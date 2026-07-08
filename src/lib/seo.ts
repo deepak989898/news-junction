@@ -100,6 +100,40 @@ export function buildArticleJsonLd(article: NewsArticle, language: "hi" | "en" =
   };
 }
 
+export function buildBreadcrumbJsonLd(article: NewsArticle, language: "hi" | "en" = "hi") {
+  const categoryName = language === "hi" ? article.categoryNameHi : article.categoryNameEn;
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+      { "@type": "ListItem", position: 2, name: categoryName, item: `${SITE_URL}/category/${article.categoryId}` },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: language === "hi" ? article.titleHi : article.titleEn,
+        item: `${SITE_URL}/article/${article.slug}`,
+      },
+    ],
+  };
+}
+
+export function buildFaqJsonLd(article: NewsArticle, language: "hi" | "en" = "hi") {
+  const faq = article.seoFaqItems || [];
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faq.map((item) => ({
+      "@type": "Question",
+      name: language === "hi" ? item.questionHi : item.questionEn,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: language === "hi" ? item.answerHi : item.answerEn,
+      },
+    })),
+  };
+}
+
 export function buildCategoryMetadata(
   nameHi: string,
   nameEn: string,

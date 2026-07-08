@@ -20,11 +20,13 @@ export async function verifyAdmin(request: NextRequest): Promise<VerifiedAdmin |
     if (!userDoc.exists) return null;
 
     const role = userDoc.data()?.role;
-    if (!["superAdmin", "editor"].includes(role)) return null;
+    if (!["superAdmin", "super_admin", "editor"].includes(role)) return null;
+    const normalizedRole: VerifiedAdmin["role"] =
+      role === "super_admin" ? "superAdmin" : (role as VerifiedAdmin["role"]);
 
     return {
       uid: decoded.uid,
-      role: role as VerifiedAdmin["role"],
+      role: normalizedRole,
       email: userDoc.data()?.email,
       name: userDoc.data()?.name,
     };

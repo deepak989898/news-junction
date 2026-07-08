@@ -16,7 +16,7 @@ async function verifyAdmin(request: NextRequest) {
   if (!userDoc.exists) return null;
 
   const role = userDoc.data()?.role;
-  if (!["superAdmin", "editor"].includes(role)) return null;
+  if (!["super_admin", "superAdmin", "editor"].includes(role)) return null;
 
   return { uid: decoded.uid, role };
 }

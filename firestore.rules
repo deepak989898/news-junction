@@ -14,11 +14,11 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        userDoc().data.role in ['superAdmin', 'editor'];
+        userDoc().data.role in ['super_admin', 'superAdmin', 'editor'];
     }
 
     function isSuperAdmin() {
-      return isAdmin() && userDoc().data.role == 'superAdmin';
+      return isAdmin() && userDoc().data.role in ['super_admin', 'superAdmin'];
     }
 
     match /news/{newsId} {
@@ -54,6 +54,83 @@ service cloud.firestore {
       allow create: if false;
       allow update: if isSuperAdmin();
       allow delete: if isSuperAdmin();
+    }
+
+    match /seoInternalLinkSuggestions/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /seoTopicSuggestions/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /aiSeoLogs/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isSuperAdmin();
+    }
+
+    match /mediaAssets/{assetId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /mediaGenerationQueue/{queueId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /aiMediaLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isSuperAdmin();
+    }
+
+    match /socialAccounts/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isSuperAdmin();
+    }
+
+    match /socialCampaigns/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /socialPostQueue/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /socialTemplates/{docId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /socialAnalytics/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isSuperAdmin();
+    }
+
+    match /socialLogs/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isSuperAdmin();
     }
 
     match /sources/{sourceId} {

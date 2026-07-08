@@ -1,8 +1,10 @@
 import { initializeApp, getApps, cert, App } from "firebase-admin/app";
 import { getFirestore, Firestore } from "firebase-admin/firestore";
+import { getStorage, Storage } from "firebase-admin/storage";
 
 let adminApp: App | undefined;
 let adminDb: Firestore | undefined;
+let adminStorage: Storage | undefined;
 
 export function getAdminApp(): App {
   if (adminApp) return adminApp;
@@ -47,4 +49,11 @@ export function getAdminDb(): Firestore {
     adminDb = getFirestore(getAdminApp());
   }
   return adminDb;
+}
+
+export function getAdminStorage(): Storage {
+  if (!adminStorage) {
+    adminStorage = getStorage(getAdminApp());
+  }
+  return adminStorage;
 }

@@ -15,6 +15,9 @@ import {
   X,
   Bot,
   Sparkles,
+  SearchCheck,
+  ImagePlus,
+  Share2,
 } from "lucide-react";
 import { logoutAdmin } from "@/firebase/auth";
 import { useAuth } from "@/contexts/AuthContext";
@@ -28,6 +31,10 @@ const navItems = [
   { href: "/admin/sources", label: "Sources", icon: Rss, roles: ["superAdmin", "editor"] },
   { href: "/admin/automation", label: "Automation", icon: Bot, roles: ["superAdmin", "editor"] },
   { href: "/admin/ai/content-studio", label: "AI Content Studio", icon: Sparkles, roles: ["superAdmin", "editor"] },
+  { href: "/admin/ai/seo-manager", label: "AI SEO Manager", icon: SearchCheck, roles: ["superAdmin", "editor"] },
+  { href: "/admin/ai/media-studio", label: "AI Media Studio", icon: ImagePlus, roles: ["superAdmin", "editor"] },
+  { href: "/admin/ai/social-manager", label: "AI Social Manager", icon: Share2, roles: ["superAdmin", "editor"] },
+  { href: "/admin/social/accounts", label: "Social Accounts", icon: Share2, roles: ["superAdmin", "editor"] },
   { href: "/admin/media", label: "Media", icon: Image, roles: ["superAdmin", "editor"] },
   { href: "/admin/ads", label: "Ads", icon: Megaphone, roles: ["superAdmin"], superAdminOnly: true },
   { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["superAdmin"], superAdminOnly: true },

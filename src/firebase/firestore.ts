@@ -90,7 +90,18 @@ function mapNewsDoc(id: string, data: Record<string, unknown>): NewsArticle {
     views: (data.views as number) || 0,
     seoTitle: (data.seoTitle as string) || "",
     seoDescription: (data.seoDescription as string) || "",
+    seoTitleHi: (data.seoTitleHi as string) || "",
+    seoTitleEn: (data.seoTitleEn as string) || "",
+    seoDescriptionHi: (data.seoDescriptionHi as string) || "",
+    seoDescriptionEn: (data.seoDescriptionEn as string) || "",
+    ogTitle: (data.ogTitle as string) || "",
+    ogDescription: (data.ogDescription as string) || "",
+    twitterTitle: (data.twitterTitle as string) || "",
+    twitterDescription: (data.twitterDescription as string) || "",
     canonicalUrl: (data.canonicalUrl as string) || "",
+    sourceCreditText: (data.sourceCreditText as string) || "",
+    seoFaqItems: (data.seoFaqItems as NewsArticle["seoFaqItems"]) || [],
+    seoInternalLinks: (data.seoInternalLinks as NewsArticle["seoInternalLinks"]) || [],
     scheduledPublishAt: (data.scheduledPublishAt as Timestamp) || null,
     createdAt: (data.createdAt as Timestamp) || null,
     updatedAt: (data.updatedAt as Timestamp) || null,
@@ -480,15 +491,25 @@ export async function getAdminUser(uid: string): Promise<AdminUser | null> {
   const ref = doc(getDb(), COLLECTIONS.users, uid);
   const snapshot = await getDoc(ref);
   if (!snapshot.exists()) return null;
+  const data = snapshot.data() as Record<string, unknown>;
+  const normalizedRole =
+    String(data.role || "") === "super_admin"
+      ? "superAdmin"
+      : (String(data.role || "") as AdminUser["role"]);
   return {
     uid: snapshot.id,
-    ...(snapshot.data() as Omit<AdminUser, "uid">),
+    ...(data as Omit<AdminUser, "uid">),
+    role: normalizedRole || "editor",
   };
 }
 
 export async function createAdminUser(uid: string, data: Omit<AdminUser, "uid" | "createdAt">) {
   const ref = doc(getDb(), COLLECTIONS.users, uid);
-  await setDoc(ref, { ...data, createdAt: serverTimestamp() });
+  await setDoc(ref, {
+    ...data,
+    role: data.role === "superAdmin" ? "super_admin" : data.role,
+    createdAt: serverTimestamp(),
+  });
 }
 
 // Sources

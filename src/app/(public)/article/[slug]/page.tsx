@@ -19,7 +19,7 @@ import {
   formatRelativeTime,
   toDate,
 } from "@/lib/utils";
-import { buildArticleJsonLd, getSiteUrl } from "@/lib/seo";
+import { buildArticleJsonLd, buildBreadcrumbJsonLd, buildFaqJsonLd, getSiteUrl } from "@/lib/seo";
 import NewsCard from "@/components/news/NewsCard";
 import AdSlotRenderer from "@/components/ads/AdSlotRenderer";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
@@ -65,15 +65,44 @@ export default function ArticlePage() {
   useEffect(() => {
     if (!article) return;
 
-    const seoTitle = (language === "hi" ? article.seoTitle : article.seoTitle) || title;
-    const description =
-      article.seoDescription ||
-      (language === "hi" ? article.summaryHi : article.summaryEn);
+    const title = getArticleTitle(article, language);
+    const seoTitle =
+      (language === "hi" ? article.seoTitleHi : article.seoTitleEn) ||
+      article.seoTitle ||
+      title;
+    const description = (language === "hi" ? article.seoDescriptionHi : article.seoDescriptionEn) || article.seoDescription || (language === "hi" ? article.summaryHi : article.summaryEn);
+    const canonicalUrl = article.canonicalUrl || `${getSiteUrl()}/article/${article.slug}`;
 
     document.title = `${seoTitle} | News Junction`;
 
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) metaDesc.setAttribute("content", description);
+
+    const setMeta = (selector: string, content: string) => {
+      let tag = document.querySelector(selector) as HTMLMetaElement | null;
+      if (!tag) {
+        tag = document.createElement("meta");
+        if (selector.includes("property=")) {
+          tag.setAttribute("property", selector.match(/"(.*)"/)?.[1] || "");
+        } else {
+          tag.setAttribute("name", selector.match(/"(.*)"/)?.[1] || "");
+        }
+        document.head.appendChild(tag);
+      }
+      tag.setAttribute("content", content);
+    };
+    let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (!canonical) {
+      canonical = document.createElement("link");
+      canonical.rel = "canonical";
+      document.head.appendChild(canonical);
+    }
+    canonical.href = canonicalUrl;
+    setMeta('meta[property="og:title"]', article.ogTitle || seoTitle);
+    setMeta('meta[property="og:description"]', article.ogDescription || description);
+    setMeta('meta[property="og:url"]', canonicalUrl);
+    setMeta('meta[name="twitter:title"]', article.twitterTitle || article.ogTitle || seoTitle);
+    setMeta('meta[name="twitter:description"]', article.twitterDescription || article.ogDescription || description);
 
     const jsonLd = buildArticleJsonLd(article, language);
     let script = document.getElementById("article-jsonld") as HTMLScriptElement | null;
@@ -84,6 +113,29 @@ export default function ArticlePage() {
       document.head.appendChild(script);
     }
     script.textContent = JSON.stringify(jsonLd);
+
+    const breadcrumbLd = buildBreadcrumbJsonLd(article, language);
+    let breadcrumbScript = document.getElementById("breadcrumb-jsonld") as HTMLScriptElement | null;
+    if (!breadcrumbScript) {
+      breadcrumbScript = document.createElement("script");
+      breadcrumbScript.id = "breadcrumb-jsonld";
+      breadcrumbScript.type = "application/ld+json";
+      document.head.appendChild(breadcrumbScript);
+    }
+    breadcrumbScript.textContent = JSON.stringify(breadcrumbLd);
+
+    const faqItems = article.seoFaqItems || [];
+    if (faqItems.length > 0) {
+      const faqLd = buildFaqJsonLd(article, language);
+      let faqScript = document.getElementById("faq-jsonld") as HTMLScriptElement | null;
+      if (!faqScript) {
+        faqScript = document.createElement("script");
+        faqScript.id = "faq-jsonld";
+        faqScript.type = "application/ld+json";
+        document.head.appendChild(faqScript);
+      }
+      faqScript.textContent = JSON.stringify(faqLd);
+    }
   }, [article, language]);
 
   if (loading) {
@@ -216,6 +268,41 @@ export default function ArticlePage() {
             />
 
             <AdSlotRenderer location="inArticle" className="my-6" />
+
+            {(article.seoInternalLinks || []).length > 0 && (
+              <section className="mt-6 rounded-lg border border-gray-100 bg-gray-50 p-4">
+                <h2 className="text-lg font-semibold text-[#1a2b4c]">
+                  {language === "hi" ? "संबंधित आंतरिक लिंक" : "Related Internal Links"}
+                </h2>
+                <ul className="mt-3 list-inside list-disc space-y-1 text-sm">
+                  {(article.seoInternalLinks || []).slice(0, 6).map((link) => (
+                    <li key={`${link.suggestedArticleId}-${link.slug}`}>
+                      <Link href={`/article/${link.slug}`} className="text-[#c41e20] hover:underline">
+                        {language === "hi" ? link.anchorTextHi || link.titleHi : link.anchorTextEn || link.titleEn}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {(article.seoFaqItems || []).length > 0 && (
+              <section className="mt-8 rounded-lg border border-gray-100 bg-gray-50 p-4">
+                <h2 className="text-lg font-semibold text-[#1a2b4c]">FAQ</h2>
+                <div className="mt-3 space-y-3">
+                  {(article.seoFaqItems || []).map((item, idx) => (
+                    <div key={idx}>
+                      <p className="font-medium text-[#1a2b4c]">
+                        {language === "hi" ? item.questionHi : item.questionEn}
+                      </p>
+                      <p className="text-sm text-gray-700">
+                        {language === "hi" ? item.answerHi : item.answerEn}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {article.tags.length > 0 && (
               <div className="mt-8 flex flex-wrap gap-2">

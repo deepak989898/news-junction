@@ -48,7 +48,30 @@ export interface NewsArticle {
   views: number;
   seoTitle?: string;
   seoDescription?: string;
+  seoTitleHi?: string;
+  seoTitleEn?: string;
+  seoDescriptionHi?: string;
+  seoDescriptionEn?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  twitterTitle?: string;
+  twitterDescription?: string;
   canonicalUrl?: string;
+  sourceCreditText?: string;
+  seoFaqItems?: {
+    questionHi: string;
+    answerHi: string;
+    questionEn: string;
+    answerEn: string;
+  }[];
+  seoInternalLinks?: {
+    suggestedArticleId: string;
+    slug: string;
+    titleHi: string;
+    titleEn: string;
+    anchorTextHi: string;
+    anchorTextEn: string;
+  }[];
   scheduledPublishAt?: Timestamp | null;
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
