@@ -119,7 +119,7 @@ export default function AiSocialManagerPage() {
   };
 
   const saveSettings = async () => {
-    if (adminUser?.role !== "superAdmin") return toast.error("Only superAdmin can update settings");
+    if (adminUser?.role !== "super_admin") return toast.error("Only super admin can update settings");
     await updateSocialSettingsApi(settingsDraft);
     toast.success("Social settings updated");
     await load();
@@ -165,7 +165,7 @@ export default function AiSocialManagerPage() {
         </div>
       </div>
 
-      {adminUser?.role === "superAdmin" && (
+      {adminUser?.role === "super_admin" && (
         <div className="mb-6 rounded-xl bg-white p-5 shadow-sm">
           <h3 className="mb-3 font-semibold text-[#1a2b4c]">Distribution Rules & Approval Settings</h3>
           <div className="grid gap-3 md:grid-cols-3 text-sm">
@@ -173,7 +173,7 @@ export default function AiSocialManagerPage() {
             <label><input type="checkbox" checked={Boolean(settingsDraft.requireApprovalBeforePosting)} onChange={(e) => setSettingsDraft((p) => ({ ...p, requireApprovalBeforePosting: e.target.checked }))} /> Require approval before posting</label>
             <label><input type="checkbox" checked={Boolean(settingsDraft.requireApprovalForHighRiskCategories)} onChange={(e) => setSettingsDraft((p) => ({ ...p, requireApprovalForHighRiskCategories: e.target.checked }))} /> Require approval for high-risk categories</label>
             <label><input type="checkbox" checked={Boolean(settingsDraft.allowEditorsScheduleOnly)} onChange={(e) => setSettingsDraft((p) => ({ ...p, allowEditorsScheduleOnly: e.target.checked }))} /> Allow editors to schedule only</label>
-            <label><input type="checkbox" checked={Boolean(settingsDraft.allowOnlySuperAdminImmediatePublish)} onChange={(e) => setSettingsDraft((p) => ({ ...p, allowOnlySuperAdminImmediatePublish: e.target.checked }))} /> Only superAdmin can publish now</label>
+            <label><input type="checkbox" checked={Boolean(settingsDraft.allowOnlySuperAdminImmediatePublish)} onChange={(e) => setSettingsDraft((p) => ({ ...p, allowOnlySuperAdminImmediatePublish: e.target.checked }))} /> Only super admin can publish now</label>
             <label><input type="checkbox" checked={Boolean(settingsDraft.publishBreakingImmediately)} onChange={(e) => setSettingsDraft((p) => ({ ...p, publishBreakingImmediately: e.target.checked }))} /> Publish breaking immediately</label>
           </div>
           <div className="mt-3 grid gap-3 md:grid-cols-4 text-sm">

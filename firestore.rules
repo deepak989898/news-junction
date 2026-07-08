@@ -14,11 +14,11 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        userDoc().data.role in ['super_admin', 'superAdmin', 'editor'];
+        userDoc().data.role in ['super_admin', 'editor'];
     }
 
     function isSuperAdmin() {
-      return isAdmin() && userDoc().data.role in ['super_admin', 'superAdmin'];
+      return isAdmin() && userDoc().data.role == 'super_admin';
     }
 
     match /news/{newsId} {
@@ -128,6 +128,185 @@ service cloud.firestore {
     }
 
     match /socialLogs/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isSuperAdmin();
+    }
+
+    match /audioAssets/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /subtitleAssets/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /videoPackages/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /newsDigests/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /voiceVideoLogs/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isSuperAdmin();
+    }
+
+    match /editorialReviews/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /editorialLogs/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isSuperAdmin();
+    }
+
+    match /editorialQueue/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /analyticsSnapshots/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isSuperAdmin();
+    }
+
+    match /growthRecommendations/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /trendSuggestions/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /contentPerformance/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /revenueReports/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isSuperAdmin();
+    }
+
+    match /analyticsReports/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isSuperAdmin();
+    }
+
+    match /analyticsLogs/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isSuperAdmin();
+    }
+
+    match /userPreferences/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if isAuthenticated() && request.auth.uid == userId && request.resource.data.uid == request.auth.uid;
+      allow update: if isAuthenticated() && request.auth.uid == userId;
+      allow delete: if isSuperAdmin();
+    }
+
+    match /userFollows/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if isAuthenticated() && request.auth.uid == userId && request.resource.data.uid == request.auth.uid;
+      allow update: if isAuthenticated() && request.auth.uid == userId;
+      allow delete: if isSuperAdmin();
+    }
+
+    match /userReadingHistory/{docId} {
+      allow read: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow delete: if isSuperAdmin();
+    }
+
+    match /userBookmarks/{docId} {
+      allow read: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.uid == request.auth.uid;
+    }
+
+    match /personalizedRecommendations/{docId} {
+      allow read: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow delete: if isSuperAdmin();
+    }
+
+    match /userDigests/{docId} {
+      allow read: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow delete: if isSuperAdmin();
+    }
+
+    match /personalizationLogs/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isSuperAdmin();
+    }
+
+    match /systemLogs/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /operationLogs/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /queueLogs/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isSuperAdmin();
+    }
+
+    match /cronLogs/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isSuperAdmin();
+    }
+
+    match /healthChecks/{docId} {
       allow read: if isAdmin();
       allow create: if false;
       allow update, delete: if isSuperAdmin();

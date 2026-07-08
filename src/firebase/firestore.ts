@@ -102,6 +102,12 @@ function mapNewsDoc(id: string, data: Record<string, unknown>): NewsArticle {
     sourceCreditText: (data.sourceCreditText as string) || "",
     seoFaqItems: (data.seoFaqItems as NewsArticle["seoFaqItems"]) || [],
     seoInternalLinks: (data.seoInternalLinks as NewsArticle["seoInternalLinks"]) || [],
+    audioHiUrl: (data.audioHiUrl as string) || "",
+    audioEnUrl: (data.audioEnUrl as string) || "",
+    audioStatusHi: (data.audioStatusHi as NewsArticle["audioStatusHi"]) || "draft",
+    audioStatusEn: (data.audioStatusEn as NewsArticle["audioStatusEn"]) || "draft",
+    audioAssetHiId: (data.audioAssetHiId as string) || "",
+    audioAssetEnId: (data.audioAssetEnId as string) || "",
     scheduledPublishAt: (data.scheduledPublishAt as Timestamp) || null,
     createdAt: (data.createdAt as Timestamp) || null,
     updatedAt: (data.updatedAt as Timestamp) || null,
@@ -493,9 +499,7 @@ export async function getAdminUser(uid: string): Promise<AdminUser | null> {
   if (!snapshot.exists()) return null;
   const data = snapshot.data() as Record<string, unknown>;
   const normalizedRole =
-    String(data.role || "") === "super_admin"
-      ? "superAdmin"
-      : (String(data.role || "") as AdminUser["role"]);
+    String(data.role || "") as AdminUser["role"];
   return {
     uid: snapshot.id,
     ...(data as Omit<AdminUser, "uid">),
@@ -507,7 +511,7 @@ export async function createAdminUser(uid: string, data: Omit<AdminUser, "uid" |
   const ref = doc(getDb(), COLLECTIONS.users, uid);
   await setDoc(ref, {
     ...data,
-    role: data.role === "superAdmin" ? "super_admin" : data.role,
+    role: data.role,
     createdAt: serverTimestamp(),
   });
 }

@@ -4,7 +4,7 @@ import { getAdminApp, getAdminDb } from "@/lib/firebase-admin";
 
 export interface VerifiedAdmin {
   uid: string;
-  role: "superAdmin" | "editor";
+  role: "super_admin" | "editor";
   email?: string;
   name?: string;
 }
@@ -20,13 +20,11 @@ export async function verifyAdmin(request: NextRequest): Promise<VerifiedAdmin |
     if (!userDoc.exists) return null;
 
     const role = userDoc.data()?.role;
-    if (!["superAdmin", "super_admin", "editor"].includes(role)) return null;
-    const normalizedRole: VerifiedAdmin["role"] =
-      role === "super_admin" ? "superAdmin" : (role as VerifiedAdmin["role"]);
+    if (!["super_admin", "editor"].includes(role)) return null;
 
     return {
       uid: decoded.uid,
-      role: normalizedRole,
+      role: role as VerifiedAdmin["role"],
       email: userDoc.data()?.email,
       name: userDoc.data()?.name,
     };

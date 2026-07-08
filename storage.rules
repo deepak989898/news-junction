@@ -6,12 +6,12 @@ service firebase.storage {
     function isAdmin() {
       return request.auth != null &&
         firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'superAdmin', 'editor'];
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'editor'];
     }
 
     function isSuperAdmin() {
       return isAdmin() &&
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'superAdmin'];
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'super_admin';
     }
 
     match /news/{allPaths=**} {
@@ -31,6 +31,12 @@ service firebase.storage {
     }
 
     match /ai-media/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /ai-voice-video/{allPaths=**} {
       allow read: if true;
       allow write: if isAdmin();
       allow delete: if isSuperAdmin();

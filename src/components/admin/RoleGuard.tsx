@@ -15,7 +15,7 @@ interface RoleGuardProps {
 
 export default function RoleGuard({
   children,
-  allowedRoles = ["superAdmin", "editor"],
+  allowedRoles = ["super_admin", "editor"],
   requireSuperAdmin = false,
   fallback,
 }: RoleGuardProps) {
@@ -40,7 +40,7 @@ export default function RoleGuard({
 
   const hasAccess =
     requireSuperAdmin
-      ? adminUser.role === "superAdmin"
+      ? adminUser.role === "super_admin"
       : allowedRoles.includes(adminUser.role);
 
   if (!hasAccess) {

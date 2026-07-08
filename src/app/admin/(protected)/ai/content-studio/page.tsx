@@ -194,7 +194,7 @@ export default function AIContentStudioPage() {
   const handleApply = async (saveAsDraft = false) => {
     if (!selectedId || !aiField || !aiOutput) return;
     if (settings?.requireApprovalForAIChanges && pendingChangeId) {
-      toast.error("This change requires superAdmin approval first");
+      toast.error("This change requires super admin approval first");
       return;
     }
     try {
@@ -270,7 +270,7 @@ export default function AIContentStudioPage() {
         </div>
       )}
 
-      {adminUser?.role === "superAdmin" && settings && (
+      {adminUser?.role === "super_admin" && settings && (
         <div className="mb-6 rounded-xl bg-white p-5 shadow-sm">
           <h3 className="mb-3 font-semibold text-[#1a2b4c]">AI Provider Settings</h3>
           <div className="grid gap-4 md:grid-cols-3">
@@ -499,7 +499,7 @@ export default function AIContentStudioPage() {
           )}
           {pendingChangeId && (
             <p className="mt-3 text-xs text-amber-600">
-              Pending approval ID: {pendingChangeId}. SuperAdmin must approve before applying.
+              Pending approval ID: {pendingChangeId}. Super admin must approve before applying.
             </p>
           )}
         </div>
@@ -527,7 +527,7 @@ export default function AIContentStudioPage() {
                     <td className="py-2 pr-4">{p.field}</td>
                     <td className="py-2 pr-4 capitalize">{p.status}</td>
                     <td className="py-2">
-                      {adminUser?.role === "superAdmin" ? (
+                      {adminUser?.role === "super_admin" ? (
                         <span className="flex gap-2">
                           <button
                             onClick={() => handleReview(p.id, "approve")}
@@ -543,7 +543,7 @@ export default function AIContentStudioPage() {
                           </button>
                         </span>
                       ) : (
-                        <span className="text-xs text-gray-400">Awaiting superAdmin</span>
+                        <span className="text-xs text-gray-400">Awaiting super admin</span>
                       )}
                     </td>
                   </tr>

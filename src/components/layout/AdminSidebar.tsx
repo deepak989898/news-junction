@@ -18,6 +18,12 @@ import {
   SearchCheck,
   ImagePlus,
   Share2,
+  Mic2,
+  ShieldCheck,
+  BarChart3,
+  UserRoundCog,
+  Radar,
+  Waypoints,
 } from "lucide-react";
 import { logoutAdmin } from "@/firebase/auth";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,19 +31,25 @@ import { canManageSettings, canManageAds } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard, roles: ["superAdmin", "editor"] },
-  { href: "/admin/news", label: "News", icon: Newspaper, roles: ["superAdmin", "editor"] },
-  { href: "/admin/categories", label: "Categories", icon: FolderOpen, roles: ["superAdmin", "editor"] },
-  { href: "/admin/sources", label: "Sources", icon: Rss, roles: ["superAdmin", "editor"] },
-  { href: "/admin/automation", label: "Automation", icon: Bot, roles: ["superAdmin", "editor"] },
-  { href: "/admin/ai/content-studio", label: "AI Content Studio", icon: Sparkles, roles: ["superAdmin", "editor"] },
-  { href: "/admin/ai/seo-manager", label: "AI SEO Manager", icon: SearchCheck, roles: ["superAdmin", "editor"] },
-  { href: "/admin/ai/media-studio", label: "AI Media Studio", icon: ImagePlus, roles: ["superAdmin", "editor"] },
-  { href: "/admin/ai/social-manager", label: "AI Social Manager", icon: Share2, roles: ["superAdmin", "editor"] },
-  { href: "/admin/social/accounts", label: "Social Accounts", icon: Share2, roles: ["superAdmin", "editor"] },
-  { href: "/admin/media", label: "Media", icon: Image, roles: ["superAdmin", "editor"] },
-  { href: "/admin/ads", label: "Ads", icon: Megaphone, roles: ["superAdmin"], superAdminOnly: true },
-  { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["superAdmin"], superAdminOnly: true },
+  { href: "/admin", label: "Dashboard", icon: LayoutDashboard, roles: ["super_admin", "editor"] },
+  { href: "/admin/news", label: "News", icon: Newspaper, roles: ["super_admin", "editor"] },
+  { href: "/admin/categories", label: "Categories", icon: FolderOpen, roles: ["super_admin", "editor"] },
+  { href: "/admin/sources", label: "Sources", icon: Rss, roles: ["super_admin", "editor"] },
+  { href: "/admin/automation", label: "Automation", icon: Bot, roles: ["super_admin", "editor"] },
+  { href: "/admin/ai/content-studio", label: "AI Content Studio", icon: Sparkles, roles: ["super_admin", "editor"] },
+  { href: "/admin/ai/seo-manager", label: "AI SEO Manager", icon: SearchCheck, roles: ["super_admin", "editor"] },
+  { href: "/admin/ai/media-studio", label: "AI Media Studio", icon: ImagePlus, roles: ["super_admin", "editor"] },
+  { href: "/admin/ai/voice-video-studio", label: "AI Voice & Video Studio", icon: Mic2, roles: ["super_admin", "editor"] },
+  { href: "/admin/ai/editorial-manager", label: "AI Editorial Manager", icon: ShieldCheck, roles: ["super_admin", "editor"] },
+  { href: "/admin/ai/analytics-manager", label: "AI Analytics Manager", icon: BarChart3, roles: ["super_admin", "editor"] },
+  { href: "/admin/ai/personalization", label: "AI Personalization", icon: UserRoundCog, roles: ["super_admin", "editor"] },
+  { href: "/admin/ai/operations", label: "AI Operations", icon: Radar, roles: ["super_admin", "editor"] },
+  { href: "/admin/ai/orchestrator", label: "AI Master Orchestrator", icon: Waypoints, roles: ["super_admin", "editor"] },
+  { href: "/admin/ai/social-manager", label: "AI Social Manager", icon: Share2, roles: ["super_admin", "editor"] },
+  { href: "/admin/social/accounts", label: "Social Accounts", icon: Share2, roles: ["super_admin", "editor"] },
+  { href: "/admin/media", label: "Media", icon: Image, roles: ["super_admin", "editor"] },
+  { href: "/admin/ads", label: "Ads", icon: Megaphone, roles: ["super_admin"] },
+  { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["super_admin"] },
 ];
 
 interface AdminSidebarProps {

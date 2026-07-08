@@ -6,6 +6,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { Share2, MessageCircle } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { addBookmarkApi, addHistoryApi, removeBookmarkApi, getBookmarksApi } from "@/lib/personalization/client-api";
+import toast from "react-hot-toast";
 import {
   getNewsBySlug,
   getRelatedNews,
@@ -28,11 +31,16 @@ export default function ArticlePage() {
   const params = useParams();
   const slug = params.slug as string;
   const { language, t } = useLanguage();
+  const { user } = useAuth();
   const [article, setArticle] = useState<NewsArticle | null>(null);
   const [related, setRelated] = useState<NewsArticle[]>([]);
   const [latest, setLatest] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [audioLang, setAudioLang] = useState<"hi" | "en">("hi");
+  const [isBookmarked, setIsBookmarked] = useState(false);
+  const [startedAt, setStartedAt] = useState<number>(Date.now());
+  const [completedRead, setCompletedRead] = useState(false);
 
   useEffect(() => {
     async function loadArticle() {
@@ -61,6 +69,46 @@ export default function ArticlePage() {
     }
     loadArticle();
   }, [slug]);
+
+  useEffect(() => {
+    setStartedAt(Date.now());
+    setCompletedRead(false);
+    const onScroll = () => {
+      const scrolled = window.scrollY;
+      const height = document.documentElement.scrollHeight - window.innerHeight;
+      if (height > 0 && scrolled / height > 0.72) setCompletedRead(true);
+    };
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [slug]);
+
+  useEffect(() => {
+    if (!user || !article) return;
+    (async () => {
+      try {
+        const res = (await getBookmarksApi()) as Record<string, unknown>;
+        const items = ((res.items as Record<string, unknown>[]) || []).map((x) => String(x.articleId));
+        setIsBookmarked(items.includes(article.id));
+      } catch {
+        setIsBookmarked(false);
+      }
+    })();
+  }, [user, article]);
+
+  useEffect(() => {
+    return () => {
+      if (!user || !article) return;
+      const seconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+      addHistoryApi({
+        articleId: article.id,
+        readingTimeSec: seconds,
+        completed: completedRead,
+        categoryId: article.categoryId,
+        categoryName: language === "hi" ? article.categoryNameHi : article.categoryNameEn,
+        topicTags: article.tags || [],
+      }).catch(() => {});
+    };
+  }, [user, article, startedAt, completedRead, language]);
 
   useEffect(() => {
     if (!article) return;
@@ -167,6 +215,14 @@ export default function ArticlePage() {
   const publishedDate = formatRelativeTime(toDate(article.publishedAt), language);
   const imageAlt = language === "hi" ? article.imageAltHi : article.imageAltEn;
   const shareUrl = `${getSiteUrl()}/article/${article.slug}`;
+  const hasHiAudio =
+    Boolean(article.audioHiUrl) &&
+    ["approved", "published"].includes(String(article.audioStatusHi || ""));
+  const hasEnAudio =
+    Boolean(article.audioEnUrl) &&
+    ["approved", "published"].includes(String(article.audioStatusEn || ""));
+  const activeAudioUrl =
+    audioLang === "hi" ? (hasHiAudio ? article.audioHiUrl : hasEnAudio ? article.audioEnUrl : "") : (hasEnAudio ? article.audioEnUrl : hasHiAudio ? article.audioHiUrl : "");
 
   const shareLinks = [
     {
@@ -243,9 +299,69 @@ export default function ArticlePage() {
               </div>
             )}
 
+            {(hasHiAudio || hasEnAudio) && (
+              <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-[#1a2b4c]">
+                    {language === "hi" ? "यह खबर सुनें" : "Listen to this news"}
+                  </p>
+                  <div className="flex gap-2 text-xs">
+                    {hasHiAudio && (
+                      <button
+                        className={`rounded px-2 py-1 ${audioLang === "hi" ? "bg-[#1a2b4c] text-white" : "bg-white border"}`}
+                        onClick={() => setAudioLang("hi")}
+                      >
+                        Hindi
+                      </button>
+                    )}
+                    {hasEnAudio && (
+                      <button
+                        className={`rounded px-2 py-1 ${audioLang === "en" ? "bg-[#1a2b4c] text-white" : "bg-white border"}`}
+                        onClick={() => setAudioLang("en")}
+                      >
+                        English
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <audio controls className="w-full" controlsList="nodownload">
+                  <source src={activeAudioUrl || undefined} type="audio/mpeg" />
+                </audio>
+              </div>
+            )}
+
             <div className="mt-6 flex items-center gap-3 border-y border-gray-100 py-4">
               <Share2 size={18} className="text-gray-400" />
               <span className="text-sm font-medium text-gray-600">{t.share}:</span>
+              {user && (
+                <button
+                  onClick={async () => {
+                    if (!article) return;
+                    try {
+                      if (isBookmarked) {
+                        await removeBookmarkApi(article.id);
+                        setIsBookmarked(false);
+                        toast.success("Bookmark removed");
+                      } else {
+                        await addBookmarkApi({
+                          articleId: article.id,
+                          title: title,
+                          slug: article.slug,
+                          categoryName: categoryName,
+                          language,
+                        });
+                        setIsBookmarked(true);
+                        toast.success("Bookmarked");
+                      }
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Bookmark action failed");
+                    }
+                  }}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${isBookmarked ? "bg-[#1a2b4c] text-white" : "bg-white text-[#1a2b4c]"}`}
+                >
+                  {isBookmarked ? "Bookmarked" : "Bookmark"}
+                </button>
+              )}
               {shareLinks.map((link) => (
                 <a
                   key={link.name}

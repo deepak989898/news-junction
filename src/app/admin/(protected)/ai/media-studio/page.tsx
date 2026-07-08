@@ -186,7 +186,7 @@ export default function AiMediaStudioPage() {
         </div>
       )}
 
-      {adminUser?.role === "superAdmin" && (
+      {adminUser?.role === "super_admin" && (
         <div className="mb-6 grid gap-6 lg:grid-cols-2">
           <div className="rounded-xl bg-white p-5 shadow-sm">
             <h3 className="mb-3 font-semibold text-[#1a2b4c]">Provider & Cost Settings</h3>

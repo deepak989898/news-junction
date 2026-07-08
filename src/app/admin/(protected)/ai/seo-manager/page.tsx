@@ -178,7 +178,7 @@ export default function AiSeoManagerPage() {
   };
 
   const updateSetting = async (patch: Partial<SeoAiSettings>) => {
-    if (adminUser?.role !== "superAdmin") return;
+    if (adminUser?.role !== "super_admin") return;
     const next = await updateSeoSettingsApi(patch as Record<string, unknown>);
     setSettings(next as SeoAiSettings);
     toast.success("SEO AI settings updated");
@@ -190,7 +190,7 @@ export default function AiSeoManagerPage() {
     <RoleGuard>
       <AdminTopbar title="AI SEO Manager" actions={<span className="text-sm text-gray-500">AI-powered SEO operations</span>} />
 
-      {adminUser?.role === "superAdmin" && settings && (
+      {adminUser?.role === "super_admin" && settings && (
         <div className="mb-6 rounded-xl bg-white p-5 shadow-sm">
           <h3 className="mb-3 font-semibold text-[#1a2b4c]">SEO AI Settings</h3>
           <div className="grid gap-3 md:grid-cols-3">

@@ -14,11 +14,11 @@ export async function POST(request: NextRequest) {
     if (!changeType) return NextResponse.json({ error: "changeType required" }, { status: 400 });
 
     const settings = await getSeoAiSettings();
-    if (bulk && settings.requireApprovalForBulkSeo && admin.role !== "superAdmin") {
-      return NextResponse.json({ error: "Bulk apply requires superAdmin approval" }, { status: 403 });
+    if (bulk && settings.requireApprovalForBulkSeo && admin.role !== "super_admin") {
+      return NextResponse.json({ error: "Bulk apply requires super admin approval" }, { status: 403 });
     }
 
-    const canEditorApply = settings.allowEditorSeoApply || admin.role === "superAdmin";
+    const canEditorApply = settings.allowEditorSeoApply || admin.role === "super_admin";
     if (admin.role === "editor" && !canEditorApply) {
       return NextResponse.json({ error: "Editors are not allowed to apply SEO changes" }, { status: 403 });
     }

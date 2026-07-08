@@ -51,8 +51,8 @@ export default function SocialAccountsPage() {
   }, []);
 
   const connect = async () => {
-    if (adminUser?.role !== "superAdmin") {
-      toast.error("Only superAdmin can connect accounts");
+    if (adminUser?.role !== "super_admin") {
+      toast.error("Only super admin can connect accounts");
       return;
     }
     try {
@@ -74,8 +74,8 @@ export default function SocialAccountsPage() {
   };
 
   const disconnect = async (platform: string) => {
-    if (adminUser?.role !== "superAdmin") {
-      toast.error("Only superAdmin can disconnect");
+    if (adminUser?.role !== "super_admin") {
+      toast.error("Only super admin can disconnect");
       return;
     }
     await disconnectSocialAccountApi(platform);

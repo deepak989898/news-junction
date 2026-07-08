@@ -2,7 +2,7 @@ import { Timestamp } from "firebase/firestore";
 
 export type Language = "hi" | "en";
 export type NewsStatus = "draft" | "published";
-export type UserRole = "superAdmin" | "editor";
+export type UserRole = "super_admin" | "editor";
 export type SourceType = "RSS" | "Official" | "Manual" | "GDELT";
 export type SourceLanguage = "Hindi" | "English" | "Both";
 export type TrustLevel = "low" | "medium" | "high";
@@ -72,6 +72,12 @@ export interface NewsArticle {
     anchorTextHi: string;
     anchorTextEn: string;
   }[];
+  audioHiUrl?: string;
+  audioEnUrl?: string;
+  audioStatusHi?: "draft" | "generated" | "approved" | "rejected" | "published" | "failed";
+  audioStatusEn?: "draft" | "generated" | "approved" | "rejected" | "published" | "failed";
+  audioAssetHiId?: string;
+  audioAssetEnId?: string;
   scheduledPublishAt?: Timestamp | null;
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;

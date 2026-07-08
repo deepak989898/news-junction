@@ -13,10 +13,7 @@ async function verifySuperAdmin(request: NextRequest) {
 
   const decoded = await getAuth().verifyIdToken(token);
   const userDoc = await getAdminDb().collection("users").doc(decoded.uid).get();
-  if (
-    !userDoc.exists ||
-    !["super_admin", "superAdmin"].includes(String(userDoc.data()?.role || ""))
-  ) {
+  if (!userDoc.exists || String(userDoc.data()?.role || "") !== "super_admin") {
     return null;
   }
   return decoded.uid;

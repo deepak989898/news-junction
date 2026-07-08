@@ -48,7 +48,7 @@ export default function AutomationDashboardPage() {
   };
 
   const handleTrigger = async (action: "fetch" | "process") => {
-    if (adminUser?.role !== "superAdmin") {
+    if (adminUser?.role !== "super_admin") {
       toast.error("Super admin required");
       return;
     }
@@ -78,7 +78,7 @@ export default function AutomationDashboardPage() {
       />
 
       <div className="mb-6 rounded-xl bg-white p-6 shadow-sm">
-        {adminUser?.role === "superAdmin" ? (
+        {adminUser?.role === "super_admin" ? (
           <ToggleSwitch
             label="Automation Enabled"
             checked={settings?.automationEnabled || false}
@@ -94,7 +94,7 @@ export default function AutomationDashboardPage() {
           <Link href="/admin/automation/settings" className="rounded-lg border px-4 py-2 text-sm font-medium">
             Automation Settings
           </Link>
-          {adminUser?.role === "superAdmin" && (
+          {adminUser?.role === "super_admin" && (
             <>
               <button
                 onClick={() => handleTrigger("fetch")}

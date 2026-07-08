@@ -1,11 +1,11 @@
 import { UserRole } from "@/types";
 
 export function isSuperAdmin(role?: UserRole | null): boolean {
-  return role === "superAdmin";
+  return role === "super_admin";
 }
 
 export function isEditor(role?: UserRole | null): boolean {
-  return role === "superAdmin" || role === "editor";
+  return role === "super_admin" || role === "editor";
 }
 
 export function canDeleteNews(role?: UserRole | null): boolean {

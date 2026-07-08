@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   const admin = await verifyAdmin(request);
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (admin.role !== "superAdmin") {
+  if (admin.role !== "super_admin") {
     return NextResponse.json({ error: "Super admin required" }, { status: 403 });
   }
   try {

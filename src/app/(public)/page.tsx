@@ -8,6 +8,8 @@ import PopularNews from "@/components/news/PopularNews";
 import AdSlotRenderer from "@/components/ads/AdSlotRenderer";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { getRecommendationsApi } from "@/lib/personalization/client-api";
 import {
   getFeaturedNews,
   getTrendingNews,
@@ -18,10 +20,12 @@ import { NewsArticle } from "@/types";
 
 export default function HomePage() {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const [featured, setFeatured] = useState<NewsArticle[]>([]);
   const [trending, setTrending] = useState<NewsArticle[]>([]);
   const [latest, setLatest] = useState<NewsArticle[]>([]);
   const [popular, setPopular] = useState<NewsArticle[]>([]);
+  const [recommended, setRecommended] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,6 +49,25 @@ export default function HomePage() {
     }
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setRecommended([]);
+      return;
+    }
+    (async () => {
+      try {
+        const res = (await getRecommendationsApi()) as Record<string, unknown>;
+        const items = ((res.sections as Record<string, unknown> | undefined)?.recommendedForYou as Record<string, unknown>[]) || [];
+        const ids = items.map((x) => String(x.articleId || ""));
+        if (!ids.length) return;
+        const recArticles = latest.filter((a) => ids.includes(a.id));
+        setRecommended(recArticles.slice(0, 6));
+      } catch {
+        setRecommended([]);
+      }
+    })();
+  }, [user, latest]);
 
   if (loading) {
     return (
@@ -83,6 +106,21 @@ export default function HomePage() {
             <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
               {trending.map((article) => (
                 <NewsCard key={article.id} article={article} variant="compact" />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {user && recommended.length > 0 && (
+          <section className="mt-10">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-[#1a2b4c] border-b-2 border-[#c41e20] pb-1 inline-block">
+                Recommended for You
+              </h2>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3">
+              {recommended.map((article) => (
+                <NewsCard key={article.id} article={article} />
               ))}
             </div>
           </section>
