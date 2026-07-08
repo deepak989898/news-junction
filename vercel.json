@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/fetch-news",
+      "schedule": "0 */3 * * *"
+    },
+    {
+      "path": "/api/cron/process-news",
+      "schedule": "30 */3 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup",
+      "schedule": "0 4 * * *"
+    }
+  ]
+}

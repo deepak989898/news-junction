@@ -1,0 +1,212 @@
+import { getAdminDb } from "@/lib/firebase-admin";
+import {
+  getAutomationSettings,
+  getRawNewsById,
+  getCategoryById,
+  publishRawNewsToNews,
+  updateRawNews,
+  logAutomation,
+  countPublishedToday,
+} from "./server-db";
+import { generateArticleContent } from "./ai-processor";
+import { checkDuplicate } from "./duplicate-checker";
+import { detectRiskLevel, shouldAutoPublish } from "./risk-detector";
+import { RawNewsStatus } from "./types";
+
+function isSafeImageUrl(url: string): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export async function processRawNewsItem(rawNewsId: string): Promise<{
+  status: RawNewsStatus;
+  newsId?: string;
+  message: string;
+}> {
+  const settings = await getAutomationSettings();
+  if (!settings.automationEnabled) {
+    return { status: "fetched", message: "Automation disabled" };
+  }
+
+  const rawItem = await getRawNewsById(rawNewsId);
+  if (!rawItem) return { status: "failed", message: "Raw news not found" };
+
+  await updateRawNews(rawNewsId, { status: "processing" });
+
+  try {
+    const dupCheck = await checkDuplicate(
+      rawItem.originalLink,
+      rawItem.originalTitle,
+      settings.duplicateThreshold
+    );
+
+    if (dupCheck.isDuplicate) {
+      await updateRawNews(rawNewsId, {
+        status: "duplicate",
+        duplicateScore: dupCheck.duplicateScore,
+        errorMessage: dupCheck.reason,
+      });
+      await logAutomation({
+        type: "process",
+        message: `Duplicate: ${dupCheck.reason}`,
+        rawNewsId,
+        sourceId: rawItem.sourceId,
+        status: "duplicate",
+      });
+      return { status: "duplicate", message: dupCheck.reason || "Duplicate detected" };
+    }
+
+    const aiOutput = await generateArticleContent(settings.aiProvider, {
+      title: rawItem.originalTitle,
+      summary: rawItem.originalSummary,
+      sourceLink: rawItem.originalLink,
+      sourceName: rawItem.sourceName,
+      categoryId: rawItem.categoryId,
+      language: rawItem.language,
+    });
+
+    const detectedRisk = detectRiskLevel(
+      rawItem.originalTitle,
+      rawItem.originalSummary,
+      rawItem.categoryId
+    );
+    const finalRisk = aiOutput.riskLevel === "high" ? "high" : detectedRisk;
+    aiOutput.riskLevel = finalRisk;
+
+    const categoryId = aiOutput.suggestedCategory || rawItem.categoryId;
+    const category = await getCategoryById(categoryId);
+    const catData = category || {
+      id: rawItem.categoryId,
+      nameHi: "देश",
+      nameEn: "India",
+    };
+
+    const imageUrl = isSafeImageUrl(rawItem.originalImage)
+      ? rawItem.originalImage
+      : settings.defaultCategoryImage;
+
+    const publishedCounts = await countPublishedToday();
+    const categoryCount = publishedCounts.byCategory[categoryId] || 0;
+
+    const canPublish =
+      publishedCounts.total < settings.maxArticlesPerDay &&
+      categoryCount < settings.maxArticlesPerCategoryPerDay;
+
+    const sourceDoc = await getAdminDb().collection("sources").doc(rawItem.sourceId).get();
+    const sourceAutoPublish = sourceDoc.exists
+      ? Boolean(sourceDoc.data()?.autoPublishAllowed)
+      : false;
+
+    const autoPublish = canPublish &&
+      shouldAutoPublish(finalRisk, sourceAutoPublish, settings) &&
+      aiOutput.titleHi && aiOutput.contentHi;
+
+    await updateRawNews(rawNewsId, {
+      aiOutput,
+      riskLevel: finalRisk,
+      categoryId,
+      status: autoPublish ? "processing" : "pendingApproval",
+    });
+
+    if (autoPublish) {
+      const newsId = await publishRawNewsToNews(rawNewsId, aiOutput, {
+        sourceName: rawItem.sourceName,
+        sourceUrl: rawItem.sourceUrl,
+        originalLink: rawItem.originalLink,
+        categoryId: catData.id as string,
+        categoryNameHi: (catData as { nameHi?: string }).nameHi || "देश",
+        categoryNameEn: (catData as { nameEn?: string }).nameEn || "India",
+        imageUrl,
+        author: settings.defaultAuthorName,
+        publish: true,
+      });
+
+      await logAutomation({
+        type: "publish",
+        message: `Auto-published: ${aiOutput.titleEn}`,
+        rawNewsId,
+        newsId,
+        sourceId: rawItem.sourceId,
+        status: "published",
+      });
+
+      return { status: "published", newsId, message: "Auto-published successfully" };
+    }
+
+    await updateRawNews(rawNewsId, { status: "pendingApproval", aiOutput, riskLevel: finalRisk });
+
+    await logAutomation({
+      type: "process",
+      message: `Pending approval (${finalRisk} risk): ${aiOutput.titleEn}`,
+      rawNewsId,
+      sourceId: rawItem.sourceId,
+      status: "pendingApproval",
+    });
+
+    return { status: "pendingApproval", message: "Sent to approval queue" };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Processing failed";
+    await updateRawNews(rawNewsId, { status: "failed", errorMessage: message });
+    await logAutomation({
+      type: "error",
+      message,
+      rawNewsId,
+      sourceId: rawItem.sourceId,
+      status: "failed",
+    });
+    return { status: "failed", message };
+  }
+}
+
+export async function approveAndPublishRawNews(rawNewsId: string): Promise<string> {
+  const settings = await getAutomationSettings();
+  const rawItem = await getRawNewsById(rawNewsId);
+  if (!rawItem || !rawItem.aiOutput) throw new Error("No AI content to publish");
+
+  const category = await getCategoryById(rawItem.categoryId);
+  const imageUrl =
+    rawItem.originalImage && rawItem.originalImage.startsWith("https")
+      ? rawItem.originalImage
+      : settings.defaultCategoryImage;
+
+  const newsId = await publishRawNewsToNews(rawNewsId, rawItem.aiOutput, {
+    sourceName: rawItem.sourceName,
+    sourceUrl: rawItem.sourceUrl,
+    originalLink: rawItem.originalLink,
+    categoryId: rawItem.categoryId,
+    categoryNameHi: (category as { nameHi?: string })?.nameHi || "देश",
+    categoryNameEn: (category as { nameEn?: string })?.nameEn || "India",
+    imageUrl,
+    author: settings.defaultAuthorName,
+    publish: true,
+  });
+
+  await logAutomation({
+    type: "publish",
+    message: `Manually approved: ${rawItem.aiOutput.titleEn}`,
+    rawNewsId,
+    newsId,
+    sourceId: rawItem.sourceId,
+    status: "published",
+  });
+
+  return newsId;
+}
+
+export async function rejectRawNews(rawNewsId: string, reason?: string) {
+  await updateRawNews(rawNewsId, {
+    status: "rejected",
+    errorMessage: reason || "Rejected by admin",
+  });
+  await logAutomation({
+    type: "process",
+    message: reason || "Rejected by admin",
+    rawNewsId,
+    status: "rejected",
+  });
+}

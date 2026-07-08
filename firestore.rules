@@ -1,0 +1,95 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        userDoc().data.role in ['superAdmin', 'editor'];
+    }
+
+    function isSuperAdmin() {
+      return isAdmin() && userDoc().data.role == 'superAdmin';
+    }
+
+    match /news/{newsId} {
+      allow read: if resource.data.status == 'published' || isAdmin();
+      allow create, update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow create, update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if settingId in ['site', 'general'] || isAdmin();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /aiPromptTemplates/{templateId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /aiContentLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isSuperAdmin();
+    }
+
+    match /aiPendingChanges/{changeId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isSuperAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /sources/{sourceId} {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /media/{mediaId} {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /adSlots/{slotId} {
+      allow read: if resource.data.isActive == true || isAdmin();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /rawNews/{rawNewsId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /automationLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isSuperAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update, delete: if isSuperAdmin();
+    }
+  }
+}

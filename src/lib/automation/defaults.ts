@@ -1,0 +1,35 @@
+import { AutomationSettings } from "./types";
+
+export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
+  automationEnabled: false,
+  aiProvider: "openai",
+  autoPublishLowRisk: false,
+  autoPublishMediumRisk: false,
+  highRiskAlwaysApproval: true,
+  maxArticlesPerDay: 20,
+  maxArticlesPerCategoryPerDay: 5,
+  duplicateThreshold: 0.75,
+  defaultAuthorName: "News Junction Team",
+  defaultSourceCreditText: "Source",
+  defaultCategoryImage: "/logo.png",
+  lastFetchRun: null,
+  lastProcessRun: null,
+  lastCleanupRun: null,
+};
+
+export const AUTOMATION_SETTINGS_DOC_ID = "automation";
+export const HIGH_RISK_KEYWORDS = [
+  "election", "politics", "political", "court", "verdict", "murder", "rape",
+  "accident", "death", "killed", "violence", "riot", "protest", "religion",
+  "communal", "finance", "stock", "rupee", "inflation", "health", "disease",
+  "covid", "cancer", "war", "conflict", "terror", "bomb", "scam", "fraud",
+  "चुनाव", "राजनीति", "अदालत", "हत्या", "दुर्घटना", "मौत", "हिंसा",
+  "धर्म", "वित्त", "स्वास्थ्य", "युद्ध", "आतंक",
+];
+
+export const GDELT_QUERIES = [
+  "india sourcelang:hindi",
+  "india sourcelang:english",
+  "india politics",
+  "india economy",
+];
