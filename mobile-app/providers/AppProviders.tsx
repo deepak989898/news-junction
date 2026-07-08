@@ -6,6 +6,7 @@ import { ThemeProvider } from "./ThemeProvider";
 import { I18nProvider } from "./I18nProvider";
 import { NetworkProvider } from "./NetworkProvider";
 import { NotificationProvider } from "./NotificationProvider";
+import { ReaderSettingsProvider } from "./ReaderSettingsProvider";
 import AppErrorBoundary from "./ErrorBoundaryProvider";
 
 const queryClient = new QueryClient({
@@ -25,11 +26,13 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
           <AppErrorBoundary>
             <ThemeProvider>
               <I18nProvider>
-                <AuthProvider>
-                  <NetworkProvider>
-                    <NotificationProvider>{children}</NotificationProvider>
-                  </NetworkProvider>
-                </AuthProvider>
+                <ReaderSettingsProvider>
+                  <AuthProvider>
+                    <NetworkProvider>
+                      <NotificationProvider>{children}</NotificationProvider>
+                    </NetworkProvider>
+                  </AuthProvider>
+                </ReaderSettingsProvider>
               </I18nProvider>
             </ThemeProvider>
           </AppErrorBoundary>

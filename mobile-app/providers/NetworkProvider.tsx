@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { isOnline } from "@/services/connectivity/network";
+import { processDownloadQueue } from "@/services/offline/article-cache";
+import { getNewsBySlug } from "@/services/news/firestore";
 
 const NetworkContext = createContext({ online: true });
 
@@ -10,7 +12,12 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
     let mounted = true;
     const tick = async () => {
       const v = await isOnline();
-      if (mounted) setOnline(v);
+      if (mounted) {
+        if (v && !online) {
+          processDownloadQueue((slug) => getNewsBySlug(slug)).catch(() => {});
+        }
+        setOnline(v);
+      }
     };
     tick();
     const id = setInterval(tick, 5000);
@@ -18,7 +25,7 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       clearInterval(id);
     };
-  }, []);
+  }, [online]);
 
   return <NetworkContext.Provider value={{ online }}>{children}</NetworkContext.Provider>;
 }

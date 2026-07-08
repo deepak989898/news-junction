@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# News Junction
 
-## Getting Started
+Enterprise news platform with:
 
-First, run the development server:
+- Web app: Next.js + Firebase
+- Mobile app: Expo React Native (`mobile-app/`)
+- AI modules: content/seo/media/social/voice/editorial/analytics/personalization/operations/orchestrator
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Workspaces
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- Web: repository root (`src/`)
+- Mobile: `mobile-app/`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Both use the same Firebase project, but mobile is independently structured and built.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Quick Start (Web)
 
-## Learn More
+1. Copy `.env.example` to `.env.local`
+2. Install dependencies:
+   - `npm install`
+3. Run development server:
+   - `npm run dev`
 
-To learn more about Next.js, take a look at the following resources:
+Build:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `npm run build`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Quick Start (Mobile)
 
-## Deploy on Vercel
+1. `cd mobile-app`
+2. Copy `mobile-app/.env.example` to `mobile-app/.env`
+3. `npm install`
+4. `npm run start`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Docs
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Governance and standards are in `/docs`:
+
+- `docs/ARCHITECTURE.md`
+- `docs/CODING_STANDARDS.md`
+- `docs/FIRESTORE_SCHEMA.md`
+- `docs/API_CONVENTIONS.md`
+- `docs/SECURITY_RULES_GUIDE.md`
+- `docs/AI_SAFETY_GUIDE.md`
+- `docs/DEPLOYMENT_GUIDE.md`
+- `docs/ENVIRONMENT_VARIABLES.md`
+- `docs/TESTING_STRATEGY.md`
+- `docs/PHASE_ROADMAP.md`
+- `docs/CHANGELOG.md`
+
+## Safety and Security
+
+- Never commit real secrets.
+- Keep API keys server-side only.
+- Enforce admin role checks on privileged routes.
+- Use `CRON_SECRET` for cron endpoints.
+
+See `SECURITY.md` for disclosure policy.

@@ -30,6 +30,20 @@ export default function RootLayout() {
         <Stack.Screen name="auth/forgot-password" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(drawer)" />
+        <Stack.Screen name="article/[slug]" />
+        <Stack.Screen name="category/[slug]" />
+        <Stack.Screen name="breaking" />
+        <Stack.Screen name="live" />
+        <Stack.Screen name="notifications" />
+        <Stack.Screen name="reading-history" />
+        <Stack.Screen name="settings/index" />
+        <Stack.Screen name="settings/font-size" />
+        <Stack.Screen name="settings/accessibility" />
+        <Stack.Screen name="settings/data-saver" />
+        <Stack.Screen name="settings/licenses" />
+        <Stack.Screen name="settings/notifications" />
+        <Stack.Screen name="settings/theme" />
+        <Stack.Screen name="settings/language" />
         <Stack.Screen name="+not-found" />
       </Stack>
     </AppProviders>

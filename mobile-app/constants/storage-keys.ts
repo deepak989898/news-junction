@@ -4,4 +4,13 @@ export const STORAGE_KEYS = {
   onboardingDone: "nj_onboarding_done",
   rememberLogin: "nj_remember_login",
   notificationEnabled: "nj_notification_enabled",
+  fontSize: "nj_font_size",
+  reduceMotion: "nj_reduce_motion",
+  highContrast: "nj_high_contrast",
+  dataSaver: "nj_data_saver",
+  wifiOnlyDownloads: "nj_wifi_only_downloads",
+  lowImageMode: "nj_low_image_mode",
+  autoDownload: "nj_auto_download",
+  bookmarkFolders: "nj_bookmark_folders",
+  readingProgress: "nj_reading_progress",
 } as const;
