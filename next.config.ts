@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["firebase-admin", "jwks-rsa", "jose", "sharp"],
-  images: {
+    images: {
     remotePatterns: [
       {
         protocol: "https",
@@ -14,7 +14,19 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
-        hostname: "*.googleapis.com",
+        hostname: "ichef.bbci.co.uk",
+      },
+      {
+        protocol: "https",
+        hostname: "live-production.wcms.abc-cdn.net.au",
+      },
+      {
+        protocol: "https",
+        hostname: "**.bbci.co.uk",
+      },
+      {
+        protocol: "https",
+        hostname: "**.indiatimes.com",
       },
       {
         protocol: "https",

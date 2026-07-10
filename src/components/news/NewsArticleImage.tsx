@@ -10,11 +10,20 @@ type NewsArticleImageProps = Omit<ImageProps, "src" | "alt"> & {
   alt: string;
 };
 
+function shouldUseUnoptimized(url: string): boolean {
+  if (!url || url.startsWith("/")) return false;
+  return !url.includes("firebasestorage.googleapis.com");
+}
+
 export default function NewsArticleImage({ src, alt, className, ...props }: NewsArticleImageProps) {
-  const [currentSrc, setCurrentSrc] = useState(src || FALLBACK);
+  const initial = src && src !== "/logo.png" ? src : FALLBACK;
+  const [currentSrc, setCurrentSrc] = useState(initial);
+  const [unoptimized, setUnoptimized] = useState(shouldUseUnoptimized(initial));
 
   useEffect(() => {
-    setCurrentSrc(src || FALLBACK);
+    const next = src && src !== "/logo.png" ? src : FALLBACK;
+    setCurrentSrc(next);
+    setUnoptimized(shouldUseUnoptimized(next));
   }, [src]);
 
   return (
@@ -22,8 +31,12 @@ export default function NewsArticleImage({ src, alt, className, ...props }: News
       src={currentSrc}
       alt={alt}
       className={className}
+      unoptimized={unoptimized}
       onError={() => {
-        if (currentSrc !== FALLBACK) setCurrentSrc(FALLBACK);
+        if (currentSrc !== FALLBACK) {
+          setCurrentSrc(FALLBACK);
+          setUnoptimized(false);
+        }
       }}
       {...props}
     />

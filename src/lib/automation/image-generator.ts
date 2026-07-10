@@ -2,13 +2,12 @@ import { getAdminStorage } from "@/lib/firebase-admin";
 import {
   buildFirebaseStorageDownloadUrl,
   createStorageDownloadToken,
+  isFirebaseStorageUrl,
 } from "@/lib/firebase-storage-url";
 
 const NEWS_IMAGE_WIDTH = 1200;
 const NEWS_IMAGE_HEIGHT = 675;
 const WEBP_QUALITY = 76;
-const MIN_SOURCE_IMAGE_BYTES = 12_000;
-const MIN_SOURCE_IMAGE_WIDTH = 480;
 
 const CATEGORY_VISUAL_STYLE: Record<string, string> = {
   khel: "dynamic sports action, stadium or field atmosphere",
@@ -30,6 +29,10 @@ function isSafeImageUrl(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+function isUsableFirebaseImageUrl(url: string): boolean {
+  return isFirebaseStorageUrl(url) && url.includes("firebasestorage.googleapis.com") && url.includes("token=");
 }
 
 function buildImagePrompt(params: {
@@ -66,17 +69,6 @@ async function optimizeForWeb(buffer: Buffer): Promise<{ buffer: Buffer; content
   }
 }
 
-async function getImageMeta(buffer: Buffer): Promise<{ width: number; height: number } | null> {
-  try {
-    const sharp = (await import("sharp")).default;
-    const meta = await sharp(buffer).metadata();
-    if (!meta.width || !meta.height) return null;
-    return { width: meta.width, height: meta.height };
-  } catch {
-    return null;
-  }
-}
-
 async function uploadOptimizedImage(
   rawNewsId: string,
   buffer: Buffer,
@@ -102,34 +94,47 @@ async function uploadOptimizedImage(
   return buildFirebaseStorageDownloadUrl(bucket.name, path, downloadToken);
 }
 
+async function optimizeAndUpload(rawNewsId: string, sourceBuffer: Buffer): Promise<string> {
+  const optimized = await optimizeForWeb(sourceBuffer);
+  return uploadOptimizedImage(rawNewsId, optimized.buffer, optimized.contentType, optimized.ext);
+}
+
 async function fetchSourceImageBuffer(url: string): Promise<Buffer | null> {
   try {
     const response = await fetch(url, {
-      signal: AbortSignal.timeout(15000),
-      headers: { "User-Agent": "NewsJunctionBot/1.0" },
+      signal: AbortSignal.timeout(20000),
+      redirect: "follow",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        Referer: new URL(url).origin,
+      },
     });
     if (!response.ok) return null;
 
     const contentType = response.headers.get("content-type") || "";
-    if (!contentType.startsWith("image/")) return null;
+    if (contentType && !contentType.startsWith("image/") && contentType !== "application/octet-stream") {
+      return null;
+    }
 
     const arrayBuffer = await response.arrayBuffer();
-    if (arrayBuffer.byteLength < MIN_SOURCE_IMAGE_BYTES) return null;
-    if (arrayBuffer.byteLength > 6_000_000) return null;
+    if (arrayBuffer.byteLength < 1500) return null;
+    if (arrayBuffer.byteLength > 8_000_000) return null;
 
-    const buffer = Buffer.from(arrayBuffer);
-    const meta = await getImageMeta(buffer);
-    if (!meta || meta.width < MIN_SOURCE_IMAGE_WIDTH) return null;
-
-    return buffer;
+    return Buffer.from(arrayBuffer);
   } catch {
     return null;
   }
 }
 
-async function optimizeAndUpload(rawNewsId: string, sourceBuffer: Buffer): Promise<string> {
-  const optimized = await optimizeForWeb(sourceBuffer);
-  return uploadOptimizedImage(rawNewsId, optimized.buffer, optimized.contentType, optimized.ext);
+export async function hostSourceImageOnFirebase(
+  rawNewsId: string,
+  sourceUrl: string
+): Promise<string | null> {
+  const sourceBuffer = await fetchSourceImageBuffer(sourceUrl);
+  if (!sourceBuffer) return null;
+  return optimizeAndUpload(rawNewsId, sourceBuffer);
 }
 
 export async function generateAutomationArticleImage(params: {
@@ -173,12 +178,6 @@ export async function generateAutomationArticleImage(params: {
   return optimizeAndUpload(params.rawNewsId, rawBuffer);
 }
 
-async function tryOptimizeSourceImage(rawNewsId: string, sourceUrl: string): Promise<string | null> {
-  const sourceBuffer = await fetchSourceImageBuffer(sourceUrl);
-  if (!sourceBuffer) return null;
-  return optimizeAndUpload(rawNewsId, sourceBuffer);
-}
-
 export async function resolveAutomationArticleImage(params: {
   rawNewsId: string;
   originalImage: string;
@@ -190,9 +189,9 @@ export async function resolveAutomationArticleImage(params: {
   categoryNameEn: string;
   fallbackImage: string;
   generateAiImages: boolean;
-}): Promise<{ imageUrl: string; generated: boolean }> {
-  if (isSafeImageUrl(params.generatedImageUrl || "")) {
-    return { imageUrl: params.generatedImageUrl!, generated: true };
+}): Promise<{ imageUrl: string; generated: boolean; source: "cached" | "ai" | "hosted" | "fallback" }> {
+  if (isUsableFirebaseImageUrl(params.generatedImageUrl || "")) {
+    return { imageUrl: params.generatedImageUrl!, generated: true, source: "cached" };
   }
 
   if (params.generateAiImages) {
@@ -204,25 +203,20 @@ export async function resolveAutomationArticleImage(params: {
         categoryId: params.categoryId,
         categoryNameEn: params.categoryNameEn,
       });
-      if (generated) {
-        return { imageUrl: generated, generated: true };
+      if (generated && isUsableFirebaseImageUrl(generated)) {
+        return { imageUrl: generated, generated: true, source: "ai" };
       }
     } catch {
-      // Fall through to optimized source image.
+      // Continue to hosted source image.
     }
   }
 
   if (isSafeImageUrl(params.originalImage)) {
-    try {
-      const optimizedSource = await tryOptimizeSourceImage(params.rawNewsId, params.originalImage);
-      if (optimizedSource) {
-        return { imageUrl: optimizedSource, generated: true };
-      }
-    } catch {
-      // Fall through to raw source or default.
+    const hosted = await hostSourceImageOnFirebase(params.rawNewsId, params.originalImage);
+    if (hosted) {
+      return { imageUrl: hosted, generated: true, source: "hosted" };
     }
-    return { imageUrl: params.originalImage, generated: false };
   }
 
-  return { imageUrl: params.fallbackImage, generated: false };
+  return { imageUrl: params.fallbackImage, generated: false, source: "fallback" };
 }

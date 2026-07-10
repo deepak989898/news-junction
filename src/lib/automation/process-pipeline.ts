@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase-admin";
 import {
   getAutomationSettings,
@@ -134,7 +135,7 @@ export async function processRawNewsItem(rawNewsId: string): Promise<{
         aiOutput,
         categoryNameEn
       );
-      if (generated) {
+      if (generated && imageUrl !== settings.defaultCategoryImage) {
         await updateRawNews(rawNewsId, { generatedImageUrl: imageUrl });
       }
 
@@ -202,7 +203,7 @@ export async function approveAndPublishRawNews(rawNewsId: string): Promise<strin
     categoryNameEn
   );
 
-  if (generated) {
+  if (generated && imageUrl !== settings.defaultCategoryImage) {
     await updateRawNews(rawNewsId, { generatedImageUrl: imageUrl });
   }
 
@@ -228,6 +229,43 @@ export async function approveAndPublishRawNews(rawNewsId: string): Promise<strin
   });
 
   return newsId;
+}
+
+export async function repairPublishedNewsImage(newsId: string): Promise<{
+  imageUrl: string;
+  source: "cached" | "ai" | "hosted" | "fallback";
+}> {
+  const db = getAdminDb();
+  const newsDoc = await db.collection("news").doc(newsId).get();
+  if (!newsDoc.exists) throw new Error("News article not found");
+
+  const newsData = newsDoc.data()!;
+  const rawNewsId = newsData.automationRawNewsId as string | undefined;
+  if (!rawNewsId) throw new Error("Article is not from automation");
+
+  const rawItem = await getRawNewsById(rawNewsId);
+  if (!rawItem?.aiOutput) throw new Error("Linked raw news has no AI content");
+
+  const category = await getCategoryById(rawItem.categoryId);
+  const categoryNameEn = (category as { nameEn?: string })?.nameEn || "India";
+
+  const { imageUrl, source } = await resolveImageForRawItem(
+    rawNewsId,
+    rawItem,
+    rawItem.aiOutput,
+    categoryNameEn
+  );
+
+  const settings = await getAutomationSettings();
+  if (imageUrl !== settings.defaultCategoryImage) {
+    await db.collection("news").doc(newsId).update({
+      imageUrl,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    await updateRawNews(rawNewsId, { generatedImageUrl: imageUrl });
+  }
+
+  return { imageUrl, source };
 }
 
 export async function rejectRawNews(rawNewsId: string, reason?: string) {
