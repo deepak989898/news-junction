@@ -159,7 +159,7 @@ export default function ApprovalQueuePage() {
             </div>
             {preview.aiOutput ? (
               <div>
-                {(preview.generatedImageUrl || preview.originalImage) && (
+                {(preview.generatedImageUrl || preview.originalImage) ? (
                   <div className="relative mb-4 h-48 w-full overflow-hidden rounded-lg border">
                     <img
                       src={preview.generatedImageUrl || preview.originalImage}
@@ -167,6 +167,10 @@ export default function ApprovalQueuePage() {
                       className="h-full w-full object-cover"
                     />
                   </div>
+                ) : (
+                  <p className="mb-4 rounded-lg bg-blue-50 p-3 text-xs text-blue-800">
+                    AI featured image (optimized WebP) will be generated when you approve this article.
+                  </p>
                 )}
                 <h4 className="font-bold text-[#1a2b4c]">{preview.aiOutput.titleHi}</h4>
                 <p className="text-gray-600">{preview.aiOutput.titleEn}</p>

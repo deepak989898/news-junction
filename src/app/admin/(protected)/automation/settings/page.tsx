@@ -69,7 +69,7 @@ export default function AutomationSettingsPage() {
           label="Generate AI Featured Images (OpenAI)"
           checked={settings.generateAiImages !== false}
           onChange={(v) => setSettings({ ...settings, generateAiImages: v })}
-          description="Creates a unique image when you approve an article. Uses OPENAI_API_KEY."
+          description="Creates a unique 16:9 WebP image (~100KB) on approve. Uses OPENAI_API_KEY."
         />
 
         <FormInput label="Default Category Image URL" value={settings.defaultCategoryImage} onChange={(e) => setSettings({ ...settings, defaultCategoryImage: e.target.value })} />
