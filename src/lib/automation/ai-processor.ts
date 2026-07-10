@@ -35,8 +35,8 @@ Return JSON with these exact fields:
   "titleEn": "English headline",
   "summaryHi": "Hindi summary (2-3 sentences)",
   "summaryEn": "English summary (2-3 sentences)",
-  "contentHi": "Hindi article body (3-5 paragraphs, HTML <p> tags)",
-  "contentEn": "English article body (3-5 paragraphs, HTML <p> tags)",
+  "contentHi": "Hindi article body (2-3 short paragraphs, HTML <p> tags)",
+  "contentEn": "English article body (2-3 short paragraphs, HTML <p> tags)",
   "tags": ["tag1", "tag2"],
   "imageAltHi": "Hindi image alt text",
   "imageAltEn": "English image alt text",
@@ -105,9 +105,10 @@ async function callOpenAI(prompt: string): Promise<string> {
         { role: "user", content: prompt },
       ],
       temperature: 0.4,
+      max_tokens: 1800,
       response_format: { type: "json_object" },
     }),
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(45000),
   });
 
   if (!response.ok) {

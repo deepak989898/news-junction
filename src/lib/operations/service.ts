@@ -200,7 +200,7 @@ export async function cronAction(input: {
     let error = "";
     try {
       if (input.cronId === "fetch-news") await runFetchNews();
-      else if (input.cronId === "process-news") await runProcessNews(5);
+      else if (input.cronId === "process-news") await runProcessNews(2);
       else {
         await Promise.resolve();
       }

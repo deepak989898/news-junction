@@ -27,6 +27,16 @@ async function adminApiPost<T>(path: string, body: Record<string, unknown>): Pro
   return data;
 }
 
+export interface ProcessBatchResult {
+  success: boolean;
+  processed: number;
+  published: number;
+  pending: number;
+  failed: number;
+  duplicates: number;
+  batchSize?: number;
+}
+
 export async function approveRawNews(rawNewsId: string) {
   return adminApiPost("/api/automation/approve", { rawNewsId });
 }
@@ -35,6 +45,23 @@ export async function rejectRawNewsApi(rawNewsId: string, reason?: string) {
   return adminApiPost("/api/automation/reject", { rawNewsId, reason });
 }
 
-export async function triggerAutomation(action: "fetch" | "process") {
-  return adminApiPost("/api/automation/trigger", { action });
+export async function triggerAutomation(action: "fetch" | "process", batchSize = 1) {
+  return adminApiPost<ProcessBatchResult>("/api/automation/trigger", { action, batchSize });
+}
+
+export async function triggerProcessBatches(rounds = 5, batchSize = 1) {
+  const totals = { processed: 0, published: 0, pending: 0, failed: 0, duplicates: 0, rounds: 0 };
+
+  for (let i = 0; i < rounds; i++) {
+    const result = await triggerAutomation("process", batchSize);
+    totals.rounds++;
+    totals.processed += result.processed || 0;
+    totals.published += result.published || 0;
+    totals.pending += result.pending || 0;
+    totals.failed += result.failed || 0;
+    totals.duplicates += result.duplicates || 0;
+    if (!result.processed) break;
+  }
+
+  return totals;
 }

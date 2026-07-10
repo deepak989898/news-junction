@@ -15,7 +15,7 @@ import {
   getAutomationLogsClient,
 } from "@/firebase/firestore";
 import { AutomationSettings, AutomationLog } from "@/lib/automation/types";
-import { triggerAutomation } from "@/lib/automation/client-api";
+import { triggerAutomation, triggerProcessBatches } from "@/lib/automation/client-api";
 import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
 
@@ -47,17 +47,30 @@ export default function AutomationDashboardPage() {
     toast.success(enabled ? "Automation enabled" : "Automation disabled");
   };
 
+  const [processProgress, setProcessProgress] = useState("");
+
   const handleTrigger = async (action: "fetch" | "process") => {
     if (adminUser?.role !== "super_admin") {
       toast.error("Super admin required");
       return;
     }
     setTriggering(action);
+    setProcessProgress("");
     try {
-      const result = await triggerAutomation(action);
-      toast.success(`${action} completed: ${JSON.stringify(result)}`);
+      if (action === "process") {
+        setProcessProgress("Processing articles with AI (1 per request to avoid timeout)...");
+        const result = await triggerProcessBatches(5, 1);
+        setProcessProgress("");
+        toast.success(
+          `Processed ${result.processed}: ${result.pending} pending approval, ${result.published} published, ${result.duplicates} duplicates`
+        );
+      } else {
+        const result = await triggerAutomation("fetch");
+        toast.success(`Fetch completed: ${JSON.stringify(result)}`);
+      }
       await load();
     } catch (e) {
+      setProcessProgress("");
       toast.error(e instanceof Error ? e.message : "Failed");
     } finally {
       setTriggering(null);
@@ -108,7 +121,7 @@ export default function AutomationDashboardPage() {
                 disabled={!!triggering}
                 className="rounded-lg bg-[#1a2b4c] px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
               >
-                {triggering === "process" ? "Processing..." : "Run Process Now"}
+                {triggering === "process" ? "Processing..." : "Run Process Now (up to 5)"}
               </button>
             </>
           )}
@@ -118,9 +131,12 @@ export default function AutomationDashboardPage() {
           Last process: {settings?.lastProcessRun ? new Date(settings.lastProcessRun).toLocaleString() : "Never"}
         </p>
         <p className="mt-2 rounded-lg bg-blue-50 p-3 text-xs text-blue-900">
-          <strong>Workflow:</strong> Run Fetch → Run Process (AI writes articles) → Approval Queue → Approve ✓ to publish on website.
-          Only items with status <strong>Pending Approval</strong> show the green approve button. Click Process multiple times until Pending Approval count rises.
+          <strong>Workflow:</strong> Run Fetch → Run Process (AI writes articles, 5 per click) → Approval Queue → Approve ✓ to publish on website.
+          Only items with status <strong>Pending Approval</strong> show the green approve button.
         </p>
+        {processProgress && (
+          <p className="mt-2 text-xs font-medium text-[#1a2b4c]">{processProgress}</p>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -1,4 +1,15 @@
 {
+  "functions": {
+    "src/app/api/automation/trigger/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/cron/process-news/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/cron/fetch-news/route.ts": {
+      "maxDuration": 60
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/fetch-news",

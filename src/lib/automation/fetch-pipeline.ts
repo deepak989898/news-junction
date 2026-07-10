@@ -133,15 +133,16 @@ export async function runFetchNews(): Promise<{
   return { fetched, duplicates, errors };
 }
 
-export async function runProcessNews(batchSize = 15): Promise<{
+export async function runProcessNews(batchSize = 1): Promise<{
   processed: number;
   published: number;
   pending: number;
   failed: number;
+  duplicates: number;
 }> {
   const settings = await getAutomationSettings();
   if (!settings.automationEnabled) {
-    return { processed: 0, published: 0, pending: 0, failed: 0 };
+    return { processed: 0, published: 0, pending: 0, failed: 0, duplicates: 0 };
   }
 
   const items = await getRawNewsByStatus("fetched", batchSize);
@@ -149,15 +150,17 @@ export async function runProcessNews(batchSize = 15): Promise<{
   let published = 0;
   let pending = 0;
   let failed = 0;
+  let duplicates = 0;
 
   for (const item of items) {
     const result = await processRawNewsItem(item.id);
     processed++;
     if (result.status === "published") published++;
     else if (result.status === "pendingApproval") pending++;
+    else if (result.status === "duplicate") duplicates++;
     else if (result.status === "failed") failed++;
   }
 
   await updateAutomationSettings({ lastProcessRun: new Date().toISOString() });
-  return { processed, published, pending, failed };
+  return { processed, published, pending, failed, duplicates };
 }
