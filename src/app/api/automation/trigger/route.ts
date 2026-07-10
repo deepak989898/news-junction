@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, ...result });
     }
     if (action === "process") {
-      const result = await runProcessNews(5);
+      const result = await runProcessNews(15);
       return NextResponse.json({ success: true, ...result });
     }
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });

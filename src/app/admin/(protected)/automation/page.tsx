@@ -117,6 +117,10 @@ export default function AutomationDashboardPage() {
           Last fetch: {settings?.lastFetchRun ? new Date(settings.lastFetchRun).toLocaleString() : "Never"} ·
           Last process: {settings?.lastProcessRun ? new Date(settings.lastProcessRun).toLocaleString() : "Never"}
         </p>
+        <p className="mt-2 rounded-lg bg-blue-50 p-3 text-xs text-blue-900">
+          <strong>Workflow:</strong> Run Fetch → Run Process (AI writes articles) → Approval Queue → Approve ✓ to publish on website.
+          Only items with status <strong>Pending Approval</strong> show the green approve button. Click Process multiple times until Pending Approval count rises.
+        </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

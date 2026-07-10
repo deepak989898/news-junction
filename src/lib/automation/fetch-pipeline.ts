@@ -133,7 +133,7 @@ export async function runFetchNews(): Promise<{
   return { fetched, duplicates, errors };
 }
 
-export async function runProcessNews(batchSize = 5): Promise<{
+export async function runProcessNews(batchSize = 15): Promise<{
   processed: number;
   published: number;
   pending: number;

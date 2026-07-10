@@ -16,7 +16,7 @@ import toast from "react-hot-toast";
 export default function ApprovalQueuePage() {
   const [items, setItems] = useState<RawNewsItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("pendingApproval");
   const [riskFilter, setRiskFilter] = useState("all");
   const [preview, setPreview] = useState<RawNewsItem | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ type: "approve" | "reject"; id: string } | null>(null);

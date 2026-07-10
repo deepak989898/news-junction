@@ -11,7 +11,8 @@ export interface DuplicateCheckResult {
 export async function checkDuplicate(
   originalLink: string,
   originalTitle: string,
-  threshold: number
+  threshold: number,
+  excludeRawNewsId?: string
 ): Promise<DuplicateCheckResult> {
   const db = getAdminDb();
 
@@ -19,9 +20,10 @@ export async function checkDuplicate(
     const linkSnap = await db
       .collection("rawNews")
       .where("originalLink", "==", originalLink)
-      .limit(1)
+      .limit(5)
       .get();
-    if (!linkSnap.empty) {
+    const hasOther = linkSnap.docs.some((doc) => doc.id !== excludeRawNewsId);
+    if (hasOther) {
       return { isDuplicate: true, duplicateScore: 1, reason: "Same original link exists in rawNews" };
     }
   }
@@ -34,6 +36,7 @@ export async function checkDuplicate(
 
   let maxScore = 0;
   for (const doc of recentRaw.docs) {
+    if (excludeRawNewsId && doc.id === excludeRawNewsId) continue;
     const data = doc.data();
     const score = titleSimilarity(originalTitle, data.originalTitle || "");
     if (score > maxScore) maxScore = score;

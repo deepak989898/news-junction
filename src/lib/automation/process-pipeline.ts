@@ -42,7 +42,8 @@ export async function processRawNewsItem(rawNewsId: string): Promise<{
     const dupCheck = await checkDuplicate(
       rawItem.originalLink,
       rawItem.originalTitle,
-      settings.duplicateThreshold
+      settings.duplicateThreshold,
+      rawNewsId
     );
 
     if (dupCheck.isDuplicate) {
