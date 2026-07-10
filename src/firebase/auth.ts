@@ -8,7 +8,7 @@ import {
 
 let authInstance: Auth | null = null;
 
-function getAuthInstance(): Auth {
+export function getAuthInstance(): Auth {
   if (typeof window === "undefined") {
     throw new Error("Firebase Auth is only available on the client");
   }

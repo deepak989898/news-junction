@@ -7,6 +7,23 @@ import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { uploadNewsImage } from "@/firebase/storage";
 import toast from "react-hot-toast";
 
+function formatUploadError(error: unknown): string {
+  if (error && typeof error === "object" && "code" in error) {
+    const code = String((error as { code?: string }).code || "");
+    if (code === "storage/unauthorized") {
+      return "Upload denied. Login as admin and deploy storage.rules to Firebase.";
+    }
+    if (code === "storage/unauthenticated") {
+      return "Please login again before uploading.";
+    }
+    if (code === "storage/unknown" || code.includes("storage/")) {
+      return `Storage error (${code}). Enable Firebase Storage and check STORAGE_BUCKET env var.`;
+    }
+  }
+  if (error instanceof Error && error.message) return error.message;
+  return "Failed to upload image";
+}
+
 interface ImageUploaderProps {
   value: string;
   onChange: (url: string) => void;
@@ -30,8 +47,8 @@ export default function ImageUploader({
       const url = await uploadNewsImage(file);
       onChange(url);
       toast.success("Image uploaded");
-    } catch {
-      toast.error("Failed to upload image");
+    } catch (error) {
+      toast.error(formatUploadError(error));
     } finally {
       setUploading(false);
     }

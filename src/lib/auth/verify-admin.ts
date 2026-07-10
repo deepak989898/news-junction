@@ -32,3 +32,9 @@ export async function verifyAdmin(request: NextRequest): Promise<VerifiedAdmin |
     return null;
   }
 }
+
+export async function verifySuperAdmin(request: NextRequest): Promise<VerifiedAdmin | null> {
+  const admin = await verifyAdmin(request);
+  if (!admin || admin.role !== "super_admin") return null;
+  return admin;
+}

@@ -206,6 +206,14 @@ export default function NewsForm({
             onSelectFromLibrary={() => setShowMediaPicker(true)}
           />
           <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <FormInput
+              label="Image URL (paste link if upload fails)"
+              name="imageUrl"
+              value={formData.imageUrl}
+              onChange={handleChange}
+              type="url"
+              placeholder="https://example.com/image.jpg"
+            />
             <FormInput label="Image ALT (Hindi)" name="imageAltHi" value={formData.imageAltHi} onChange={handleChange} />
             <FormInput label="Image ALT (English)" name="imageAltEn" value={formData.imageAltEn} onChange={handleChange} />
           </div>

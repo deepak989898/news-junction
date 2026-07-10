@@ -1,4 +1,5 @@
 import { ref, uploadBytes, getDownloadURL, deleteObject, FirebaseStorage } from "firebase/storage";
+import { firebaseConfig } from "./config";
 
 let storageInstance: FirebaseStorage | null = null;
 
@@ -9,7 +10,11 @@ function getStorageInstance(): FirebaseStorage {
   if (!storageInstance) {
     const { getStorage } = require("firebase/storage") as typeof import("firebase/storage");
     const { getFirebaseApp } = require("./config") as typeof import("./config");
-    storageInstance = getStorage(getFirebaseApp());
+    const bucket = firebaseConfig.storageBucket;
+    if (!bucket) {
+      throw new Error("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET is missing in environment variables.");
+    }
+    storageInstance = getStorage(getFirebaseApp(), `gs://${bucket}`);
   }
   return storageInstance;
 }

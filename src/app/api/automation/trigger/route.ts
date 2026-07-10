@@ -1,31 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuth } from "firebase-admin/auth";
-import { getAdminApp, getAdminDb } from "@/lib/firebase-admin";
 import { runFetchNews, runProcessNews } from "@/lib/automation/fetch-pipeline";
+import { verifySuperAdmin } from "@/lib/auth/verify-admin";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-async function verifySuperAdmin(request: NextRequest) {
-  getAdminApp();
-  const token = request.headers.get("authorization")?.replace("Bearer ", "");
-  if (!token) return null;
-
-  const decoded = await getAuth().verifyIdToken(token);
-  const userDoc = await getAdminDb().collection("users").doc(decoded.uid).get();
-  if (!userDoc.exists || String(userDoc.data()?.role || "") !== "super_admin") {
-    return null;
-  }
-  return decoded.uid;
-}
-
 export async function POST(request: NextRequest) {
-  const uid = await verifySuperAdmin(request);
-  if (!uid) {
-    return NextResponse.json({ error: "Super admin required" }, { status: 401 });
-  }
-
   try {
+    const admin = await verifySuperAdmin(request);
+    if (!admin) {
+      return NextResponse.json({ error: "Super admin required" }, { status: 401 });
+    }
+
     const { action } = await request.json();
     if (action === "fetch") {
       const result = await runFetchNews();
@@ -38,6 +24,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Trigger failed";
+    if (message.includes("Firebase Admin credentials missing")) {
+      return NextResponse.json(
+        { error: "Firebase Admin not configured on Vercel. Set FIREBASE_SERVICE_ACCOUNT_KEY." },
+        { status: 500 }
+      );
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
