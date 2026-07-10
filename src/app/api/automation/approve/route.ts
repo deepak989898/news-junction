@@ -1,25 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuth } from "firebase-admin/auth";
-import { getAdminApp } from "@/lib/firebase-admin";
-import { getAdminDb } from "@/lib/firebase-admin";
-import { approveAndPublishRawNews, rejectRawNews } from "@/lib/automation/process-pipeline";
+import { verifyAdmin } from "@/lib/auth/verify-admin";
+import { approveAndPublishRawNews } from "@/lib/automation/process-pipeline";
 
 export const runtime = "nodejs";
-
-async function verifyAdmin(request: NextRequest) {
-  getAdminApp();
-  const token = request.headers.get("authorization")?.replace("Bearer ", "");
-  if (!token) return null;
-
-  const decoded = await getAuth().verifyIdToken(token);
-  const userDoc = await getAdminDb().collection("users").doc(decoded.uid).get();
-  if (!userDoc.exists) return null;
-
-  const role = userDoc.data()?.role;
-  if (!["super_admin", "editor"].includes(role)) return null;
-
-  return { uid: decoded.uid, role };
-}
 
 export async function POST(request: NextRequest) {
   const admin = await verifyAdmin(request);

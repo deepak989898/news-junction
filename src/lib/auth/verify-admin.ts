@@ -1,5 +1,4 @@
 import { NextRequest } from "next/server";
-import { getAuth } from "firebase-admin/auth";
 import { getAdminApp, getAdminDb } from "@/lib/firebase-admin";
 
 export interface VerifiedAdmin {
@@ -10,11 +9,12 @@ export interface VerifiedAdmin {
 }
 
 export async function verifyAdmin(request: NextRequest): Promise<VerifiedAdmin | null> {
-  getAdminApp();
   const token = request.headers.get("authorization")?.replace("Bearer ", "");
   if (!token) return null;
 
   try {
+    getAdminApp();
+    const { getAuth } = await import("firebase-admin/auth");
     const decoded = await getAuth().verifyIdToken(token);
     const userDoc = await getAdminDb().collection("users").doc(decoded.uid).get();
     if (!userDoc.exists) return null;
