@@ -36,6 +36,7 @@ import { env } from "@/config/env";
 import { cacheArticle, enqueueDownload } from "@/services/offline/article-cache";
 import { toggleArticleLike, getLikedArticles } from "@/services/storage/reader-storage";
 import { copyArticleLink } from "@/services/share/share";
+import { useAiAction } from "@/hooks/useAI";
 
 export default function ArticleScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
@@ -52,6 +53,8 @@ export default function ArticleScreen() {
   const [progress, setProgress] = useState(0);
   const [playing, setPlaying] = useState(false);
   const soundRef = useRef<Audio.Sound | null>(null);
+  const [aiResult, setAiResult] = useState("");
+  const aiAction = useAiAction();
 
   const { data: related } = useRelatedNews(article?.categoryId || "", article?.id || "");
   const { data: recommendations } = useRecommendations();
@@ -155,6 +158,15 @@ export default function ArticleScreen() {
     setReplyParent(null);
   };
 
+  const runAi = async (
+    mode: "summary" | "bullet_summary" | "key_takeaways" | "explain_simple" | "explain_detailed" | "translate_hi" | "translate_en"
+  ) => {
+    if (!article) return;
+    const text = `${getArticleTitle(article, language)}\n\n${getArticleContent(article, language)}`;
+    const res = await aiAction.mutateAsync({ mode, text, language });
+    setAiResult(res.output);
+  };
+
   if (isLoading || !article) {
     return (
       <View className="flex-1 bg-white pt-12">
@@ -233,6 +245,13 @@ export default function ArticleScreen() {
 
         <View className="mt-4 flex-row flex-wrap gap-2 px-4">
           <AppButton title={t("listen")} onPress={playAudio} />
+          <AppButton title="Quick Summary" onPress={() => runAi("summary")} />
+          <AppButton title="5 Bullet Summary" onPress={() => runAi("bullet_summary")} />
+          <AppButton title="Key Takeaways" onPress={() => runAi("key_takeaways")} />
+          <AppButton title="Explain" onPress={() => runAi("explain_simple")} />
+          <AppButton title="Detailed" onPress={() => runAi("explain_detailed")} />
+          <AppButton title="Translate HI" onPress={() => runAi("translate_hi")} />
+          <AppButton title="Translate EN" onPress={() => runAi("translate_en")} />
           <AppButton title={t("offlineDownload")} onPress={downloadOffline} />
           <AppButton title={t("copyLink")} onPress={() => copyArticleLink(shareUrl)} />
           <AppButton title={t("printPlaceholder")} onPress={() => {}} />
@@ -246,6 +265,13 @@ export default function ArticleScreen() {
           <Pressable className="mx-4 mt-4 rounded-xl bg-slate-50 p-3">
             <AppText className="text-sm text-red-600">{t("sourceLink")}: {article.sourceName}</AppText>
           </Pressable>
+        ) : null}
+
+        {aiResult ? (
+          <View className="mx-4 mt-4 rounded-2xl bg-slate-50 p-4">
+            <AppText className="font-semibold text-slate-900">AI Result</AppText>
+            <AppText className="mt-2 text-sm text-slate-700">{aiResult}</AppText>
+          </View>
         ) : null}
 
         <View className="mt-8 px-4">

@@ -7,6 +7,8 @@ import { I18nProvider } from "./I18nProvider";
 import { NetworkProvider } from "./NetworkProvider";
 import { NotificationProvider } from "./NotificationProvider";
 import { ReaderSettingsProvider } from "./ReaderSettingsProvider";
+import { AdminSecurityProvider } from "./AdminSecurityProvider";
+import { RuntimeProvider } from "./RuntimeProvider";
 import AppErrorBoundary from "./ErrorBoundaryProvider";
 
 const queryClient = new QueryClient({
@@ -28,9 +30,13 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
               <I18nProvider>
                 <ReaderSettingsProvider>
                   <AuthProvider>
-                    <NetworkProvider>
-                      <NotificationProvider>{children}</NotificationProvider>
-                    </NetworkProvider>
+                    <AdminSecurityProvider>
+                      <RuntimeProvider>
+                        <NetworkProvider>
+                          <NotificationProvider>{children}</NotificationProvider>
+                        </NetworkProvider>
+                      </RuntimeProvider>
+                    </AdminSecurityProvider>
                   </AuthProvider>
                 </ReaderSettingsProvider>
               </I18nProvider>

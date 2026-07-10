@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { HomeAppBar } from "@/components/layout/HomeAppBar";
 import { OfflineBanner } from "@/components/layout/OfflineBanner";
@@ -16,10 +16,15 @@ import { useCategories } from "@/hooks/useCategories";
 import { useRecommendations } from "@/hooks/useRecommendations";
 import { useI18n } from "@/hooks/useI18n";
 import { NewsArticle } from "@/types/news";
+import { useAiCenter } from "@/hooks/useAI";
+import { AiWidgetCard, AiShortcutRow } from "@/components/ai/AiCards";
+import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function HomeScreen() {
   const { t } = useI18n();
   const { data, isLoading, isError, refetch, isRefetching } = useHomeFeed();
+  const aiCenter = useAiCenter();
   const { data: categories } = useCategories();
   const { data: recommendations } = useRecommendations();
   const infinite = useInfiniteLatestNews(12);
@@ -44,6 +49,15 @@ export default function HomeScreen() {
       ) : (
         <>
           <SectionHeader title={t("topStories")} />
+          {aiCenter.data ? (
+            <>
+              <AiWidgetCard
+                greeting={aiCenter.data.greeting}
+                topCount={aiCenter.data.recommendations?.recommendations?.length || 0}
+              />
+              <AiShortcutRow />
+            </>
+          ) : null}
           <HeroCarousel items={data?.featured || []} />
 
           <SectionHeader title={t("breakingNews")} actionLabel={t("viewAll")} href="/breaking" />
@@ -122,6 +136,12 @@ export default function HomeScreen() {
         onEndReachedThreshold={0.4}
         ListFooterComponent={infinite.isFetchingNextPage ? <NewsListSkeleton count={2} /> : null}
       />
+      <Pressable
+        onPress={() => router.push("/ai")}
+        className="absolute bottom-6 right-6 h-14 w-14 items-center justify-center rounded-full bg-red-600 shadow-lg"
+      >
+        <Ionicons name="sparkles-outline" size={24} color="#fff" />
+      </Pressable>
     </View>
   );
 }

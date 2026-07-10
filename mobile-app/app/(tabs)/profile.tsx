@@ -14,6 +14,7 @@ export default function ProfileScreen() {
   const { resolvedTheme } = useThemePreference();
 
   const rows = [
+    { label: "Admin Center", href: "/admin" },
     { label: t("readingHistory"), href: "/reading-history" },
     { label: t("bookmarks"), href: "/(tabs)/bookmarks" },
     { label: t("notifications"), href: "/notifications" },

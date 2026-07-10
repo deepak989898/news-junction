@@ -5,4 +5,6 @@ export const ROUTES = {
   home: "/(tabs)",
   settings: "/settings",
   profile: "/(tabs)/profile",
+  ai: "/ai",
+  admin: "/admin",
 } as const;

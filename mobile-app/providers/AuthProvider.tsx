@@ -8,6 +8,7 @@ import {
 } from "firebase/auth";
 import { auth } from "@/firebase/auth";
 import { getSecureValue, setSecureValue, deleteSecureValue } from "@/services/storage/secure-storage";
+import { AppState } from "react-native";
 
 type Ctx = {
   user: User | null;
@@ -44,6 +45,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     getSecureValue(TOKEN_KEY).finally(() => setLoading(false));
     return unsub;
+  }, []);
+
+  useEffect(() => {
+    const SESSION_TIMEOUT_MS = 1000 * 60 * 30;
+    let backgroundAt = 0;
+    const sub = AppState.addEventListener("change", async (state) => {
+      if (state === "background" || state === "inactive") {
+        backgroundAt = Date.now();
+      }
+      if (state === "active" && backgroundAt) {
+        const elapsed = Date.now() - backgroundAt;
+        if (elapsed > SESSION_TIMEOUT_MS && auth.currentUser) {
+          await signOut(auth).catch(() => {});
+        }
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   const signIn = async (email: string, password: string, remember = true) => {

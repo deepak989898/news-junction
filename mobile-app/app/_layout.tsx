@@ -4,6 +4,8 @@ import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import { AppProviders } from "@/providers/AppProviders";
 import { env } from "@/config/env";
+import { initCrashReporting } from "@/services/monitoring/crash-reporting";
+import { registerBackgroundSync } from "@/services/background/tasks";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -12,6 +14,8 @@ export default function RootLayout() {
 
   useEffect(() => {
     const init = async () => {
+      initCrashReporting();
+      await registerBackgroundSync().catch(() => {});
       await new Promise((resolve) => setTimeout(resolve, 800));
       setReady(true);
       await SplashScreen.hideAsync();
@@ -44,6 +48,10 @@ export default function RootLayout() {
         <Stack.Screen name="settings/notifications" />
         <Stack.Screen name="settings/theme" />
         <Stack.Screen name="settings/language" />
+        <Stack.Screen name="ai" />
+        <Stack.Screen name="admin" />
+        <Stack.Screen name="diagnostics" />
+        <Stack.Screen name="release-health" />
         <Stack.Screen name="+not-found" />
       </Stack>
     </AppProviders>

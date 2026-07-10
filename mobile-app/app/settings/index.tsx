@@ -38,6 +38,8 @@ export default function SettingsIndexScreen() {
     { label: t("privacy"), href: "/(drawer)/privacy" },
     { label: t("terms"), href: "/(drawer)/terms" },
     { label: t("licenses"), href: "/settings/licenses" },
+    { label: "Diagnostics", href: "/diagnostics" },
+    { label: "App Health Dashboard", href: "/release-health" },
   ];
 
   return (

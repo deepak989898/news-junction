@@ -5,16 +5,57 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "channel": "development",
+      "env": {
+        "EXPO_PUBLIC_RELEASE_CHANNEL": "development"
+      }
+    },
+    "internal": {
+      "distribution": "internal",
+      "channel": "internal",
+      "env": {
+        "EXPO_PUBLIC_RELEASE_CHANNEL": "internal"
+      }
+    },
+    "qa": {
+      "distribution": "internal",
+      "channel": "qa",
+      "env": {
+        "EXPO_PUBLIC_RELEASE_CHANNEL": "qa"
+      }
+    },
+    "staging": {
+      "distribution": "internal",
+      "channel": "staging",
+      "env": {
+        "EXPO_PUBLIC_RELEASE_CHANNEL": "staging"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_RELEASE_CHANNEL": "preview"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "channel": "production",
+      "env": {
+        "EXPO_PUBLIC_RELEASE_CHANNEL": "production"
+      }
+    },
+    "hotfix": {
+      "autoIncrement": true,
+      "channel": "hotfix",
+      "env": {
+        "EXPO_PUBLIC_RELEASE_CHANNEL": "hotfix"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "production": {},
+    "hotfix": {}
   }
 }

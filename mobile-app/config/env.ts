@@ -23,4 +23,6 @@ export const env = {
   apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL || "",
   appVersion: process.env.EXPO_PUBLIC_APP_VERSION || "1.0.0",
   featureFlags: process.env.EXPO_PUBLIC_FEATURE_FLAGS || "{}",
+  releaseChannel: process.env.EXPO_PUBLIC_RELEASE_CHANNEL || "development",
+  sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN || "",
 };
