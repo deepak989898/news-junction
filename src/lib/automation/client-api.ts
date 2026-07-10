@@ -45,6 +45,43 @@ export async function rejectRawNewsApi(rawNewsId: string, reason?: string) {
   return adminApiPost("/api/automation/reject", { rawNewsId, reason });
 }
 
+export async function bulkRejectRawNews(rawNewsIds: string[], reason?: string) {
+  return adminApiPost<{ processed: number; failed: number }>("/api/automation/bulk", {
+    action: "reject",
+    rawNewsIds,
+    reason,
+  });
+}
+
+export async function bulkDeleteRawNews(rawNewsIds: string[]) {
+  return adminApiPost<{ deleted: number }>("/api/automation/bulk", {
+    action: "delete",
+    rawNewsIds,
+  });
+}
+
+export async function bulkApproveRawNews(
+  rawNewsIds: string[],
+  onProgress?: (done: number, total: number) => void
+) {
+  let success = 0;
+  let failed = 0;
+  const errors: string[] = [];
+
+  for (let i = 0; i < rawNewsIds.length; i++) {
+    try {
+      await approveRawNews(rawNewsIds[i]);
+      success++;
+    } catch (error) {
+      failed++;
+      errors.push(error instanceof Error ? error.message : `Failed: ${rawNewsIds[i]}`);
+    }
+    onProgress?.(i + 1, rawNewsIds.length);
+  }
+
+  return { success, failed, errors };
+}
+
 export async function triggerAutomation(action: "fetch" | "process", batchSize = 1) {
   return adminApiPost<ProcessBatchResult>("/api/automation/trigger", { action, batchSize });
 }

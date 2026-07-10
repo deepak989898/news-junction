@@ -123,6 +123,15 @@ export async function updateRawNews(id: string, data: Record<string, unknown>) {
   });
 }
 
+export async function deleteRawNewsItems(ids: string[]): Promise<number> {
+  if (!ids.length) return 0;
+  const db = getAdminDb();
+  const batch = db.batch();
+  ids.forEach((id) => batch.delete(db.collection(COLLECTIONS.rawNews).doc(id)));
+  await batch.commit();
+  return ids.length;
+}
+
 export async function getRawNewsByStatus(status: RawNewsStatus, limit = 10) {
   const db = getAdminDb();
   const snap = await db
