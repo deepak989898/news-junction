@@ -3,8 +3,8 @@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { NewsArticle } from "@/types";
 import { getArticleTitle, getArticleSummary, formatRelativeTime, toDate } from "@/lib/utils";
-import Image from "next/image";
 import Link from "next/link";
+import NewsArticleImage from "./NewsArticleImage";
 import NewsCard from "./NewsCard";
 
 interface FeaturedNewsProps {
@@ -32,7 +32,7 @@ export default function FeaturedNews({ featured, sideArticles }: FeaturedNewsPro
       >
         <div className="relative aspect-[16/10] md:aspect-[16/9]">
           {featured.imageUrl ? (
-            <Image
+            <NewsArticleImage
               src={featured.imageUrl}
               alt={imageAlt || title}
               fill

@@ -9,7 +9,7 @@ import {
   toDate,
   cn,
 } from "@/lib/utils";
-import Image from "next/image";
+import NewsArticleImage from "./NewsArticleImage";
 import Link from "next/link";
 
 interface NewsCardProps {
@@ -40,7 +40,7 @@ export default function NewsCard({
       >
         {showImage && article.imageUrl && (
           <div className="relative h-20 w-28 shrink-0 overflow-hidden rounded-lg">
-            <Image
+            <NewsArticleImage
               src={article.imageUrl}
               alt={imageAlt || title}
               fill
@@ -68,7 +68,7 @@ export default function NewsCard({
       >
         {showImage && article.imageUrl && (
           <div className="relative h-24 w-36 shrink-0 overflow-hidden rounded-lg md:h-28 md:w-44">
-            <Image
+            <NewsArticleImage
               src={article.imageUrl}
               alt={imageAlt || title}
               fill
@@ -99,7 +99,7 @@ export default function NewsCard({
       >
         {showImage && article.imageUrl && (
           <div className="relative mb-2 aspect-[4/3] overflow-hidden rounded-lg">
-            <Image
+            <NewsArticleImage
               src={article.imageUrl}
               alt={imageAlt || title}
               fill
@@ -123,7 +123,7 @@ export default function NewsCard({
     >
       {showImage && article.imageUrl && (
         <div className="relative aspect-[16/10] overflow-hidden">
-          <Image
+          <NewsArticleImage
             src={article.imageUrl}
             alt={imageAlt || title}
             fill

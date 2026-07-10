@@ -1,4 +1,8 @@
 import { getAdminStorage } from "@/lib/firebase-admin";
+import {
+  buildFirebaseStorageDownloadUrl,
+  createStorageDownloadToken,
+} from "@/lib/firebase-storage-url";
 
 const NEWS_IMAGE_WIDTH = 1200;
 const NEWS_IMAGE_HEIGHT = 675;
@@ -82,17 +86,20 @@ async function uploadOptimizedImage(
   const bucket = getAdminStorage().bucket();
   const path = `news/automation/${rawNewsId}/${Date.now()}.${ext}`;
   const file = bucket.file(path);
+  const downloadToken = createStorageDownloadToken();
+
   await file.save(buffer, {
     contentType,
     resumable: false,
-    metadata: { cacheControl: "public,max-age=31536000,immutable" },
+    metadata: {
+      cacheControl: "public,max-age=31536000,immutable",
+      metadata: {
+        firebaseStorageDownloadTokens: downloadToken,
+      },
+    },
   });
-  try {
-    await file.makePublic();
-  } catch {
-    // Bucket may already allow public reads via rules.
-  }
-  return `https://storage.googleapis.com/${bucket.name}/${path}`;
+
+  return buildFirebaseStorageDownloadUrl(bucket.name, path, downloadToken);
 }
 
 async function fetchSourceImageBuffer(url: string): Promise<Buffer | null> {

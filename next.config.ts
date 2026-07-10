@@ -10,9 +10,18 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
+        hostname: "storage.googleapis.com",
+      },
+      {
+        protocol: "https",
         hostname: "*.googleapis.com",
       },
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+      },
     ],
+    formats: ["image/webp"],
   },
 };
 

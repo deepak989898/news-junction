@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import Image from "next/image";
+import NewsArticleImage from "@/components/news/NewsArticleImage";
 import Link from "next/link";
 import { Share2, MessageCircle } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -288,7 +288,7 @@ export default function ArticlePage() {
 
             {article.imageUrl && (
               <div className="relative mt-6 aspect-[16/9] overflow-hidden rounded-lg">
-                <Image
+                <NewsArticleImage
                   src={article.imageUrl}
                   alt={imageAlt || title}
                   fill
