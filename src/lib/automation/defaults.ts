@@ -12,6 +12,7 @@ export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
   defaultAuthorName: "News Junction Team",
   defaultSourceCreditText: "Source",
   defaultCategoryImage: "/logo.png",
+  generateAiImages: true,
   lastFetchRun: null,
   lastProcessRun: null,
   lastCleanupRun: null,

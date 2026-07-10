@@ -50,6 +50,7 @@ export interface RawNewsItem {
   riskLevel: AutomationRiskLevel;
   duplicateScore: number;
   aiOutput?: AIGeneratedContent | null;
+  generatedImageUrl?: string;
   newsId?: string;
   errorMessage?: string;
   createdAt: string | null;
@@ -68,6 +69,7 @@ export interface AutomationSettings {
   defaultAuthorName: string;
   defaultSourceCreditText: string;
   defaultCategoryImage: string;
+  generateAiImages: boolean;
   lastFetchRun: string | null;
   lastProcessRun: string | null;
   lastCleanupRun: string | null;

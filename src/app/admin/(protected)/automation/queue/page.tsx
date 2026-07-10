@@ -159,6 +159,15 @@ export default function ApprovalQueuePage() {
             </div>
             {preview.aiOutput ? (
               <div>
+                {(preview.generatedImageUrl || preview.originalImage) && (
+                  <div className="relative mb-4 h-48 w-full overflow-hidden rounded-lg border">
+                    <img
+                      src={preview.generatedImageUrl || preview.originalImage}
+                      alt={preview.aiOutput.imageAltHi || preview.aiOutput.titleHi}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                )}
                 <h4 className="font-bold text-[#1a2b4c]">{preview.aiOutput.titleHi}</h4>
                 <p className="text-gray-600">{preview.aiOutput.titleEn}</p>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -197,7 +206,7 @@ export default function ApprovalQueuePage() {
       <ConfirmModal
         open={!!confirmAction}
         title={confirmAction?.type === "approve" ? "Approve & Publish" : "Reject Article"}
-        message={confirmAction?.type === "approve" ? "Publish this AI-generated article to the website?" : "Reject this article? It will not be published."}
+        message={confirmAction?.type === "approve" ? "Publish this article? OpenAI will generate a featured image (may take 30-60 seconds)." : "Reject this article? It will not be published."}
         confirmLabel={confirmAction?.type === "approve" ? "Publish" : "Reject"}
         variant={confirmAction?.type === "approve" ? "primary" : "danger"}
         onConfirm={handleConfirm}

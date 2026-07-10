@@ -11,16 +11,32 @@ import {
 import { generateArticleContent } from "./ai-processor";
 import { checkDuplicate } from "./duplicate-checker";
 import { detectRiskLevel, shouldAutoPublish } from "./risk-detector";
+import { resolveAutomationArticleImage } from "./image-generator";
 import { RawNewsStatus } from "./types";
 
-function isSafeImageUrl(url: string): boolean {
-  if (!url) return false;
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
+async function resolveImageForRawItem(
+  rawNewsId: string,
+  rawItem: {
+    originalImage: string;
+    generatedImageUrl?: string;
+    categoryId: string;
+  },
+  aiOutput: { titleEn: string; titleHi: string; summaryEn: string },
+  categoryNameEn: string
+) {
+  const settings = await getAutomationSettings();
+  return resolveAutomationArticleImage({
+    rawNewsId,
+    originalImage: rawItem.originalImage,
+    generatedImageUrl: rawItem.generatedImageUrl,
+    titleEn: aiOutput.titleEn,
+    titleHi: aiOutput.titleHi,
+    summaryEn: aiOutput.summaryEn,
+    categoryId: rawItem.categoryId,
+    categoryNameEn,
+    fallbackImage: settings.defaultCategoryImage,
+    generateAiImages: settings.generateAiImages !== false,
+  });
 }
 
 export async function processRawNewsItem(rawNewsId: string): Promise<{
@@ -86,10 +102,7 @@ export async function processRawNewsItem(rawNewsId: string): Promise<{
       nameHi: "देश",
       nameEn: "India",
     };
-
-    const imageUrl = isSafeImageUrl(rawItem.originalImage)
-      ? rawItem.originalImage
-      : settings.defaultCategoryImage;
+    const categoryNameEn = (catData as { nameEn?: string }).nameEn || "India";
 
     const publishedCounts = await countPublishedToday();
     const categoryCount = publishedCounts.byCategory[categoryId] || 0;
@@ -115,13 +128,23 @@ export async function processRawNewsItem(rawNewsId: string): Promise<{
     });
 
     if (autoPublish) {
+      const { imageUrl, generated } = await resolveImageForRawItem(
+        rawNewsId,
+        { ...rawItem, categoryId },
+        aiOutput,
+        categoryNameEn
+      );
+      if (generated) {
+        await updateRawNews(rawNewsId, { generatedImageUrl: imageUrl });
+      }
+
       const newsId = await publishRawNewsToNews(rawNewsId, aiOutput, {
         sourceName: rawItem.sourceName,
         sourceUrl: rawItem.sourceUrl,
         originalLink: rawItem.originalLink,
         categoryId: catData.id as string,
         categoryNameHi: (catData as { nameHi?: string }).nameHi || "देश",
-        categoryNameEn: (catData as { nameEn?: string }).nameEn || "India",
+        categoryNameEn,
         imageUrl,
         author: settings.defaultAuthorName,
         publish: true,
@@ -170,10 +193,18 @@ export async function approveAndPublishRawNews(rawNewsId: string): Promise<strin
   if (!rawItem || !rawItem.aiOutput) throw new Error("No AI content to publish");
 
   const category = await getCategoryById(rawItem.categoryId);
-  const imageUrl =
-    rawItem.originalImage && rawItem.originalImage.startsWith("https")
-      ? rawItem.originalImage
-      : settings.defaultCategoryImage;
+  const categoryNameEn = (category as { nameEn?: string })?.nameEn || "India";
+
+  const { imageUrl, generated } = await resolveImageForRawItem(
+    rawNewsId,
+    rawItem,
+    rawItem.aiOutput,
+    categoryNameEn
+  );
+
+  if (generated) {
+    await updateRawNews(rawNewsId, { generatedImageUrl: imageUrl });
+  }
 
   const newsId = await publishRawNewsToNews(rawNewsId, rawItem.aiOutput, {
     sourceName: rawItem.sourceName,
@@ -181,7 +212,7 @@ export async function approveAndPublishRawNews(rawNewsId: string): Promise<strin
     originalLink: rawItem.originalLink,
     categoryId: rawItem.categoryId,
     categoryNameHi: (category as { nameHi?: string })?.nameHi || "देश",
-    categoryNameEn: (category as { nameEn?: string })?.nameEn || "India",
+    categoryNameEn,
     imageUrl,
     author: settings.defaultAuthorName,
     publish: true,

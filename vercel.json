@@ -3,6 +3,9 @@
     "src/app/api/automation/trigger/route.ts": {
       "maxDuration": 60
     },
+    "src/app/api/automation/approve/route.ts": {
+      "maxDuration": 120
+    },
     "src/app/api/cron/process-news/route.ts": {
       "maxDuration": 60
     },

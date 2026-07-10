@@ -43,6 +43,7 @@ function mapRawNews(id: string, data: FirebaseFirestore.DocumentData): RawNewsIt
     riskLevel: data.riskLevel || "medium",
     duplicateScore: data.duplicateScore || 0,
     aiOutput: data.aiOutput || null,
+    generatedImageUrl: data.generatedImageUrl || undefined,
     newsId: data.newsId || undefined,
     errorMessage: data.errorMessage || undefined,
     createdAt: tsToIso(data.createdAt),

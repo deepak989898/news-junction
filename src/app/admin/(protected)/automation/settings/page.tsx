@@ -65,6 +65,13 @@ export default function AutomationSettingsPage() {
           <FormInput label="Default Author" value={settings.defaultAuthorName} onChange={(e) => setSettings({ ...settings, defaultAuthorName: e.target.value })} />
         </div>
 
+        <ToggleSwitch
+          label="Generate AI Featured Images (OpenAI)"
+          checked={settings.generateAiImages !== false}
+          onChange={(v) => setSettings({ ...settings, generateAiImages: v })}
+          description="Creates a unique image when you approve an article. Uses OPENAI_API_KEY."
+        />
+
         <FormInput label="Default Category Image URL" value={settings.defaultCategoryImage} onChange={(e) => setSettings({ ...settings, defaultCategoryImage: e.target.value })} />
         <FormInput label="Default Source Credit Text" value={settings.defaultSourceCreditText} onChange={(e) => setSettings({ ...settings, defaultSourceCreditText: e.target.value })} />
 

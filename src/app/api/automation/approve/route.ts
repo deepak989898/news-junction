@@ -3,6 +3,7 @@ import { verifyAdmin } from "@/lib/auth/verify-admin";
 import { approveAndPublishRawNews } from "@/lib/automation/process-pipeline";
 
 export const runtime = "nodejs";
+export const maxDuration = 120;
 
 export async function POST(request: NextRequest) {
   const admin = await verifyAdmin(request);
