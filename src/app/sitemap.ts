@@ -2,7 +2,33 @@ import { MetadataRoute } from "next";
 import { getSiteUrl } from "@/lib/seo";
 import { DEFAULT_CATEGORIES } from "@/lib/constants";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+async function getPublishedArticleUrls(siteUrl: string): Promise<MetadataRoute.Sitemap> {
+  try {
+    const { getAdminDb } = await import("@/lib/firebase-admin");
+    const snapshot = await getAdminDb()
+      .collection("news")
+      .where("status", "==", "published")
+      .orderBy("publishedAt", "desc")
+      .limit(500)
+      .get();
+
+    return snapshot.docs.map((doc) => {
+      const data = doc.data();
+      const slug = String(data.slug || doc.id);
+      const publishedAt = data.publishedAt?.toDate?.() || new Date();
+      return {
+        url: `${siteUrl}/article/${slug}`,
+        lastModified: publishedAt,
+        changeFrequency: "daily" as const,
+        priority: 0.7,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = getSiteUrl();
   const now = new Date();
 
@@ -20,5 +46,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }));
 
-  return [...staticPages, ...categoryPages];
+  const articlePages = await getPublishedArticleUrls(siteUrl);
+
+  return [...staticPages, ...categoryPages, ...articlePages];
 }

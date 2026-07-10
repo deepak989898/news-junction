@@ -24,6 +24,7 @@ import {
   UserRoundCog,
   Radar,
   Waypoints,
+  ClipboardCheck,
 } from "lucide-react";
 import { logoutAdmin } from "@/firebase/auth";
 import { useAuth } from "@/contexts/AuthContext";
@@ -36,6 +37,7 @@ const navItems = [
   { href: "/admin/categories", label: "Categories", icon: FolderOpen, roles: ["super_admin", "editor"] },
   { href: "/admin/sources", label: "Sources", icon: Rss, roles: ["super_admin", "editor"] },
   { href: "/admin/automation", label: "Automation", icon: Bot, roles: ["super_admin", "editor"] },
+  { href: "/admin/system-verification", label: "System Verification", icon: ClipboardCheck, roles: ["super_admin"] },
   { href: "/admin/ai/content-studio", label: "AI Content Studio", icon: Sparkles, roles: ["super_admin", "editor"] },
   { href: "/admin/ai/seo-manager", label: "AI SEO Manager", icon: SearchCheck, roles: ["super_admin", "editor"] },
   { href: "/admin/ai/media-studio", label: "AI Media Studio", icon: ImagePlus, roles: ["super_admin", "editor"] },
