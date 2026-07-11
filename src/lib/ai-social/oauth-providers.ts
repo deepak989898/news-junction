@@ -4,6 +4,13 @@ import { SocialPlatform } from "./types";
 
 const FB_GRAPH = "https://graph.facebook.com/v20.0";
 
+/** Page publishing scopes per Meta Permissions Reference (pages_manage_posts dependencies). */
+export const FACEBOOK_PAGE_OAUTH_SCOPES = [
+  "pages_show_list",
+  "pages_read_engagement",
+  "pages_manage_posts",
+] as const;
+
 function requireEnv(name: string): string {
   const value = (process.env[name] || "").trim();
   if (!value) throw new Error(`${name} is not configured in Vercel environment variables`);
@@ -13,19 +20,17 @@ function requireEnv(name: string): string {
 export function getFacebookOAuthUrl(state: string): string {
   const appId = requireEnv("FACEBOOK_APP_ID");
   const redirectUri = `${getSiteUrl()}/api/ai/social/oauth/facebook/callback`;
-  const scopes = [
-    "pages_manage_posts",
-    "pages_read_engagement",
-    "pages_show_list",
-    "pages_manage_metadata",
-  ].join(",");
   const params = new URLSearchParams({
     client_id: appId,
     redirect_uri: redirectUri,
     state,
-    scope: scopes,
+    scope: FACEBOOK_PAGE_OAUTH_SCOPES.join(","),
     response_type: "code",
   });
+  const configId = (process.env.FACEBOOK_LOGIN_CONFIG_ID || "").trim();
+  if (configId) {
+    params.set("config_id", configId);
+  }
   return `https://www.facebook.com/v20.0/dialog/oauth?${params.toString()}`;
 }
 
@@ -65,42 +70,46 @@ export async function completeFacebookOAuth(code: string) {
       id: string;
       name: string;
       access_token: string;
-      instagram_business_account?: { id: string };
+      tasks?: string[];
     }>;
   }>("/me/accounts", {
     access_token: longToken.access_token,
-    fields: "id,name,access_token,instagram_business_account",
+    fields: "id,name,access_token,tasks",
   });
 
   if (!accounts.data?.length) {
-    throw new Error("No Facebook Pages found. Create a Page and grant access during login.");
+    throw new Error("No Facebook Pages found. Create a Page and grant Page access during authorization.");
   }
 
   const page =
     (configuredPageId && accounts.data.find((p) => p.id === configuredPageId)) ||
     accounts.data[0];
 
+  if (configuredPageId && page.id !== configuredPageId) {
+    throw new Error(
+      `FACEBOOK_PAGE_ID (${configuredPageId}) was not returned for this Facebook account. Use the Page admin account that manages that Page.`
+    );
+  }
+
+  const canPublish =
+    !page.tasks?.length ||
+    page.tasks.some((task) => ["CREATE_CONTENT", "MANAGE"].includes(task));
+  if (!canPublish) {
+    throw new Error(
+      `Facebook account lacks CREATE_CONTENT permission on Page "${page.name}". Use a Page admin account.`
+    );
+  }
+
   await upsertSocialAccount({
     platform: "facebook",
     accountName: page.name,
     accountId: page.id,
     token: page.access_token,
-    scopes: ["pages_manage_posts", "pages_read_engagement", "pages_show_list"],
+    scopes: [...FACEBOOK_PAGE_OAUTH_SCOPES],
     enabled: true,
   });
 
-  if (page.instagram_business_account?.id) {
-    await upsertSocialAccount({
-      platform: "instagram",
-      accountName: `${page.name} (Instagram)`,
-      accountId: page.instagram_business_account.id,
-      token: page.access_token,
-      scopes: ["instagram_basic", "instagram_content_publish"],
-      enabled: true,
-    });
-  }
-
-  return { pageName: page.name, pageId: page.id, instagramConnected: Boolean(page.instagram_business_account?.id) };
+  return { pageName: page.name, pageId: page.id };
 }
 
 export async function connectTelegramBot(botToken: string) {
@@ -173,9 +182,9 @@ export function getPlatformConnectConfig(platform: SocialPlatform) {
   > = {
     facebook: {
       oneClick: true,
-      envRequired: ["FACEBOOK_APP_ID", "FACEBOOK_APP_SECRET", "FACEBOOK_PAGE_ID"],
+      envRequired: ["FACEBOOK_APP_ID", "FACEBOOK_APP_SECRET"],
       label: "Facebook Page",
-      description: "Login with Facebook and auto-connect your Page for posting.",
+      description: "Authorize your Facebook Page (Pages API). We store an encrypted Page access token for auto-posting.",
     },
     telegram: {
       oneClick: true,
@@ -187,7 +196,7 @@ export function getPlatformConnectConfig(platform: SocialPlatform) {
       oneClick: false,
       envRequired: ["FACEBOOK_APP_ID"],
       label: "Instagram",
-      description: "Connects automatically when Facebook Page has linked Instagram Business account.",
+      description: "Instagram publishing requires separate Instagram Graph permissions and App Review.",
     },
     x: {
       oneClick: false,

@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     return redirectToAccounts({
       status: "success",
       platform: "facebook",
-      message: `Connected ${result.pageName}${result.instagramConnected ? " + Instagram" : ""}`,
+      message: `Connected Facebook Page: ${result.pageName}`,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Facebook connect failed";

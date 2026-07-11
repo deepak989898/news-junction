@@ -168,8 +168,8 @@ export default function SocialAccountsPage() {
       />
 
       <div className="mb-6 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
-        <strong>Quick connect:</strong> Facebook = one click login. Telegram = paste bot token once (auto-verified).
-        Instagram connects automatically when linked to your Facebook Page.
+        <strong>Quick connect:</strong> Facebook = authorize your Page via Meta OAuth (Pages API token). Telegram = paste bot
+        token once (auto-verified).
       </div>
 
       <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -207,7 +207,7 @@ export default function SocialAccountsPage() {
               )}
 
               {cfg.platform === "instagram" && !isConnected && (
-                <p className="mb-3 text-xs text-gray-500">Connect Facebook first if Page has Instagram Business linked.</p>
+                <p className="mb-3 text-xs text-gray-500">Instagram posting is not enabled yet (requires App Review).</p>
               )}
 
               {cfg.missing.length > 0 && cfg.oneClick && (
@@ -224,7 +224,7 @@ export default function SocialAccountsPage() {
                     onClick={connectFacebook}
                   >
                     <Share2 className="mr-1 inline h-4 w-4" />
-                    {connecting === "facebook" ? "Redirecting..." : isConnected ? "Reconnect Facebook" : "Connect with Facebook"}
+                    {connecting === "facebook" ? "Redirecting..." : isConnected ? "Reconnect Page" : "Authorize Facebook Page"}
                   </button>
                 )}
 

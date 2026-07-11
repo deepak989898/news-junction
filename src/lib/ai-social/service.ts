@@ -274,7 +274,13 @@ function backoffMs(retryCount: number) {
   return Math.min(5 * 60 * 1000, 2000 * 2 ** retryCount);
 }
 
-async function publishToPlatform(platform: SocialPlatform, text: string, imageUrl: string | undefined, token: string) {
+async function publishToPlatform(
+  platform: SocialPlatform,
+  text: string,
+  imageUrl: string | undefined,
+  token: string,
+  accountId?: string
+) {
   if (platform === "telegram") {
     const chatId = process.env.TELEGRAM_CHANNEL_ID;
     if (!chatId) throw new Error("TELEGRAM_CHANNEL_ID not configured");
@@ -294,8 +300,8 @@ async function publishToPlatform(platform: SocialPlatform, text: string, imageUr
     return { platformPostId: `telegram-${Date.now()}` };
   }
   if (platform === "facebook") {
-    const pageId = process.env.FACEBOOK_PAGE_ID;
-    if (!pageId) throw new Error("FACEBOOK_PAGE_ID not configured");
+    const pageId = accountId || process.env.FACEBOOK_PAGE_ID;
+    if (!pageId) throw new Error("Facebook Page ID not configured. Reconnect the Page in Social Accounts.");
     const endpoint = imageUrl
       ? `https://graph.facebook.com/v20.0/${pageId}/photos`
       : `https://graph.facebook.com/v20.0/${pageId}/feed`;
@@ -353,7 +359,13 @@ export async function processSocialQueue(limit = 20) {
       if (accountSnap.empty) throw new Error(`No connected account for ${item.platform}`);
       const account = accountSnap.docs[0].data() as SocialAccount;
       const token = decrypt(account.tokenEncrypted);
-      await publishToPlatform(item.platform, `${item.text}\n\n${item.hashtags.join(" ")}\n${item.cta}`.trim(), item.imageUrl, token);
+      await publishToPlatform(
+        item.platform,
+        `${item.text}\n\n${item.hashtags.join(" ")}\n${item.cta}`.trim(),
+        item.imageUrl,
+        token,
+        account.accountId
+      );
       await doc.ref.update({ status: "published", publishedAt: nowIso(), updatedAt: nowIso() });
       published += 1;
       await syncAnalyticsOnPublish(item);

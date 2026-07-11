@@ -53,9 +53,10 @@ export default function PrivacyPolicyPage() {
 
       <h2>3. Facebook / Meta Integration</h2>
       <p>
-        If you are an authorized administrator and choose to connect Facebook, we use Meta&apos;s official OAuth login.
-        We receive only the permissions you approve (such as managing posts on Pages you administer). Tokens are stored
-        encrypted on our server and are used solely to publish content you approve from the admin panel.
+        If you are an authorized administrator and choose to connect a Facebook Page, we use Meta&apos;s OAuth
+        authorization dialog (Facebook Login for Business / Pages API). We receive only the Page permissions you
+        approve. The resulting Page access token is stored encrypted and is used solely to publish content you
+        approve from the admin panel. We do not use Facebook to authenticate website users.
       </p>
       <p>
         We do not sell Facebook user data. For Meta&apos;s own practices, see{" "}
