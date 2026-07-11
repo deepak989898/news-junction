@@ -78,6 +78,17 @@ export default function Footer() {
         </div>
 
         <div className="mt-8 border-t border-white/10 pt-6 text-center text-sm text-gray-400">
+          <div className="mb-3 flex flex-wrap justify-center gap-4">
+            <Link href="/privacy-policy" className="hover:text-white transition-colors">
+              {language === "hi" ? "गोपनीयता नीति" : "Privacy Policy"}
+            </Link>
+            <Link href="/terms" className="hover:text-white transition-colors">
+              {language === "hi" ? "सेवा की शर्तें" : "Terms of Service"}
+            </Link>
+            <Link href="/user-data-deletion" className="hover:text-white transition-colors">
+              {language === "hi" ? "डेटा हटाएँ" : "Data Deletion"}
+            </Link>
+          </div>
           {settings.footerText || `© ${year} ${settings.siteName || BRAND.name}. ${language === "hi" ? "सर्वाधिकार सुरक्षित" : "All rights reserved"}.`}
         </div>
       </div>
