@@ -1,4 +1,4 @@
-export type MediaProvider = "openai-images" | "google-imagen" | "stability-ai";
+export type MediaProvider = "openai-images" | "google-gemini-image" | "stability-ai";
 export type MediaStatus = "pending" | "processing" | "completed" | "failed" | "cancelled" | "retrying";
 export type MediaAssetStatus = "pending" | "approved" | "rejected" | "applied";
 

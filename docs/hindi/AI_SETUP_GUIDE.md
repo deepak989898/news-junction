@@ -6,7 +6,7 @@
 |----------|------|--------|-----|
 | OpenAI | ✅ Real | ✅ gpt-image-1 | ✅ gpt-4o-mini-tts |
 | Gemini | ✅ gemini-1.5-flash | ❌ | ❌ |
-| Stability/Imagen | ❌ Placeholder | ❌ Placeholder | — |
+| Google Gemini Image | ✅ gemini-3.1-flash-image | ❌ | ❌ |
 | ElevenLabs/Google TTS | — | — | ❌ Placeholder |
 
 ## Environment Variables

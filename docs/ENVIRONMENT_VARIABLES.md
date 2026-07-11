@@ -16,9 +16,8 @@
 
 - `CRON_SECRET`
 - `OPENAI_API_KEY`
-- `GEMINI_API_KEY`
-- `STABILITY_API_KEY` (optional provider)
-- `IMAGEN_API_KEY` (optional provider)
+- `GEMINI_API_KEY` (required for Google Gemini image generation; also used for Gemini text)
+- `IMAGEN_API_KEY` (deprecated alias — use `GEMINI_API_KEY` instead)
 - `ELEVENLABS_API_KEY` (optional provider)
 - `GOOGLE_CLOUD_TTS_API_KEY` (optional provider)
 

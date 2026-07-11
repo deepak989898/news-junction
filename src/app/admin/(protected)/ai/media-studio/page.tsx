@@ -194,8 +194,8 @@ export default function AiMediaStudioPage() {
               <label className="text-sm">Default Provider
                 <select className="mt-1 w-full rounded border px-2 py-1" value={String(settingsDraft.defaultProvider || "openai-images")} onChange={(e) => setSettingsDraft((p) => ({ ...p, defaultProvider: e.target.value }))}>
                   <option value="openai-images">OpenAI Images</option>
-                  <option value="google-imagen">Google Imagen (placeholder)</option>
-                  <option value="stability-ai">Stability AI (placeholder)</option>
+                  <option value="google-gemini-image">Google Gemini Image (gemini-3.1-flash-image)</option>
+                  <option value="stability-ai">Stability AI (not configured)</option>
                 </select>
               </label>
               <label className="text-sm">Default Image Size

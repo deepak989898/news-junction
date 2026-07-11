@@ -1,3 +1,4 @@
+import { generateGeminiImage } from "@/lib/google-ai/gemini-image";
 import { getAdminDb, getAdminStorage } from "@/lib/firebase-admin";
 import { getArticleById, getAISettings } from "@/lib/ai-studio/server-db";
 import { estimateTokensFromText } from "@/lib/ai-studio/ai-client";
@@ -25,16 +26,27 @@ function asString(v: unknown) {
   return String(v || "");
 }
 
+function normalizeMediaProvider(provider: MediaProvider | "google-imagen"): MediaProvider {
+  if (provider === "google-imagen") return "google-gemini-image";
+  return provider;
+}
+
 function estimateImageCost(provider: MediaProvider, quality: "standard" | "hd", imageCount = 1): number {
-  if (provider === "openai-images") return (quality === "hd" ? 0.08 : 0.04) * imageCount;
-  if (provider === "stability-ai") return 0.03 * imageCount;
+  const normalized = normalizeMediaProvider(provider);
+  if (normalized === "openai-images") return (quality === "hd" ? 0.08 : 0.04) * imageCount;
+  if (normalized === "google-gemini-image") return (quality === "hd" ? 0.06 : 0.04) * imageCount;
+  if (normalized === "stability-ai") return 0.03 * imageCount;
   return 0.05 * imageCount;
 }
 
 export async function getAiMediaSettings(): Promise<AiMediaSettings> {
   const doc = await getAdminDb().collection("settings").doc(AI_MEDIA_SETTINGS_DOC_ID).get();
   if (!doc.exists) return { ...DEFAULT_AI_MEDIA_SETTINGS };
-  return { ...DEFAULT_AI_MEDIA_SETTINGS, ...(doc.data() as AiMediaSettings) };
+  const raw = { ...DEFAULT_AI_MEDIA_SETTINGS, ...(doc.data() as AiMediaSettings) };
+  if ((raw.defaultProvider as string) === "google-imagen") {
+    raw.defaultProvider = "google-gemini-image";
+  }
+  return raw;
 }
 
 export async function updateAiMediaSettings(patch: Partial<AiMediaSettings>): Promise<AiMediaSettings> {
@@ -140,15 +152,27 @@ function parseSize(size: string) {
 }
 
 async function generateWithProvider(args: {
-  provider: MediaProvider;
+  provider: MediaProvider | "google-imagen";
   prompt: string;
   size: string;
   quality: "standard" | "hd";
 }): Promise<{ imageBuffer: Buffer; revisedPrompt?: string; format: string; width: number; height: number }> {
-  const { provider, prompt, size, quality } = args;
+  const provider = normalizeMediaProvider(args.provider);
+  const { prompt, size, quality } = args;
   const { width, height } = parseSize(size);
-  if (provider === "google-imagen" || provider === "stability-ai") {
-    throw new Error(`${provider} is configured as future-ready placeholder. Switch provider to OpenAI Images.`);
+
+  if (provider === "stability-ai") {
+    throw new Error("stability-ai is not configured. Switch provider to OpenAI Images or Google Gemini Image.");
+  }
+
+  if (provider === "google-gemini-image") {
+    const generated = await generateGeminiImage({ prompt, size, quality });
+    return {
+      imageBuffer: generated.imageBuffer,
+      format: generated.format,
+      width: generated.width,
+      height: generated.height,
+    };
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
@@ -267,7 +291,7 @@ export async function generateMediaAsset(args: {
   const settings = await getAiMediaSettings();
   const articleRaw = args.articleId ? await getArticleById(args.articleId) : null;
   const article = articleRaw as NewsDoc | null;
-  const provider = args.provider || settings.defaultProvider;
+  const provider = normalizeMediaProvider(args.provider || settings.defaultProvider);
   const style = args.style || settings.defaultStyle;
   const language = args.language || "both";
   const altCount = Math.max(1, Math.min(4, Number(args.makeAlternatives || 1)));
@@ -474,7 +498,9 @@ export async function getMediaStudioData() {
       providerComparison: {
         openai: assets.docs.filter((d) => d.data().provider === "openai-images").length,
         stability: assets.docs.filter((d) => d.data().provider === "stability-ai").length,
-        imagen: assets.docs.filter((d) => d.data().provider === "google-imagen").length,
+        gemini: assets.docs.filter((d) =>
+          ["google-gemini-image", "google-imagen"].includes(String(d.data().provider || ""))
+        ).length,
       },
     },
     assets: assets.docs.map((d) => ({ id: d.id, ...d.data() })),
