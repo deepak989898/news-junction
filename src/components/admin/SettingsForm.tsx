@@ -9,6 +9,7 @@ import Image from "next/image";
 import toast from "react-hot-toast";
 import { useState, FormEvent, ChangeEvent } from "react";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import { SITE_FAVICON_URL } from "@/components/layout/FaviconHead";
 
 interface SettingsFormProps {
   initialSettings: SiteSettings;
@@ -115,15 +116,16 @@ export default function SettingsForm({ initialSettings, onSave }: SettingsFormPr
               </label>
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">Favicon</label>
-              {settings.faviconUrl && (
-                <div className="relative mb-2 h-16 w-16 overflow-hidden rounded-full border border-gray-200 bg-white shadow-sm">
-                  <Image src={settings.faviconUrl} alt="Favicon" fill className="object-contain p-2" sizes="64px" />
-                </div>
-              )}
+              <label className="mb-2 block text-sm font-medium text-gray-700">Favicon (browser tab)</label>
+              <div className="relative mb-2 h-16 w-16 overflow-hidden rounded-full border border-gray-200 bg-white shadow-sm">
+                <Image src={SITE_FAVICON_URL} alt="Favicon" fill className="object-contain p-1.5" sizes="64px" unoptimized />
+              </div>
               <p className="mt-1 text-xs text-gray-500">
-                Site default round favicon: <code className="rounded bg-gray-100 px-1">/favicon.ico</code>. Upload only if you need a custom icon.
+                Browser tab uses round NJ favicon: <code className="rounded bg-gray-100 px-1">/favicon-96.png</code>
               </p>
+              {settings.faviconUrl && settings.faviconUrl !== "/favicon-96.png" && (
+                <p className="mt-1 text-xs text-amber-700">Stored custom URL is not used for the tab icon.</p>
+              )}
               <label className="mt-2 inline-flex cursor-pointer rounded-lg border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-600 hover:border-[#1a2b4c]">
                 {uploading === "favicon" ? <LoadingSpinner size="sm" /> : "Upload Favicon"}
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleAssetUpload(e.target.files[0], "favicon")} />

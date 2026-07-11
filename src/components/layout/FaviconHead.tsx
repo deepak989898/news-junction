@@ -1,41 +1,33 @@
 "use client";
 
 import { useEffect } from "react";
-import { useSettings } from "@/contexts/SettingsContext";
 
-const FAVICON_VERSION = "5";
+const FAVICON_VERSION = "8";
+export const SITE_FAVICON_URL = `/favicon-96.png?v=${FAVICON_VERSION}`;
 
-function resolveFaviconHref(faviconUrl?: string): string {
-  const localRound =
-    !faviconUrl ||
-    faviconUrl === "/logo.png" ||
-    faviconUrl.endsWith("/logo.png") ||
-    faviconUrl.includes("firebasestorage.googleapis.com");
-
-  const base = localRound ? "/favicon.ico" : faviconUrl;
-  return base.includes("?") ? base : `${base}?v=${FAVICON_VERSION}`;
-}
-
-/** Applies round site favicon in the browser tab and busts stale cache. */
+/** Applies the round NJ favicon in the browser tab (PNG for clarity at small sizes). */
 export default function FaviconHead() {
-  const { settings } = useSettings();
-
   useEffect(() => {
-    const href = resolveFaviconHref(settings.faviconUrl);
-
     document.querySelectorAll("link[rel*='icon']").forEach((node) => node.remove());
 
-    const icon = document.createElement("link");
-    icon.rel = "icon";
-    icon.type = href.includes(".ico") ? "image/x-icon" : "image/png";
-    icon.href = href;
-    document.head.appendChild(icon);
+    const png = document.createElement("link");
+    png.rel = "icon";
+    png.type = "image/png";
+    png.sizes = "96x96";
+    png.href = SITE_FAVICON_URL;
+    document.head.appendChild(png);
+
+    const shortcut = document.createElement("link");
+    shortcut.rel = "shortcut icon";
+    shortcut.type = "image/png";
+    shortcut.href = SITE_FAVICON_URL;
+    document.head.appendChild(shortcut);
 
     const apple = document.createElement("link");
     apple.rel = "apple-touch-icon";
     apple.href = `/apple-icon.png?v=${FAVICON_VERSION}`;
     document.head.appendChild(apple);
-  }, [settings.faviconUrl]);
+  }, []);
 
   return null;
 }

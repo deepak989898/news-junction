@@ -1,6 +1,5 @@
 /**
- * Generates round white-background favicons with a large centered NJ mark.
- * Usage: node scripts/generate-favicon.mjs [optional-source-path]
+ * Generates favicons: white background, centered NJ logo, clearly visible in browser tabs.
  */
 import sharp from "sharp";
 import fs from "fs";
@@ -15,48 +14,39 @@ const defaultSource =
 
 const source = process.argv[2] || defaultSource;
 
-const LOGO_IN_CIRCLE_SCALE = 0.66;
+/** Padding around logo inside the square (8% each side) */
+const PADDING_RATIO = 0.08;
 
 async function extractNjMark(src) {
   const meta = await sharp(src).metadata();
   const w = meta.width || 1024;
   const h = meta.height || 1024;
 
-  // NJ monogram + globe only (no "NEWS JUNCTION" text below)
-  const cropSize = Math.round(w * 0.42);
+  const cropSize = Math.round(w * 0.52);
   const left = Math.round((w - cropSize) / 2);
-  const top = Math.round(h * 0.06);
+  const top = Math.round(h * 0.04);
 
   return sharp(src).extract({ left, top, width: cropSize, height: cropSize }).png().toBuffer();
 }
 
-async function createRoundFavicon(njMark, size) {
-  const radius = size / 2;
-  const logoSize = Math.round(size * LOGO_IN_CIRCLE_SCALE);
-  const offset = Math.round((size - logoSize) / 2);
-
-  const circleMask = Buffer.from(
-    `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="${radius}" cy="${radius}" r="${radius}" fill="#ffffff"/>
-    </svg>`
-  );
-
-  const whiteCanvas = Buffer.from(
-    `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="${radius}" cy="${radius}" r="${radius}" fill="#ffffff"/>
-    </svg>`
-  );
+async function createFavicon(njMark, size) {
+  const pad = Math.max(2, Math.round(size * PADDING_RATIO));
+  const inner = size - pad * 2;
 
   const logo = await sharp(njMark)
-    .resize(logoSize, logoSize, { fit: "contain", background: { r: 255, g: 255, b: 255, alpha: 1 } })
+    .resize(inner, inner, { fit: "contain", background: { r: 255, g: 255, b: 255, alpha: 1 } })
     .png()
     .toBuffer();
 
-  return sharp(whiteCanvas)
-    .composite([{ input: logo, top: offset, left: offset }])
-    .ensureAlpha()
-    .composite([{ input: circleMask, blend: "dest-in" }])
-    .flatten({ background: { r: 255, g: 255, b: 255 } })
+  return sharp({
+    create: {
+      width: size,
+      height: size,
+      channels: 3,
+      background: { r: 255, g: 255, b: 255 },
+    },
+  })
+    .composite([{ input: logo, top: pad, left: pad }])
     .png()
     .toBuffer();
 }
@@ -80,20 +70,18 @@ async function main() {
   ];
 
   for (const { size, path: relPath } of outputs) {
-    const buffer = await createRoundFavicon(njMark, size);
+    const buffer = await createFavicon(njMark, size);
     const out = path.join(root, relPath);
     fs.mkdirSync(path.dirname(out), { recursive: true });
     await sharp(buffer).toFile(out);
-    console.log("Wrote", relPath, `(${size}px round)`);
+    console.log("Wrote", relPath);
   }
 
-  const favicon32 = await createRoundFavicon(njMark, 32);
+  const favicon32 = await createFavicon(njMark, 32);
   await sharp(favicon32).toFile(path.join(root, "src/app/favicon.ico"));
   await sharp(favicon32).toFile(path.join(root, "public/favicon.ico"));
-  console.log("Wrote favicon.ico (32px round)");
 
   await sharp(source).png().toFile(path.join(root, "public/logo.png"));
-  console.log("Wrote public/logo.png (full logo)");
 }
 
 main().catch((err) => {
