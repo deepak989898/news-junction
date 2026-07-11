@@ -3,7 +3,7 @@ import { SiteSettings } from "@/types";
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   siteName: "News Junction",
   logoUrl: "/logo.png",
-  faviconUrl: "/logo.png",
+  faviconUrl: "/favicon.ico",
   defaultLanguage: "hi",
   contactEmail: "contact@newsjunction.com",
   socialLinks: {
