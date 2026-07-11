@@ -34,9 +34,9 @@ export default function Header() {
             <Image
               src={logoUrl}
               alt={siteName}
-              width={40}
-              height={40}
-              className="rounded-full"
+              width={44}
+              height={44}
+              className="rounded-full border border-gray-100 bg-white object-cover p-0.5 shadow-sm"
             />
             <div className="hidden sm:block">
               <span className="text-lg font-bold leading-none">

@@ -105,8 +105,8 @@ export default function SettingsForm({ initialSettings, onSave }: SettingsFormPr
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">Logo</label>
               {settings.logoUrl && (
-                <div className="relative mb-2 h-16 w-16">
-                  <Image src={settings.logoUrl} alt="Logo" fill className="rounded object-contain" sizes="64px" />
+                <div className="relative mb-2 h-16 w-16 overflow-hidden rounded-full border border-gray-200 bg-white shadow-sm">
+                  <Image src={settings.logoUrl} alt="Logo" fill className="object-cover p-0.5" sizes="64px" />
                 </div>
               )}
               <label className="cursor-pointer rounded-lg border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-600 hover:border-[#1a2b4c]">
@@ -117,11 +117,14 @@ export default function SettingsForm({ initialSettings, onSave }: SettingsFormPr
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">Favicon</label>
               {settings.faviconUrl && (
-                <div className="relative mb-2 h-8 w-8">
-                  <Image src={settings.faviconUrl} alt="Favicon" fill className="rounded object-contain" sizes="32px" />
+                <div className="relative mb-2 h-16 w-16 overflow-hidden rounded-full border border-gray-200 bg-white shadow-sm">
+                  <Image src={settings.faviconUrl} alt="Favicon" fill className="object-cover p-1" sizes="64px" />
                 </div>
               )}
-              <label className="cursor-pointer rounded-lg border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-600 hover:border-[#1a2b4c]">
+              <p className="mt-1 text-xs text-gray-500">
+                Site default round favicon: <code className="rounded bg-gray-100 px-1">/favicon.ico</code>. Upload only if you need a custom icon.
+              </p>
+              <label className="mt-2 inline-flex cursor-pointer rounded-lg border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-600 hover:border-[#1a2b4c]">
                 {uploading === "favicon" ? <LoadingSpinner size="sm" /> : "Upload Favicon"}
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleAssetUpload(e.target.files[0], "favicon")} />
               </label>
