@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-const FAVICON_VERSION = "8";
+const FAVICON_VERSION = "9";
 export const SITE_FAVICON_URL = `/favicon-96.png?v=${FAVICON_VERSION}`;
 
 /** Applies the round NJ favicon in the browser tab (PNG for clarity at small sizes). */

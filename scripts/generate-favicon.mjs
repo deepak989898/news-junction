@@ -30,6 +30,7 @@ async function extractNjMark(src) {
 }
 
 async function createFavicon(njMark, size) {
+  const radius = size / 2;
   const pad = Math.max(2, Math.round(size * PADDING_RATIO));
   const inner = size - pad * 2;
 
@@ -38,14 +39,14 @@ async function createFavicon(njMark, size) {
     .png()
     .toBuffer();
 
-  return sharp({
-    create: {
-      width: size,
-      height: size,
-      channels: 3,
-      background: { r: 255, g: 255, b: 255 },
-    },
-  })
+  // White circle on transparent square — rounded look in browser tabs
+  const whiteCircle = Buffer.from(
+    `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="${radius}" cy="${radius}" r="${radius}" fill="#ffffff"/>
+    </svg>`
+  );
+
+  return sharp(whiteCircle)
     .composite([{ input: logo, top: pad, left: pad }])
     .png()
     .toBuffer();
