@@ -26,6 +26,16 @@ export const connectSocialAccountApi = (payload: Record<string, unknown>) =>
   callSocialApi("/api/ai/social/accounts", "POST", payload);
 export const disconnectSocialAccountApi = (platform: string) =>
   callSocialApi("/api/ai/social/accounts", "PUT", { platform, action: "disconnect" });
+export const getSocialOAuthConfigApi = () =>
+  callSocialApi<{ platforms: Array<Record<string, unknown>> }>("/api/ai/social/oauth/config");
+export const startFacebookOAuthApi = () =>
+  callSocialApi<{ url: string }>("/api/ai/social/oauth/facebook/start");
+export const connectTelegramBotApi = (botToken: string) =>
+  callSocialApi<{ success: boolean; accountName: string; channelTitle: string }>(
+    "/api/ai/social/oauth/telegram/connect",
+    "POST",
+    { botToken }
+  );
 export const generateSocialContentApi = (payload: Record<string, unknown>) =>
   callSocialApi("/api/ai/social/generate", "POST", payload);
 export const scheduleSocialPostApi = (payload: Record<string, unknown>) =>

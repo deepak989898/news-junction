@@ -1,44 +1,80 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Link2, Link2Off, Shield, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Link2,
+  Link2Off,
+  RefreshCw,
+  Share2,
+  Send,
+  Camera,
+  MessageSquare,
+  Briefcase,
+  MessageCircle,
+  Play,
+  CheckCircle2,
+  AlertCircle,
+  ExternalLink,
+} from "lucide-react";
 import AdminTopbar from "@/components/layout/AdminTopbar";
 import RoleGuard from "@/components/admin/RoleGuard";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
-import { connectSocialAccountApi, disconnectSocialAccountApi } from "@/lib/ai-social/client-api";
+import {
+  connectTelegramBotApi,
+  disconnectSocialAccountApi,
+  getSocialOAuthConfigApi,
+  startFacebookOAuthApi,
+} from "@/lib/ai-social/client-api";
 import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
 
-const PLATFORMS = [
-  "facebook",
-  "instagram",
-  "x",
-  "linkedin",
-  "telegram",
-  "whatsapp_channel",
-  "youtube_community",
-] as const;
+type SocialAccountRow = {
+  id?: string;
+  platform: string;
+  accountName: string;
+  status: string;
+  enabled: boolean;
+  lastCheckedAt?: string;
+};
+
+type PlatformConfig = {
+  platform: string;
+  oneClick: boolean;
+  ready: boolean;
+  label: string;
+  description: string;
+  missing: string[];
+};
+
+const PLATFORM_ICONS: Record<string, typeof Share2> = {
+  facebook: Share2,
+  telegram: Send,
+  instagram: Camera,
+  x: MessageSquare,
+  linkedin: Briefcase,
+  whatsapp_channel: MessageCircle,
+  youtube_community: Play,
+};
 
 export default function SocialAccountsPage() {
   const { adminUser } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [accounts, setAccounts] = useState<Record<string, unknown>[]>([]);
-  const [form, setForm] = useState({
-    platform: "facebook",
-    accountName: "",
-    accountId: "",
-    token: "",
-    refreshToken: "",
-    tokenExpiresAt: "",
-    scopes: "",
-  });
+  const [connecting, setConnecting] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<SocialAccountRow[]>([]);
+  const [platformConfigs, setPlatformConfigs] = useState<PlatformConfig[]>([]);
+  const [telegramToken, setTelegramToken] = useState("");
+  const [showTelegramModal, setShowTelegramModal] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const token = await (await import("@/lib/automation/client-api")).getAuthToken();
-    const res = await fetch("/api/ai/social/accounts", { headers: { Authorization: `Bearer ${token}` } });
-    const data = await res.json();
-    setAccounts(data.accounts || []);
-  };
+    const [accountsRes, configRes] = await Promise.all([
+      fetch("/api/ai/social/accounts", { headers: { Authorization: `Bearer ${token}` } }),
+      getSocialOAuthConfigApi(),
+    ]);
+    const accountsData = await accountsRes.json();
+    setAccounts(accountsData.accounts || []);
+    setPlatformConfigs((configRes.platforms || []) as PlatformConfig[]);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -48,28 +84,67 @@ export default function SocialAccountsPage() {
       toast.error(e instanceof Error ? e.message : "Failed to load accounts");
       setLoading(false);
     });
-  }, []);
+  }, [load]);
 
-  const connect = async () => {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("status");
+    const message = params.get("message");
+    const platform = params.get("platform");
+    if (!status) return;
+
+    if (status === "success") {
+      toast.success(message || `${platform} connected successfully`);
+      load().catch(() => undefined);
+    } else if (status === "error") {
+      toast.error(message || `${platform} connection failed`);
+    }
+
+    window.history.replaceState({}, "", "/admin/social/accounts");
+  }, [load]);
+
+  const accountByPlatform = useMemo(() => {
+    const map = new Map<string, SocialAccountRow>();
+    accounts.forEach((a) => map.set(a.platform, a));
+    return map;
+  }, [accounts]);
+
+  const connectFacebook = async () => {
     if (adminUser?.role !== "super_admin") {
       toast.error("Only super admin can connect accounts");
       return;
     }
+    setConnecting("facebook");
     try {
-      await connectSocialAccountApi({
-        platform: form.platform,
-        accountName: form.accountName,
-        accountId: form.accountId || undefined,
-        token: form.token,
-        refreshToken: form.refreshToken || undefined,
-        tokenExpiresAt: form.tokenExpiresAt || undefined,
-        scopes: form.scopes ? form.scopes.split(",").map((x) => x.trim()).filter(Boolean) : [],
-      });
-      toast.success("Account connected");
-      setForm((p) => ({ ...p, token: "", refreshToken: "" }));
+      const { url } = await startFacebookOAuthApi();
+      window.location.href = url;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Facebook connect failed");
+      setConnecting(null);
+    }
+  };
+
+  const connectTelegram = async () => {
+    if (adminUser?.role !== "super_admin") {
+      toast.error("Only super admin can connect accounts");
+      return;
+    }
+    if (!telegramToken.trim()) {
+      toast.error("Paste your bot token from @BotFather");
+      return;
+    }
+    setConnecting("telegram");
+    try {
+      const result = await connectTelegramBotApi(telegramToken.trim());
+      toast.success(`Connected ${result.accountName} → ${result.channelTitle}`);
+      setTelegramToken("");
+      setShowTelegramModal(false);
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Connect failed");
+      toast.error(e instanceof Error ? e.message : "Telegram connect failed");
+    } finally {
+      setConnecting(null);
     }
   };
 
@@ -87,67 +162,188 @@ export default function SocialAccountsPage() {
 
   return (
     <RoleGuard>
-      <AdminTopbar title="Social Accounts" actions={<span className="text-sm text-gray-500">Official API account connections</span>} />
+      <AdminTopbar
+        title="Social Accounts"
+        actions={<span className="text-sm text-gray-500">One-click official API connections</span>}
+      />
 
-      <div className="mb-6 rounded-xl bg-white p-5 shadow-sm">
-        <h3 className="mb-3 flex items-center gap-2 font-semibold text-[#1a2b4c]"><Shield size={16} /> Connect Account</h3>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          <label className="text-sm">Platform
-            <select className="mt-1 w-full rounded border px-2 py-1" value={form.platform} onChange={(e) => setForm((p) => ({ ...p, platform: e.target.value }))}>
-              {PLATFORMS.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </label>
-          <label className="text-sm">Account Name
-            <input className="mt-1 w-full rounded border px-2 py-1" value={form.accountName} onChange={(e) => setForm((p) => ({ ...p, accountName: e.target.value }))} />
-          </label>
-          <label className="text-sm">Account ID (optional)
-            <input className="mt-1 w-full rounded border px-2 py-1" value={form.accountId} onChange={(e) => setForm((p) => ({ ...p, accountId: e.target.value }))} />
-          </label>
-          <label className="text-sm">Access Token
-            <input className="mt-1 w-full rounded border px-2 py-1" value={form.token} onChange={(e) => setForm((p) => ({ ...p, token: e.target.value }))} />
-          </label>
-          <label className="text-sm">Refresh Token (optional)
-            <input className="mt-1 w-full rounded border px-2 py-1" value={form.refreshToken} onChange={(e) => setForm((p) => ({ ...p, refreshToken: e.target.value }))} />
-          </label>
-          <label className="text-sm">Token Expires At (ISO)
-            <input className="mt-1 w-full rounded border px-2 py-1" value={form.tokenExpiresAt} onChange={(e) => setForm((p) => ({ ...p, tokenExpiresAt: e.target.value }))} />
-          </label>
-          <label className="text-sm md:col-span-2 lg:col-span-3">Scopes (comma-separated)
-            <input className="mt-1 w-full rounded border px-2 py-1" value={form.scopes} onChange={(e) => setForm((p) => ({ ...p, scopes: e.target.value }))} />
-          </label>
-        </div>
-        <button className="mt-4 rounded bg-[#1a2b4c] px-4 py-2 text-sm font-bold text-white" onClick={connect}>
-          <Link2 className="mr-1 inline h-4 w-4" /> Connect / Reconnect
-        </button>
+      <div className="mb-6 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
+        <strong>Quick connect:</strong> Facebook = one click login. Telegram = paste bot token once (auto-verified).
+        Instagram connects automatically when linked to your Facebook Page.
       </div>
+
+      <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {platformConfigs.map((cfg) => {
+          const Icon = PLATFORM_ICONS[cfg.platform] || Link2;
+          const connected = accountByPlatform.get(cfg.platform);
+          const isConnected = connected?.enabled && connected?.status === "connected";
+
+          return (
+            <div key={cfg.platform} className="rounded-xl bg-white p-5 shadow-sm">
+              <div className="mb-3 flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Icon size={18} className="text-[#1a2b4c]" />
+                  <h3 className="font-semibold text-[#1a2b4c]">{cfg.label}</h3>
+                </div>
+                {isConnected ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">
+                    <CheckCircle2 size={12} /> Connected
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                    Not connected
+                  </span>
+                )}
+              </div>
+
+              <p className="mb-3 text-sm text-gray-600">{cfg.description}</p>
+
+              {isConnected && (
+                <p className="mb-3 text-sm font-medium text-gray-800">{connected.accountName}</p>
+              )}
+
+              {!cfg.oneClick && cfg.platform !== "instagram" && (
+                <p className="mb-3 text-xs text-amber-700">Posting OAuth coming soon. Captions still work.</p>
+              )}
+
+              {cfg.platform === "instagram" && !isConnected && (
+                <p className="mb-3 text-xs text-gray-500">Connect Facebook first if Page has Instagram Business linked.</p>
+              )}
+
+              {cfg.missing.length > 0 && cfg.oneClick && (
+                <p className="mb-3 text-xs text-red-600">
+                  Missing env: {cfg.missing.join(", ")} — add in Vercel and redeploy.
+                </p>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                {cfg.platform === "facebook" && (
+                  <button
+                    className="rounded bg-[#1877F2] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    disabled={!cfg.ready || connecting === "facebook"}
+                    onClick={connectFacebook}
+                  >
+                    <Share2 className="mr-1 inline h-4 w-4" />
+                    {connecting === "facebook" ? "Redirecting..." : isConnected ? "Reconnect Facebook" : "Connect with Facebook"}
+                  </button>
+                )}
+
+                {cfg.platform === "telegram" && (
+                  <button
+                    className="rounded bg-[#0088cc] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    disabled={!cfg.ready || connecting === "telegram"}
+                    onClick={() => setShowTelegramModal(true)}
+                  >
+                    <Send className="mr-1 inline h-4 w-4" />
+                    {isConnected ? "Reconnect Telegram" : "Connect Telegram"}
+                  </button>
+                )}
+
+                {isConnected && (
+                  <button
+                    className="rounded border border-red-200 px-3 py-2 text-sm text-red-600"
+                    onClick={() => disconnect(cfg.platform)}
+                  >
+                    <Link2Off className="mr-1 inline h-4 w-4" /> Disconnect
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {showTelegramModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="mb-2 text-lg font-bold text-[#1a2b4c]">Connect Telegram Channel</h3>
+            <ol className="mb-4 list-decimal space-y-1 pl-5 text-sm text-gray-700">
+              <li>
+                Open{" "}
+                <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-blue-600 underline">
+                  @BotFather
+                </a>{" "}
+                and create a bot (<ExternalLink className="inline h-3 w-3" />)
+              </li>
+              <li>Add the bot as <strong>Admin</strong> to your Telegram channel</li>
+              <li>Paste the bot token below — we verify channel access automatically</li>
+            </ol>
+            <input
+              className="mb-4 w-full rounded border px-3 py-2 text-sm"
+              placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+              value={telegramToken}
+              onChange={(e) => setTelegramToken(e.target.value)}
+            />
+            <div className="flex justify-end gap-2">
+              <button className="rounded border px-4 py-2 text-sm" onClick={() => setShowTelegramModal(false)}>
+                Cancel
+              </button>
+              <button
+                className="rounded bg-[#0088cc] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                disabled={connecting === "telegram"}
+                onClick={connectTelegram}
+              >
+                {connecting === "telegram" ? "Verifying..." : "Connect Now"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl bg-white p-5 shadow-sm">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="font-semibold text-[#1a2b4c]">Connection Status</h3>
-          <button className="rounded border px-3 py-1 text-xs" onClick={load}><RefreshCw className="mr-1 inline h-3 w-3" />Refresh</button>
+          <button className="rounded border px-3 py-1 text-xs" onClick={load}>
+            <RefreshCw className="mr-1 inline h-3 w-3" />
+            Refresh
+          </button>
         </div>
         <div className="overflow-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b text-gray-500"><th className="py-2">Platform</th><th>Account</th><th>Status</th><th>Enabled</th><th>Last Checked</th><th>Action</th></tr>
+              <tr className="border-b text-gray-500">
+                <th className="py-2">Platform</th>
+                <th>Account</th>
+                <th>Status</th>
+                <th>Enabled</th>
+                <th>Last Checked</th>
+                <th>Action</th>
+              </tr>
             </thead>
             <tbody>
               {accounts.map((a) => (
-                <tr key={String(a.id)} className="border-b">
-                  <td className="py-2">{String(a.platform)}</td>
-                  <td>{String(a.accountName)}</td>
-                  <td>{String(a.status)}</td>
-                  <td>{String(a.enabled ? "Yes" : "No")}</td>
-                  <td>{String(a.lastCheckedAt || "-")}</td>
+                <tr key={String(a.id || a.platform)} className="border-b">
+                  <td className="py-2 capitalize">{a.platform.replace(/_/g, " ")}</td>
+                  <td>{a.accountName}</td>
                   <td>
-                    <button className="rounded border px-2 py-1 text-xs text-red-600" onClick={() => disconnect(String(a.platform))}>
+                    {a.status === "connected" ? (
+                      <span className="inline-flex items-center gap-1 text-green-700">
+                        <CheckCircle2 size={14} /> connected
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-amber-700">
+                        <AlertCircle size={14} /> {a.status}
+                      </span>
+                    )}
+                  </td>
+                  <td>{a.enabled ? "Yes" : "No"}</td>
+                  <td>{a.lastCheckedAt || "-"}</td>
+                  <td>
+                    <button
+                      className="rounded border px-2 py-1 text-xs text-red-600"
+                      onClick={() => disconnect(a.platform)}
+                    >
                       <Link2Off className="mr-1 inline h-3 w-3" /> Disconnect
                     </button>
                   </td>
                 </tr>
               ))}
               {accounts.length === 0 && (
-                <tr><td colSpan={6} className="py-4 text-center text-gray-400">No social accounts connected</td></tr>
+                <tr>
+                  <td colSpan={6} className="py-4 text-center text-gray-400">
+                    No social accounts connected — use the buttons above
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
