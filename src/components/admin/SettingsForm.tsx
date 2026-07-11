@@ -118,7 +118,7 @@ export default function SettingsForm({ initialSettings, onSave }: SettingsFormPr
               <label className="mb-2 block text-sm font-medium text-gray-700">Favicon</label>
               {settings.faviconUrl && (
                 <div className="relative mb-2 h-16 w-16 overflow-hidden rounded-full border border-gray-200 bg-white shadow-sm">
-                  <Image src={settings.faviconUrl} alt="Favicon" fill className="object-cover p-1" sizes="64px" />
+                  <Image src={settings.faviconUrl} alt="Favicon" fill className="object-contain p-2" sizes="64px" />
                 </div>
               )}
               <p className="mt-1 text-xs text-gray-500">

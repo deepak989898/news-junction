@@ -15,21 +15,25 @@ const defaultSource =
 
 const source = process.argv[2] || defaultSource;
 
+const LOGO_IN_CIRCLE_SCALE = 0.66;
+
 async function extractNjMark(src) {
   const meta = await sharp(src).metadata();
   const w = meta.width || 1024;
   const h = meta.height || 1024;
 
-  // Tight crop on NJ monogram + globe (exclude tagline / language buttons)
-  const cropSize = Math.round(w * 0.5);
+  // NJ monogram + globe only (no "NEWS JUNCTION" text below)
+  const cropSize = Math.round(w * 0.42);
   const left = Math.round((w - cropSize) / 2);
-  const top = Math.round(h * 0.05);
+  const top = Math.round(h * 0.06);
 
   return sharp(src).extract({ left, top, width: cropSize, height: cropSize }).png().toBuffer();
 }
 
 async function createRoundFavicon(njMark, size) {
   const radius = size / 2;
+  const logoSize = Math.round(size * LOGO_IN_CIRCLE_SCALE);
+  const offset = Math.round((size - logoSize) / 2);
 
   const circleMask = Buffer.from(
     `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
@@ -37,13 +41,19 @@ async function createRoundFavicon(njMark, size) {
     </svg>`
   );
 
-  // Fill the circle with the NJ mark (cover = larger, easier to read in tab)
-  const filled = await sharp(njMark)
-    .resize(size, size, { fit: "cover", position: "centre" })
+  const whiteCanvas = Buffer.from(
+    `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="${radius}" cy="${radius}" r="${radius}" fill="#ffffff"/>
+    </svg>`
+  );
+
+  const logo = await sharp(njMark)
+    .resize(logoSize, logoSize, { fit: "contain", background: { r: 255, g: 255, b: 255, alpha: 1 } })
     .png()
     .toBuffer();
 
-  return sharp(filled)
+  return sharp(whiteCanvas)
+    .composite([{ input: logo, top: offset, left: offset }])
     .ensureAlpha()
     .composite([{ input: circleMask, blend: "dest-in" }])
     .flatten({ background: { r: 255, g: 255, b: 255 } })

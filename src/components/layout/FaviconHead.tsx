@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useSettings } from "@/contexts/SettingsContext";
 
-const FAVICON_VERSION = "4";
+const FAVICON_VERSION = "5";
 
 function resolveFaviconHref(faviconUrl?: string): string {
   const localRound =
