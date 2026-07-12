@@ -8,16 +8,78 @@ import ToggleSwitch from "@/components/admin/ToggleSwitch";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { getAutomationSettingsClient, updateAutomationSettingsClient } from "@/firebase/firestore";
 import { AutomationSettings } from "@/lib/automation/types";
+import { getAuthToken } from "@/lib/automation/client-api";
 import toast from "react-hot-toast";
+
+type CronSetup = {
+  configured: boolean;
+  secretPreview?: string;
+  secretLength?: number;
+  urls?: { autoPublishCycle: string; autoPublishCycleForce: string; processSocialQueue: string };
+  message?: string;
+};
 
 export default function AutomationSettingsPage() {
   const [settings, setSettings] = useState<AutomationSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [cronSetup, setCronSetup] = useState<CronSetup | null>(null);
+  const [cronTesting, setCronTesting] = useState(false);
 
   useEffect(() => {
-    getAutomationSettingsClient().then(setSettings).finally(() => setLoading(false));
+    (async () => {
+      try {
+        const [s, token] = await Promise.all([
+          getAutomationSettingsClient(),
+          getAuthToken(),
+        ]);
+        setSettings(s);
+        if (token) {
+          const res = await fetch("/api/admin/automation/cron-setup", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = (await res.json()) as CronSetup;
+          setCronSetup(data);
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
+
+  const copyCronUrl = async () => {
+    const url = cronSetup?.urls?.autoPublishCycle;
+    if (!url) return toast.error("Cron URL not available");
+    await navigator.clipboard.writeText(url);
+    toast.success("Exact cron URL copied — paste in cron-job.org");
+  };
+
+  const testCronFromServer = async () => {
+    setCronTesting(true);
+    const toastId = toast.loading("Testing auto-publish with server CRON_SECRET...");
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("Not logged in");
+      const res = await fetch("/api/admin/automation/cron-test", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ force: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Test failed");
+      toast.success(
+        `Cron works! Published: ${data.published ?? 0}, Processed: ${data.processed ?? data.process?.processed ?? 0}`,
+        { id: toastId, duration: 8000 }
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Cron test failed", { id: toastId });
+    } finally {
+      setCronTesting(false);
+    }
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -68,16 +130,32 @@ export default function AutomationSettingsPage() {
         </div>
 
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-          <p className="font-semibold">30-minute auto publish (cron-job.org)</p>
-          <p className="mt-2 font-medium">Easiest setup — put secret in URL (no headers needed):</p>
-          <p className="mt-1 break-all text-xs">
-            https://news-junction.vercel.app/api/cron/auto-publish-cycle?cron_secret=YOUR_CRON_SECRET
-          </p>
-          <p className="mt-2 font-medium">Or use header:</p>
-          <p className="mt-1">Key: <code className="text-xs">x-cron-secret</code> → Value: your CRON_SECRET (no Bearer)</p>
-          <p className="mt-1">Or Key: <code className="text-xs">Authorization</code> → Value: <code className="text-xs">Bearer YOUR_CRON_SECRET</code></p>
-          <p className="mt-2 text-red-700">Wrong: Key = &quot;Authorization: Bearer&quot; — that causes 401.</p>
-          <p className="mt-1">Schedule: every 30 minutes. Max Articles Per Day = 48 recommended.</p>
+          <p className="font-semibold">cron-job.org setup (30-minute auto publish)</p>
+          {!cronSetup?.configured ? (
+            <p className="mt-2 font-medium text-red-700">
+              {cronSetup?.message || "CRON_SECRET not set on Vercel — add it and redeploy."}
+            </p>
+          ) : (
+            <>
+              <p className="mt-2">
+                Vercel CRON_SECRET: <strong>{cronSetup.secretPreview}</strong> ({cronSetup.secretLength} chars)
+              </p>
+              <p className="mt-2 font-medium">Copy this exact URL into cron-job.org (no headers needed):</p>
+              <p className="mt-1 break-all rounded border bg-white p-2 text-xs">{cronSetup.urls?.autoPublishCycle}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={copyCronUrl} className="rounded bg-[#1a2b4c] px-3 py-1.5 text-xs font-bold text-white">
+                  Copy Cron URL
+                </button>
+                <button type="button" onClick={testCronFromServer} disabled={cronTesting} className="rounded border px-3 py-1.5 text-xs font-bold disabled:opacity-50">
+                  {cronTesting ? "Testing..." : "Test Auto-Publish Now"}
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-red-700">
+                Do not type the secret manually — use Copy Cron URL. Wrong secret = 401 Unauthorized.
+              </p>
+            </>
+          )}
+          <p className="mt-2">Schedule: every 30 minutes · Method: GET · Headers: leave empty</p>
         </div>
 
         <ToggleSwitch
