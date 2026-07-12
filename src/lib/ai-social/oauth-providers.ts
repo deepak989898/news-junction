@@ -26,24 +26,31 @@ export function getFacebookOAuthUrl(state: string): string {
   const appId = requireEnv("FACEBOOK_APP_ID");
   const redirectUri = getFacebookRedirectUri();
   const configId = (process.env.FACEBOOK_LOGIN_CONFIG_ID || "").trim();
+  const useScopes = (process.env.FACEBOOK_OAUTH_USE_SCOPES || "").trim() === "true";
+  const systemUser = (process.env.FACEBOOK_OAUTH_SYSTEM_USER || "").trim() === "true";
+
   const params = new URLSearchParams({
     client_id: appId,
     redirect_uri: redirectUri,
     state,
     response_type: "code",
   });
-  // Facebook Login for Business: config_id replaces scope (Meta docs).
-  if (configId) {
+
+  if (useScopes || !configId) {
+    params.set("scope", FACEBOOK_PAGE_OAUTH_SCOPES.join(","));
+  } else {
     if (configId === appId) {
       throw new Error(
         "FACEBOOK_LOGIN_CONFIG_ID must be the Configuration ID from Facebook Login for Business → Configurations, not the App ID."
       );
     }
     params.set("config_id", configId);
-    params.set("override_default_response_type", "true");
-  } else {
-    params.set("scope", FACEBOOK_PAGE_OAUTH_SCOPES.join(","));
+    // override_default_response_type is only for System User token configurations (Meta docs).
+    if (systemUser) {
+      params.set("override_default_response_type", "true");
+    }
   }
+
   return `${FB_OAUTH_DIALOG}?${params.toString()}`;
 }
 

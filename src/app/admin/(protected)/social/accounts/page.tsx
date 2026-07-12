@@ -193,6 +193,12 @@ export default function SocialAccountsPage() {
               <strong>Redirect URI (Meta me exactly ye paste karo):</strong>{" "}
               <code>{String(fbSetup.redirectUri || "")}</code>
             </p>
+            <p className="mt-1">
+              <strong>OAuth mode:</strong> {String(fbSetup.oauthMode || "config_id")}
+              {fbSetup.oauthMode === "config_id" ? (
+                <span className="text-gray-600"> — agar error aaye to Vercel me FACEBOOK_OAUTH_USE_SCOPES=true set karo</span>
+              ) : null}
+            </p>
             {Array.isArray(fbSetup.missingEnv) && (fbSetup.missingEnv as string[]).length > 0 && (
               <p className="mt-1 text-red-600">Missing Vercel env: {(fbSetup.missingEnv as string[]).join(", ")}</p>
             )}

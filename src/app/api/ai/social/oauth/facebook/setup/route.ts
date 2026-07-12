@@ -22,12 +22,20 @@ export async function GET(request: NextRequest) {
     hasConfigId: Boolean(configId),
     configIdLooksLikeAppId: Boolean(configId && appId && configId === appId),
     configIdPreview: configId ? `${configId.slice(0, 4)}...${configId.slice(-4)}` : null,
+    oauthMode:
+      (process.env.FACEBOOK_OAUTH_USE_SCOPES || "").trim() === "true" || !configId
+        ? "scope"
+        : "config_id",
+    systemUserMode: (process.env.FACEBOOK_OAUTH_SYSTEM_USER || "").trim() === "true",
     missingEnv: missingEnvVars(["FACEBOOK_APP_ID", "FACEBOOK_APP_SECRET", "FACEBOOK_LOGIN_CONFIG_ID"]),
     metaDashboardSteps: [
       "Facebook Login for Business → Settings → Valid OAuth Redirect URIs must match redirectUri exactly",
-      "Configurations → User access token → Pages → pages_manage_posts permissions",
-      "Copy Configuration ID to Vercel FACEBOOK_LOGIN_CONFIG_ID (not App ID)",
+      "Configurations → User access token (NOT System User) → Pages → pages_manage_posts",
+      "Use cases → Manage everything on your Page → add pages_manage_posts permission",
+      "Copy Configuration ID to FACEBOOK_LOGIN_CONFIG_ID (not App ID)",
+      "If 'Sorry something went wrong' persists, set FACEBOOK_OAUTH_USE_SCOPES=true in Vercel and redeploy",
       "App roles → your Facebook account must be Administrator or Developer",
+      "Check Alert Inbox (red badge) and fix any Meta warnings",
     ],
   });
 }
