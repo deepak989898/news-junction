@@ -249,13 +249,13 @@ export async function schedulePost(input: Omit<SocialPostQueueItem, "id" | "crea
     throw new Error("Featured image required before scheduling social post");
   }
   const status: SocialQueueStatus = input.scheduledAt ? "scheduled" : "pending";
-  const payload: Omit<SocialPostQueueItem, "id"> = {
+  const payload = stripUndefined({
     ...input,
     status,
     retryCount: 0,
     createdAt: nowIso(),
     updatedAt: nowIso(),
-  };
+  }) as Omit<SocialPostQueueItem, "id">;
   const ref = await getAdminDb().collection("socialPostQueue").add(payload);
   await logSocial({
     articleId: input.articleId,
@@ -329,7 +329,11 @@ export async function publishPostImmediately(input: {
       errorMessage: null,
       platformPostId: publishResult.platformPostId,
     });
-    await syncAnalyticsOnPublish(queueItem);
+    try {
+      await syncAnalyticsOnPublish(queueItem);
+    } catch (analyticsError) {
+      console.error("social analytics sync failed:", analyticsError);
+    }
     await logSocial({
       articleId: queueItem.articleId,
       queueId,
@@ -555,7 +559,11 @@ export async function processSocialQueue(limit = 20, options?: { force?: boolean
       );
       await doc.ref.update({ status: "published", publishedAt: nowIso(), updatedAt: nowIso(), errorMessage: null });
       published += 1;
-      await syncAnalyticsOnPublish(item);
+      try {
+        await syncAnalyticsOnPublish(item);
+      } catch (analyticsError) {
+        console.error("social analytics sync failed:", analyticsError);
+      }
       await logSocial({
         articleId: item.articleId,
         queueId: doc.id,
@@ -647,11 +655,21 @@ async function syncAnalyticsOnPublish(item: SocialPostQueueItem) {
   const key = `${item.platform}_${dateBucket}_${item.articleId}`;
   const ref = getAdminDb().collection("socialAnalytics").doc(key);
   const doc = await ref.get();
+
+  let categoryId: string | undefined;
+  try {
+    const articleRaw = await getArticleById(item.articleId);
+    const rawCategory = articleRaw?.categoryId;
+    if (rawCategory) categoryId = String(rawCategory);
+  } catch {
+    // analytics should not block publish if article lookup fails
+  }
+
   if (!doc.exists) {
-    const payload: SocialAnalytics = {
+    const payload = stripUndefined({
       platform: item.platform,
       articleId: item.articleId,
-      categoryId: undefined,
+      categoryId,
       impressions: 0,
       clicks: 0,
       engagement: 0,
@@ -659,7 +677,7 @@ async function syncAnalyticsOnPublish(item: SocialPostQueueItem) {
       failedCount: 0,
       dateBucket,
       updatedAt: nowIso(),
-    };
+    });
     await ref.set(payload);
     return;
   }
