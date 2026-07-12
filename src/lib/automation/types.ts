@@ -65,6 +65,8 @@ export interface AutomationSettings {
   highRiskAlwaysApproval: boolean;
   maxArticlesPerDay: number;
   maxArticlesPerCategoryPerDay: number;
+  publishIntervalMinutes: number;
+  processBatchSizePerRun: number;
   duplicateThreshold: number;
   defaultAuthorName: string;
   defaultSourceCreditText: string;

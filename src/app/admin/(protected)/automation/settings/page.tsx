@@ -61,15 +61,24 @@ export default function AutomationSettingsPage() {
         <div className="grid gap-4 md:grid-cols-2">
           <FormInput label="Max Articles Per Day" type="number" value={settings.maxArticlesPerDay} onChange={(e) => setSettings({ ...settings, maxArticlesPerDay: parseInt(e.target.value) || 0 })} />
           <FormInput label="Max Per Category Per Day" type="number" value={settings.maxArticlesPerCategoryPerDay} onChange={(e) => setSettings({ ...settings, maxArticlesPerCategoryPerDay: parseInt(e.target.value) || 0 })} />
+          <FormInput label="Publish Interval (minutes)" type="number" value={settings.publishIntervalMinutes ?? 30} onChange={(e) => setSettings({ ...settings, publishIntervalMinutes: parseInt(e.target.value) || 30 })} />
+          <FormInput label="Articles Per Cron Run" type="number" value={settings.processBatchSizePerRun ?? 1} onChange={(e) => setSettings({ ...settings, processBatchSizePerRun: parseInt(e.target.value) || 1 })} />
           <FormInput label="Duplicate Threshold (0-1)" type="number" step="0.05" value={settings.duplicateThreshold} onChange={(e) => setSettings({ ...settings, duplicateThreshold: parseFloat(e.target.value) || 0.75 })} />
           <FormInput label="Default Author" value={settings.defaultAuthorName} onChange={(e) => setSettings({ ...settings, defaultAuthorName: e.target.value })} />
+        </div>
+
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+          <p className="font-semibold">30-minute auto publish (cron-job.org)</p>
+          <p className="mt-1">URL: <code className="text-xs">https://news-junction.vercel.app/api/cron/auto-publish-cycle</code></p>
+          <p className="mt-1">Header: <code className="text-xs">Authorization: Bearer YOUR_CRON_SECRET</code></p>
+          <p className="mt-1">Schedule: every 30 minutes. Set Max Articles Per Day to 48 for full coverage.</p>
         </div>
 
         <ToggleSwitch
           label="Generate AI Featured Images (OpenAI)"
           checked={settings.generateAiImages !== false}
           onChange={(v) => setSettings({ ...settings, generateAiImages: v })}
-          description="Creates a unique 16:9 WebP image (~100KB) on approve. Uses OPENAI_API_KEY."
+          description="High-quality 16:9 WebP hero images matched to article headline. Uses OPENAI_API_KEY."
         />
 
         <FormInput label="Default Category Image URL" value={settings.defaultCategoryImage} onChange={(e) => setSettings({ ...settings, defaultCategoryImage: e.target.value })} />

@@ -15,6 +15,9 @@
     "src/app/api/cron/process-social-queue/route.ts": {
       "maxDuration": 60
     },
+    "src/app/api/cron/auto-publish-cycle/route.ts": {
+      "maxDuration": 60
+    },
     "src/app/api/ai/social/publish-now/route.ts": {
       "maxDuration": 60
     }
@@ -35,6 +38,10 @@
     {
       "path": "/api/cron/process-social-queue",
       "schedule": "30 4 * * *"
+    },
+    {
+      "path": "/api/cron/auto-publish-cycle",
+      "schedule": "0 5 * * *"
     }
   ]
 }

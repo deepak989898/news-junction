@@ -39,13 +39,13 @@ export default function NewsCard({
         className={cn("group flex gap-3 border-b border-gray-100 py-3 last:border-0", className)}
       >
         {showImage && article.imageUrl && (
-          <div className="relative h-20 w-28 shrink-0 overflow-hidden rounded-lg">
+          <div className="relative h-20 w-[7.5rem] shrink-0 overflow-hidden rounded-lg bg-gray-100 sm:h-24 sm:w-36">
             <NewsArticleImage
               src={article.imageUrl}
               alt={imageAlt || title}
               fill
-              className="object-cover transition-transform group-hover:scale-105"
-              sizes="112px"
+              className="transition-transform group-hover:scale-105"
+              sizes="144px"
             />
           </div>
         )}
@@ -67,13 +67,13 @@ export default function NewsCard({
         className={cn("group flex gap-4 border-b border-gray-100 py-4 last:border-0", className)}
       >
         {showImage && article.imageUrl && (
-          <div className="relative h-24 w-36 shrink-0 overflow-hidden rounded-lg md:h-28 md:w-44">
+          <div className="relative h-24 w-40 shrink-0 overflow-hidden rounded-lg bg-gray-100 md:h-28 md:w-44">
             <NewsArticleImage
               src={article.imageUrl}
               alt={imageAlt || title}
               fill
-              className="object-cover transition-transform group-hover:scale-105"
-              sizes="(max-width: 768px) 144px, 176px"
+              className="transition-transform group-hover:scale-105"
+              sizes="(max-width: 768px) 160px, 176px"
             />
           </div>
         )}
@@ -98,12 +98,12 @@ export default function NewsCard({
         className={cn("group block", className)}
       >
         {showImage && article.imageUrl && (
-          <div className="relative mb-2 aspect-[4/3] overflow-hidden rounded-lg">
+          <div className="relative mb-2 aspect-[16/9] overflow-hidden rounded-lg bg-gray-100">
             <NewsArticleImage
               src={article.imageUrl}
               alt={imageAlt || title}
               fill
-              className="object-cover transition-transform group-hover:scale-105"
+              className="transition-transform group-hover:scale-105"
               sizes="(max-width: 768px) 50vw, 200px"
             />
           </div>
@@ -122,12 +122,12 @@ export default function NewsCard({
       className={cn("group block overflow-hidden rounded-xl bg-white shadow-sm transition-shadow hover:shadow-md", className)}
     >
       {showImage && article.imageUrl && (
-        <div className="relative aspect-[16/10] overflow-hidden">
+        <div className="relative aspect-[16/9] overflow-hidden bg-gray-100">
           <NewsArticleImage
             src={article.imageUrl}
             alt={imageAlt || title}
             fill
-            className="object-cover transition-transform group-hover:scale-105"
+            className="transition-transform group-hover:scale-105"
             sizes="(max-width: 768px) 100vw, 33vw"
           />
         </div>

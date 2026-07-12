@@ -30,7 +30,7 @@ export default function NewsArticleImage({ src, alt, className, ...props }: News
     <Image
       src={currentSrc}
       alt={alt}
-      className={className}
+      className={`object-cover object-center ${className || ""}`}
       unoptimized={unoptimized}
       onError={() => {
         if (currentSrc !== FALLBACK) {

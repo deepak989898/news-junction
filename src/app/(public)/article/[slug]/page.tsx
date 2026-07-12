@@ -287,12 +287,12 @@ export default function ArticlePage() {
             </div>
 
             {article.imageUrl && (
-              <div className="relative mt-6 aspect-[16/9] overflow-hidden rounded-lg">
+              <div className="relative mt-6 aspect-[16/9] overflow-hidden rounded-lg bg-gray-100">
                 <NewsArticleImage
                   src={article.imageUrl}
                   alt={imageAlt || title}
                   fill
-                  className="object-cover"
+                  className=""
                   sizes="(max-width: 1024px) 100vw, 66vw"
                   priority
                 />

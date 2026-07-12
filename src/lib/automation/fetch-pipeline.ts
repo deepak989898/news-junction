@@ -12,7 +12,7 @@ import { checkDuplicate } from "./duplicate-checker";
 import { detectRiskLevel } from "./risk-detector";
 import { processRawNewsItem } from "./process-pipeline";
 
-export async function runFetchNews(): Promise<{
+export async function runFetchNews(options?: { rssItemLimit?: number }): Promise<{
   fetched: number;
   duplicates: number;
   errors: number;
@@ -21,6 +21,8 @@ export async function runFetchNews(): Promise<{
   if (!settings.automationEnabled) {
     return { fetched: 0, duplicates: 0, errors: 0 };
   }
+
+  const rssItemLimit = options?.rssItemLimit ?? 8;
 
   let fetched = 0;
   let duplicates = 0;
@@ -39,7 +41,7 @@ export async function runFetchNews(): Promise<{
       }> = [];
 
       if (source.type === "RSS" || source.type === "Official") {
-        items = await fetchRssFeed(source.url as string);
+        items = await fetchRssFeed(source.url as string, rssItemLimit);
       } else if (source.type === "GDELT") {
         items = await fetchGdeltItems(5);
       } else {
@@ -163,4 +165,48 @@ export async function runProcessNews(batchSize = 1): Promise<{
 
   await updateAutomationSettings({ lastProcessRun: new Date().toISOString() });
   return { processed, published, pending, failed, duplicates };
+}
+
+export async function runAutoPublishCycle(options?: { force?: boolean; batchSize?: number }) {
+  const settings = await getAutomationSettings();
+  if (!settings.automationEnabled) {
+    return {
+      skipped: true,
+      reason: "automationEnabled is false",
+      fetched: 0,
+      processed: 0,
+      published: 0,
+    };
+  }
+
+  const intervalMinutes = settings.publishIntervalMinutes || 30;
+  const intervalMs = intervalMinutes * 60 * 1000;
+
+  if (!options?.force && settings.lastProcessRun) {
+    const elapsed = Date.now() - new Date(settings.lastProcessRun).getTime();
+    if (elapsed < intervalMs - 60_000) {
+      const waitMinutes = Math.ceil((intervalMs - elapsed) / 60_000);
+      return {
+        skipped: true,
+        reason: `Waiting for ${intervalMinutes}-minute interval (${waitMinutes} min remaining)`,
+        publishIntervalMinutes: intervalMinutes,
+        fetched: 0,
+        processed: 0,
+        published: 0,
+      };
+    }
+  }
+
+  const fetchResult = await runFetchNews({ rssItemLimit: 5 });
+  const batchSize = options?.batchSize ?? settings.processBatchSizePerRun ?? 1;
+  const processResult = await runProcessNews(batchSize);
+
+  return {
+    skipped: false,
+    publishIntervalMinutes: intervalMinutes,
+    fetch: fetchResult,
+    process: processResult,
+    published: processResult.published,
+    processed: processResult.processed,
+  };
 }

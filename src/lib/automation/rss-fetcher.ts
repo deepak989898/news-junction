@@ -37,9 +37,9 @@ function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 }
 
-export async function fetchRssFeed(feedUrl: string): Promise<FetchedRssItem[]> {
+export async function fetchRssFeed(feedUrl: string, itemLimit = 15): Promise<FetchedRssItem[]> {
   const feed = await parser.parseURL(feedUrl);
-  return (feed.items || []).slice(0, 15).map((item) => {
+  return (feed.items || []).slice(0, itemLimit).map((item) => {
     const summary = stripHtml(item.contentSnippet || item.summary || item.content || "");
     const pubDate = item.isoDate || item.pubDate || null;
     return {

@@ -7,18 +7,18 @@ import {
 
 const NEWS_IMAGE_WIDTH = 1200;
 const NEWS_IMAGE_HEIGHT = 675;
-const WEBP_QUALITY = 76;
+const WEBP_QUALITY = 86;
 
 const CATEGORY_VISUAL_STYLE: Record<string, string> = {
-  khel: "dynamic sports action, stadium or field atmosphere",
-  technology: "clean modern technology, devices or innovation lab",
-  vyapar: "business district, markets, or corporate editorial scene",
-  swasthya: "healthcare and wellness editorial environment",
-  manoranjan: "entertainment and culture scene",
-  duniya: "international news location or global context",
-  rajya: "Indian state landmark or civic scene",
-  desh: "Indian national news editorial scene",
-  video: "broadcast studio or media production",
+  khel: "dynamic sports action in a stadium or field, athletes in motion, energetic atmosphere",
+  technology: "modern technology scene — devices, innovation lab, or digital infrastructure",
+  vyapar: "business district skyline, stock market floor, or corporate editorial scene",
+  swasthya: "clean hospital, medical research, or public health setting",
+  manoranjan: "entertainment event, cinema, music, or cultural celebration scene",
+  duniya: "international landmark or global news location matching the story region",
+  rajya: "Indian state landmark, government building, or regional civic scene",
+  desh: "Indian national context — parliament area, major city skyline, or civic life",
+  video: "broadcast news studio or media production environment",
 };
 
 function isSafeImageUrl(url: string): boolean {
@@ -35,21 +35,54 @@ function isUsableFirebaseImageUrl(url: string): boolean {
   return isFirebaseStorageUrl(url) && url.includes("firebasestorage.googleapis.com") && url.includes("token=");
 }
 
+function extractVisualKeywords(titleEn: string, summaryEn: string): string {
+  const combined = `${titleEn} ${summaryEn}`.toLowerCase();
+  const cues: string[] = [];
+
+  if (/court|verdict|judge|legal|petition|law/i.test(combined)) cues.push("courtroom or legal proceedings setting");
+  if (/election|vote|politic|parliament|minister|government/i.test(combined)) cues.push("political or government setting");
+  if (/cricket|football|sport|match|olympic|player/i.test(combined)) cues.push("sports action scene");
+  if (/tech|ai|software|smartphone|digital|cyber/i.test(combined)) cues.push("technology and innovation scene");
+  if (/health|hospital|doctor|disease|medical/i.test(combined)) cues.push("healthcare environment");
+  if (/economy|market|stock|business|trade|rupee/i.test(combined)) cues.push("business and economy scene");
+  if (/weather|flood|storm|earthquake|disaster/i.test(combined)) cues.push("weather or disaster scene");
+  if (/school|education|student|university/i.test(combined)) cues.push("education campus scene");
+  if (/police|crime|arrest|investigation/i.test(combined)) cues.push("law enforcement scene without violence");
+  if (/space|nasa|rocket|satellite/i.test(combined)) cues.push("space or aerospace scene");
+
+  return cues.length ? cues.join("; ") : "clear symbolic scene that represents the headline topic";
+}
+
 function buildImagePrompt(params: {
   titleEn: string;
+  titleHi: string;
   summaryEn: string;
   categoryId: string;
   categoryNameEn: string;
 }): string {
   const style = CATEGORY_VISUAL_STYLE[params.categoryId] || "editorial news photography";
-  const summary = params.summaryEn.replace(/\s+/g, " ").slice(0, 240);
-  return `Professional 16:9 landscape featured image for a news website article.
-Topic: ${params.titleEn}
-Context: ${summary}
+  const summary = params.summaryEn.replace(/\s+/g, " ").slice(0, 320);
+  const visualCues = extractVisualKeywords(params.titleEn, params.summaryEn);
+
+  return `Photorealistic featured news photograph for a Hindi-English news website.
+
+The image MUST instantly communicate this story to a viewer within 2 seconds.
+
+English headline: ${params.titleEn}
+Hindi headline: ${params.titleHi}
+Story summary: ${summary}
 Category: ${params.categoryNameEn}
-Style: ${style}, photorealistic, sharp focus, balanced composition, natural colors, cinematic lighting.
-Requirements: wide landscape framing, high visual clarity, realistic scene symbolic of the story, suitable as a news hero image.
-Strict exclusions: no text, no captions, no logos, no watermarks, no brand marks, no identifiable real person's face, no gore, no propaganda.`;
+Visual cues to include: ${visualCues}
+Category style: ${style}
+
+Composition requirements:
+- 16:9 wide landscape, hero image suitable for mobile and desktop news cards
+- Single clear focal subject related to the headline (place, event, object, or symbolic scene)
+- Professional Reuters/AP-style photojournalism, natural lighting, sharp focus, rich color
+- Center-weighted subject so cropping on mobile still reads clearly
+- Realistic environment matching the news topic and geography when implied
+
+Strict exclusions: no text, no captions, no logos, no watermarks, no brand marks, no readable signs, no identifiable real person's face, no gore, no propaganda, no collage, no split panels.`;
 }
 
 async function optimizeForWeb(buffer: Buffer): Promise<{ buffer: Buffer; contentType: string; ext: string }> {
@@ -60,8 +93,9 @@ async function optimizeForWeb(buffer: Buffer): Promise<{ buffer: Buffer; content
       .resize(NEWS_IMAGE_WIDTH, NEWS_IMAGE_HEIGHT, {
         fit: "cover",
         position: "attention",
+        kernel: sharp.kernel.lanczos3,
       })
-      .webp({ quality: WEBP_QUALITY, effort: 4 })
+      .webp({ quality: WEBP_QUALITY, effort: 5, smartSubsample: true })
       .toBuffer();
     return { buffer: optimized, contentType: "image/webp", ext: "webp" };
   } catch {
@@ -87,6 +121,9 @@ async function uploadOptimizedImage(
       cacheControl: "public,max-age=31536000,immutable",
       metadata: {
         firebaseStorageDownloadTokens: downloadToken,
+        width: String(NEWS_IMAGE_WIDTH),
+        height: String(NEWS_IMAGE_HEIGHT),
+        aspectRatio: "16:9",
       },
     },
   });
@@ -140,6 +177,7 @@ export async function hostSourceImageOnFirebase(
 export async function generateAutomationArticleImage(params: {
   rawNewsId: string;
   titleEn: string;
+  titleHi: string;
   summaryEn: string;
   categoryId: string;
   categoryNameEn: string;
@@ -199,6 +237,7 @@ export async function resolveAutomationArticleImage(params: {
       const generated = await generateAutomationArticleImage({
         rawNewsId: params.rawNewsId,
         titleEn: params.titleEn || params.titleHi,
+        titleHi: params.titleHi || params.titleEn,
         summaryEn: params.summaryEn,
         categoryId: params.categoryId,
         categoryNameEn: params.categoryNameEn,
