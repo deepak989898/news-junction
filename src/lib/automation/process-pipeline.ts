@@ -23,7 +23,8 @@ async function resolveImageForRawItem(
     categoryId: string;
   },
   aiOutput: { titleEn: string; titleHi: string; summaryEn: string },
-  categoryNameEn: string
+  categoryNameEn: string,
+  options?: { preferHostedImage?: boolean }
 ) {
   const settings = await getAutomationSettings();
   return resolveAutomationArticleImage({
@@ -37,10 +38,14 @@ async function resolveImageForRawItem(
     categoryNameEn,
     fallbackImage: settings.defaultCategoryImage,
     generateAiImages: settings.generateAiImages !== false,
+    preferHostedFirst: options?.preferHostedImage,
   });
 }
 
-export async function processRawNewsItem(rawNewsId: string): Promise<{
+export async function processRawNewsItem(
+  rawNewsId: string,
+  options?: { preferHostedImage?: boolean }
+): Promise<{
   status: RawNewsStatus;
   newsId?: string;
   message: string;
@@ -133,7 +138,8 @@ export async function processRawNewsItem(rawNewsId: string): Promise<{
         rawNewsId,
         { ...rawItem, categoryId },
         aiOutput,
-        categoryNameEn
+        categoryNameEn,
+        options
       );
       if (generated && imageUrl !== settings.defaultCategoryImage) {
         await updateRawNews(rawNewsId, { generatedImageUrl: imageUrl });

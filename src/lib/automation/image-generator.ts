@@ -200,7 +200,7 @@ export async function generateAutomationArticleImage(params: {
       quality: "high",
       response_format: "b64_json",
     }),
-    signal: AbortSignal.timeout(90000),
+    signal: AbortSignal.timeout(45000),
   });
 
   if (!response.ok) {
@@ -227,9 +227,17 @@ export async function resolveAutomationArticleImage(params: {
   categoryNameEn: string;
   fallbackImage: string;
   generateAiImages: boolean;
+  preferHostedFirst?: boolean;
 }): Promise<{ imageUrl: string; generated: boolean; source: "cached" | "ai" | "hosted" | "fallback" }> {
   if (isUsableFirebaseImageUrl(params.generatedImageUrl || "")) {
     return { imageUrl: params.generatedImageUrl!, generated: true, source: "cached" };
+  }
+
+  if (params.preferHostedFirst && isSafeImageUrl(params.originalImage)) {
+    const hosted = await hostSourceImageOnFirebase(params.rawNewsId, params.originalImage);
+    if (hosted) {
+      return { imageUrl: hosted, generated: true, source: "hosted" };
+    }
   }
 
   if (params.generateAiImages) {

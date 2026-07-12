@@ -5,6 +5,7 @@ import {
   logAutomation,
   updateAutomationSettings,
   getRawNewsByStatus,
+  countRawNewsByStatus,
 } from "./server-db";
 import { fetchRssFeed } from "./rss-fetcher";
 import { fetchGdeltItems } from "./gdelt-fetcher";
@@ -12,7 +13,11 @@ import { checkDuplicate } from "./duplicate-checker";
 import { detectRiskLevel } from "./risk-detector";
 import { processRawNewsItem } from "./process-pipeline";
 
-export async function runFetchNews(options?: { rssItemLimit?: number }): Promise<{
+export async function runFetchNews(options?: {
+  rssItemLimit?: number;
+  skipGdeltDiscovery?: boolean;
+  maxSources?: number;
+}): Promise<{
   fetched: number;
   duplicates: number;
   errors: number;
@@ -29,8 +34,9 @@ export async function runFetchNews(options?: { rssItemLimit?: number }): Promise
   let errors = 0;
 
   const sources = await getActiveSources();
+  const sourcesToUse = options?.maxSources ? sources.slice(0, options.maxSources) : sources;
 
-  for (const source of sources) {
+  for (const source of sourcesToUse) {
     try {
       let items: Array<{
         originalTitle: string;
@@ -106,7 +112,7 @@ export async function runFetchNews(options?: { rssItemLimit?: number }): Promise
 
   // Also fetch GDELT discovery if no dedicated GDELT source exists
   const hasGdeltSource = sources.some((s) => s.type === "GDELT");
-  if (!hasGdeltSource) {
+  if (!options?.skipGdeltDiscovery && !hasGdeltSource) {
     try {
       const gdeltItems = await fetchGdeltItems(3);
       for (const item of gdeltItems) {
@@ -135,7 +141,10 @@ export async function runFetchNews(options?: { rssItemLimit?: number }): Promise
   return { fetched, duplicates, errors };
 }
 
-export async function runProcessNews(batchSize = 1): Promise<{
+export async function runProcessNews(
+  batchSize = 1,
+  options?: { preferHostedImage?: boolean }
+): Promise<{
   processed: number;
   published: number;
   pending: number;
@@ -155,7 +164,9 @@ export async function runProcessNews(batchSize = 1): Promise<{
   let duplicates = 0;
 
   for (const item of items) {
-    const result = await processRawNewsItem(item.id);
+    const result = await processRawNewsItem(item.id, {
+      preferHostedImage: options?.preferHostedImage,
+    });
     processed++;
     if (result.status === "published") published++;
     else if (result.status === "pendingApproval") pending++;
@@ -197,13 +208,27 @@ export async function runAutoPublishCycle(options?: { force?: boolean; batchSize
     }
   }
 
-  const fetchResult = await runFetchNews({ rssItemLimit: 5 });
+  const fetchedBacklog = await countRawNewsByStatus("fetched");
+  let fetchResult: { fetched: number; duplicates: number; errors: number; skipped: boolean };
+
+  if (fetchedBacklog === 0) {
+    const fetched = await runFetchNews({
+      rssItemLimit: 2,
+      maxSources: 2,
+      skipGdeltDiscovery: true,
+    });
+    fetchResult = { ...fetched, skipped: false };
+  } else {
+    fetchResult = { fetched: 0, duplicates: 0, errors: 0, skipped: true };
+  }
+
   const batchSize = options?.batchSize ?? settings.processBatchSizePerRun ?? 1;
-  const processResult = await runProcessNews(batchSize);
+  const processResult = await runProcessNews(batchSize, { preferHostedImage: true });
 
   return {
     skipped: false,
     publishIntervalMinutes: intervalMinutes,
+    fetchedBacklog,
     fetch: fetchResult,
     process: processResult,
     published: processResult.published,

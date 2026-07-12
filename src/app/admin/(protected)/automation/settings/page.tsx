@@ -156,6 +156,10 @@ export default function AutomationSettingsPage() {
             </>
           )}
           <p className="mt-2">Schedule: every 30 minutes · Method: GET · Headers: leave empty</p>
+          <p className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+            <strong>If test run times out:</strong> cron-job.org → ADVANCED → increase <strong>Request timeout to 90 seconds</strong>.
+            Vercel allows max 60s; we optimized the cycle to finish faster (skip fetch when queue has items, use RSS image first).
+          </p>
         </div>
 
         <ToggleSwitch

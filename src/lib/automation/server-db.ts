@@ -143,6 +143,12 @@ export async function getRawNewsByStatus(status: RawNewsStatus, limit = 10) {
   return snap.docs.map((d) => mapRawNews(d.id, d.data()));
 }
 
+export async function countRawNewsByStatus(status: RawNewsStatus): Promise<number> {
+  const db = getAdminDb();
+  const snap = await db.collection(COLLECTIONS.rawNews).where("status", "==", status).count().get();
+  return snap.data().count || 0;
+}
+
 export async function getAllRawNews(limit = 100) {
   const db = getAdminDb();
   const snap = await db
