@@ -69,15 +69,22 @@ export default function SocialAccountsPage() {
 
   const load = useCallback(async () => {
     const token = await (await import("@/lib/automation/client-api")).getAuthToken();
-    const [accountsRes, configRes, setupRes] = await Promise.all([
+    const [accountsRes, configRes] = await Promise.all([
       fetch("/api/ai/social/accounts", { headers: { Authorization: `Bearer ${token}` } }),
       getSocialOAuthConfigApi(),
-      getFacebookSetupApi().catch(() => null),
     ]);
     const accountsData = await accountsRes.json();
     setAccounts(accountsData.accounts || []);
     setPlatformConfigs((configRes.platforms || []) as PlatformConfig[]);
-    if (setupRes) setFbSetup(setupRes);
+  }, []);
+
+  const loadSetupInfo = useCallback(async () => {
+    try {
+      const setupRes = await getFacebookSetupApi();
+      setFbSetup(setupRes);
+    } catch {
+      setFbSetup(null);
+    }
   }, []);
 
   useEffect(() => {
@@ -92,11 +99,19 @@ export default function SocialAccountsPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+
     const params = new URLSearchParams(window.location.search);
     const status = params.get("status");
-    const message = params.get("message");
-    const platform = params.get("platform");
     if (!status) return;
+
+    const message = params.get("message") || "";
+    const platform = params.get("platform") || "social";
+    const toastKey = `social-oauth-toast:${status}:${platform}:${message}`;
+
+    window.history.replaceState({}, "", "/admin/social/accounts");
+
+    if (sessionStorage.getItem(toastKey)) return;
+    sessionStorage.setItem(toastKey, "1");
 
     if (status === "success") {
       toast.success(message || `${platform} connected successfully`);
@@ -104,8 +119,6 @@ export default function SocialAccountsPage() {
     } else if (status === "error") {
       toast.error(message || `${platform} connection failed`);
     }
-
-    window.history.replaceState({}, "", "/admin/social/accounts");
   }, [load]);
 
   const accountByPlatform = useMemo(() => {
@@ -113,6 +126,20 @@ export default function SocialAccountsPage() {
     accounts.forEach((a) => map.set(a.platform, a));
     return map;
   }, [accounts]);
+
+  const facebookConnected = useMemo(() => {
+    const fb = accountByPlatform.get("facebook");
+    return Boolean(fb?.enabled && fb?.status === "connected");
+  }, [accountByPlatform]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (facebookConnected) {
+      setFbSetup(null);
+      return;
+    }
+    loadSetupInfo().catch(() => undefined);
+  }, [loading, facebookConnected, loadSetupInfo]);
 
   const connectFacebook = async () => {
     if (adminUser?.role !== "super_admin") {
@@ -158,6 +185,11 @@ export default function SocialAccountsPage() {
       return;
     }
     await disconnectSocialAccountApi(platform);
+    if (platform === "facebook") {
+      Object.keys(sessionStorage)
+        .filter((key) => key.startsWith("social-oauth-toast:"))
+        .forEach((key) => sessionStorage.removeItem(key));
+    }
     toast.success("Disconnected");
     await load();
   };
@@ -171,40 +203,55 @@ export default function SocialAccountsPage() {
         actions={<span className="text-sm text-gray-500">One-click official API connections</span>}
       />
 
-      <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        <strong>Facebook setup required in Meta Dashboard:</strong> App must include the{" "}
-        <em>Manage everything on your Page</em> use case + Facebook Login for Business configuration.
-        If you see &quot;Invalid Scopes&quot;, create a new <strong>Business</strong> Meta app (see docs below).
-      </div>
+      {!facebookConnected && (
+        <>
+          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <strong>Facebook setup required in Meta Dashboard:</strong> App must include the{" "}
+            <em>Manage everything on your Page</em> use case + Facebook Login for Business configuration.
+            If you see &quot;Invalid Scopes&quot;, create a new <strong>Business</strong> Meta app.
+          </div>
 
-      <div className="mb-6 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
-        <strong>Quick connect:</strong> Facebook = authorize your Page via Meta OAuth (Pages API token). Telegram = paste bot
-        token once (auto-verified).
-        {fbSetup && (
-          <div className="mt-3 rounded border border-blue-200 bg-white p-3 text-xs text-gray-800">
-            <p>
-              <strong>App ID:</strong> {String(fbSetup.appId || "missing")} |{" "}
-              <strong>Config ID:</strong> {fbSetup.hasConfigId ? String(fbSetup.configIdPreview) : "missing"}
-              {fbSetup.configIdLooksLikeAppId ? (
-                <span className="ml-2 font-bold text-red-600">Config ID = App ID (wrong!)</span>
-              ) : null}
-            </p>
-            <p className="mt-1 break-all">
-              <strong>Redirect URI (Meta me exactly ye paste karo):</strong>{" "}
-              <code>{String(fbSetup.redirectUri || "")}</code>
-            </p>
-            <p className="mt-1">
-              <strong>OAuth mode:</strong> {String(fbSetup.oauthMode || "config_id")}
-              {fbSetup.oauthMode === "config_id" ? (
-                <span className="text-gray-600"> — agar error aaye to Vercel me FACEBOOK_OAUTH_USE_SCOPES=true set karo</span>
-              ) : null}
-            </p>
-            {Array.isArray(fbSetup.missingEnv) && (fbSetup.missingEnv as string[]).length > 0 && (
-              <p className="mt-1 text-red-600">Missing Vercel env: {(fbSetup.missingEnv as string[]).join(", ")}</p>
+          <div className="mb-6 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
+            <strong>Quick connect:</strong> Facebook = authorize your Page via Meta OAuth (Pages API token). Telegram =
+            paste bot token once (auto-verified).
+            {fbSetup && (
+              <div className="mt-3 rounded border border-blue-200 bg-white p-3 text-xs text-gray-800">
+                <p>
+                  <strong>App ID:</strong> {String(fbSetup.appId || "missing")} |{" "}
+                  <strong>Config ID:</strong> {fbSetup.hasConfigId ? String(fbSetup.configIdPreview) : "missing"}
+                  {fbSetup.configIdLooksLikeAppId ? (
+                    <span className="ml-2 font-bold text-red-600">Config ID = App ID (wrong!)</span>
+                  ) : null}
+                </p>
+                <p className="mt-1 break-all">
+                  <strong>Redirect URI (Meta me exactly ye paste karo):</strong>{" "}
+                  <code>{String(fbSetup.redirectUri || "")}</code>
+                </p>
+                <p className="mt-1">
+                  <strong>OAuth mode:</strong> {String(fbSetup.oauthMode || "config_id")}
+                  {fbSetup.oauthMode === "config_id" ? (
+                    <span className="text-gray-600">
+                      {" "}
+                      — agar error aaye to Vercel me FACEBOOK_OAUTH_USE_SCOPES=true set karo
+                    </span>
+                  ) : null}
+                </p>
+                {Array.isArray(fbSetup.missingEnv) && (fbSetup.missingEnv as string[]).length > 0 && (
+                  <p className="mt-1 text-red-600">Missing Vercel env: {(fbSetup.missingEnv as string[]).join(", ")}</p>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
+        </>
+      )}
+
+      {facebookConnected && (
+        <div className="mb-6 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-900">
+          <CheckCircle2 className="mr-1 inline h-4 w-4" />
+          Facebook Page <strong>{accountByPlatform.get("facebook")?.accountName}</strong> is connected and ready for
+          auto-posting.
+        </div>
+      )}
 
       <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {platformConfigs.map((cfg) => {
