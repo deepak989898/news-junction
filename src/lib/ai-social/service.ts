@@ -659,7 +659,7 @@ async function syncAnalyticsOnPublish(item: SocialPostQueueItem) {
   let categoryId: string | undefined;
   try {
     const articleRaw = await getArticleById(item.articleId);
-    const rawCategory = articleRaw?.categoryId;
+    const rawCategory = articleRaw ? (articleRaw as NewsDoc).categoryId : undefined;
     if (rawCategory) categoryId = String(rawCategory);
   } catch {
     // analytics should not block publish if article lookup fails
