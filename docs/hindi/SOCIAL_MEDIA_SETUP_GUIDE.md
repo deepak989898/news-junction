@@ -38,6 +38,21 @@ TELEGRAM_CHANNEL_ID=@yourchannel
 `/admin/ai/social-manager` → Process Queue  
 या API: `/api/ai/social/process-queue`
 
+### Auto-publish Cron (Vercel Hobby)
+Vercel **Hobby (free)** plan par cron **sirf 1 baar per day** chal sakta hai.  
+Is project mein: `/api/cron/process-social-queue` — daily ~10 AM IST (`30 4 * * *` UTC).
+
+**Har 15 minute auto-publish** ke liye (Hobby par Vercel cron se nahi):
+1. [cron-job.org](https://cron-job.org) ya [EasyCron](https://www.easycron.com) (free) use karein
+2. URL: `https://news-junction.vercel.app/api/cron/process-social-queue`
+3. Method: GET
+4. Header: `Authorization: Bearer YOUR_CRON_SECRET`
+5. Schedule: har 15 minute (business hours ke liye custom schedule)
+
+**Ya** Vercel **Pro plan** upgrade karein — tab Vercel cron har 15 min chala sakte hain.
+
+**Instant publish:** Admin → AI Social Manager → **Publish Now** (cron ki zaroorat nahi).
+
 ## Platform Status
 
 | Platform | Caption | Post |

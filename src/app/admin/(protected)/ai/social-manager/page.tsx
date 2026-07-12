@@ -432,8 +432,7 @@ export default function AiSocialManagerPage() {
           <div className={`mb-3 rounded-lg px-3 py-2 text-sm ${autoPublishEnabled ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>
             {autoPublishEnabled ? (
               <>
-                Auto-publish is <strong>ON</strong>. Cron runs every 15 minutes during business hours ({String(settingsDraft.businessHoursStart || 9)}–{String(settingsDraft.businessHoursEnd || 21)} {String(settingsDraft.timezone || "Asia/Kolkata")}).
-                Approved/scheduled posts publish automatically — no manual Process Queue needed.
+                Auto-publish is <strong>ON</strong>. Vercel cron runs once daily (~10 AM IST). During business hours ({String(settingsDraft.businessHoursStart || 9)}–{String(settingsDraft.businessHoursEnd || 21)} {String(settingsDraft.timezone || "Asia/Kolkata")}), approved posts publish automatically — or use <strong>Publish Now</strong> for instant posting.
               </>
             ) : (
               <>

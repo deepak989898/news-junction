@@ -34,7 +34,7 @@
     },
     {
       "path": "/api/cron/process-social-queue",
-      "schedule": "*/15 * * * *"
+      "schedule": "30 4 * * *"
     }
   ]
 }
