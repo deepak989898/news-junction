@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySuperAdmin } from "@/lib/auth/verify-admin";
 import { createOAuthState } from "@/lib/ai-social/oauth-state";
-import { getFacebookOAuthUrl, missingEnvVars } from "@/lib/ai-social/oauth-providers";
+import { getFacebookOAuthUrl, getFacebookRedirectUri, missingEnvVars } from "@/lib/ai-social/oauth-providers";
 
 export const runtime = "nodejs";
 
@@ -23,7 +23,14 @@ export async function GET(request: NextRequest) {
   try {
     const state = createOAuthState({ uid: admin.uid, platform: "facebook" });
     const url = getFacebookOAuthUrl(state);
-    return NextResponse.json({ url });
+    const configId = (process.env.FACEBOOK_LOGIN_CONFIG_ID || "").trim();
+    return NextResponse.json({
+      url,
+      redirectUri: getFacebookRedirectUri(),
+      appId: process.env.FACEBOOK_APP_ID,
+      usingConfigId: Boolean(configId),
+      configIdPreview: configId ? `${configId.slice(0, 4)}...${configId.slice(-4)}` : null,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to start Facebook OAuth";
     return NextResponse.json({ error: message }, { status: 500 });

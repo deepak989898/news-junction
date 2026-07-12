@@ -2,7 +2,8 @@ import { getSiteUrl } from "./oauth-state";
 import { upsertSocialAccount } from "./service";
 import { SocialPlatform } from "./types";
 
-const FB_GRAPH = "https://graph.facebook.com/v20.0";
+const FB_GRAPH = "https://graph.facebook.com/v25.0";
+const FB_OAUTH_DIALOG = "https://www.facebook.com/v25.0/dialog/oauth";
 
 /** Page publishing scopes per Meta Permissions Reference (pages_manage_posts dependencies). */
 export const FACEBOOK_PAGE_OAUTH_SCOPES = [
@@ -17,21 +18,33 @@ function requireEnv(name: string): string {
   return value;
 }
 
+export function getFacebookRedirectUri(): string {
+  return `${getSiteUrl()}/api/ai/social/oauth/facebook/callback`;
+}
+
 export function getFacebookOAuthUrl(state: string): string {
   const appId = requireEnv("FACEBOOK_APP_ID");
-  const redirectUri = `${getSiteUrl()}/api/ai/social/oauth/facebook/callback`;
+  const redirectUri = getFacebookRedirectUri();
+  const configId = (process.env.FACEBOOK_LOGIN_CONFIG_ID || "").trim();
   const params = new URLSearchParams({
     client_id: appId,
     redirect_uri: redirectUri,
     state,
-    scope: FACEBOOK_PAGE_OAUTH_SCOPES.join(","),
     response_type: "code",
   });
-  const configId = (process.env.FACEBOOK_LOGIN_CONFIG_ID || "").trim();
+  // Facebook Login for Business: config_id replaces scope (Meta docs).
   if (configId) {
+    if (configId === appId) {
+      throw new Error(
+        "FACEBOOK_LOGIN_CONFIG_ID must be the Configuration ID from Facebook Login for Business → Configurations, not the App ID."
+      );
+    }
     params.set("config_id", configId);
+    params.set("override_default_response_type", "true");
+  } else {
+    params.set("scope", FACEBOOK_PAGE_OAUTH_SCOPES.join(","));
   }
-  return `https://www.facebook.com/v20.0/dialog/oauth?${params.toString()}`;
+  return `${FB_OAUTH_DIALOG}?${params.toString()}`;
 }
 
 async function fbGet<T>(path: string, params: Record<string, string>): Promise<T> {
@@ -48,7 +61,7 @@ async function fbGet<T>(path: string, params: Record<string, string>): Promise<T
 export async function completeFacebookOAuth(code: string) {
   const appId = requireEnv("FACEBOOK_APP_ID");
   const appSecret = requireEnv("FACEBOOK_APP_SECRET");
-  const redirectUri = `${getSiteUrl()}/api/ai/social/oauth/facebook/callback`;
+  const redirectUri = getFacebookRedirectUri();
   const configuredPageId = (process.env.FACEBOOK_PAGE_ID || "").trim();
 
   const shortToken = await fbGet<{ access_token: string }>("/oauth/access_token", {
@@ -182,9 +195,10 @@ export function getPlatformConnectConfig(platform: SocialPlatform) {
   > = {
     facebook: {
       oneClick: true,
-      envRequired: ["FACEBOOK_APP_ID", "FACEBOOK_APP_SECRET"],
+      envRequired: ["FACEBOOK_APP_ID", "FACEBOOK_APP_SECRET", "FACEBOOK_LOGIN_CONFIG_ID"],
       label: "Facebook Page",
-      description: "Authorize your Facebook Page (Pages API). We store an encrypted Page access token for auto-posting.",
+      description:
+        "Authorize your Facebook Page via Facebook Login for Business. Requires Meta app with Pages use case + Configuration ID.",
     },
     telegram: {
       oneClick: true,

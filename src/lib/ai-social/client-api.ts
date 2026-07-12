@@ -29,7 +29,15 @@ export const disconnectSocialAccountApi = (platform: string) =>
 export const getSocialOAuthConfigApi = () =>
   callSocialApi<{ platforms: Array<Record<string, unknown>> }>("/api/ai/social/oauth/config");
 export const startFacebookOAuthApi = () =>
-  callSocialApi<{ url: string }>("/api/ai/social/oauth/facebook/start");
+  callSocialApi<{
+    url: string;
+    redirectUri: string;
+    appId?: string;
+    usingConfigId?: boolean;
+    configIdPreview?: string | null;
+  }>("/api/ai/social/oauth/facebook/start");
+export const getFacebookSetupApi = () =>
+  callSocialApi<Record<string, unknown>>("/api/ai/social/oauth/facebook/setup");
 export const connectTelegramBotApi = (botToken: string) =>
   callSocialApi<{ success: boolean; accountName: string; channelTitle: string }>(
     "/api/ai/social/oauth/telegram/connect",

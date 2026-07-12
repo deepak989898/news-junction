@@ -22,6 +22,7 @@ import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import {
   connectTelegramBotApi,
   disconnectSocialAccountApi,
+  getFacebookSetupApi,
   getSocialOAuthConfigApi,
   startFacebookOAuthApi,
 } from "@/lib/ai-social/client-api";
@@ -64,16 +65,19 @@ export default function SocialAccountsPage() {
   const [platformConfigs, setPlatformConfigs] = useState<PlatformConfig[]>([]);
   const [telegramToken, setTelegramToken] = useState("");
   const [showTelegramModal, setShowTelegramModal] = useState(false);
+  const [fbSetup, setFbSetup] = useState<Record<string, unknown> | null>(null);
 
   const load = useCallback(async () => {
     const token = await (await import("@/lib/automation/client-api")).getAuthToken();
-    const [accountsRes, configRes] = await Promise.all([
+    const [accountsRes, configRes, setupRes] = await Promise.all([
       fetch("/api/ai/social/accounts", { headers: { Authorization: `Bearer ${token}` } }),
       getSocialOAuthConfigApi(),
+      getFacebookSetupApi().catch(() => null),
     ]);
     const accountsData = await accountsRes.json();
     setAccounts(accountsData.accounts || []);
     setPlatformConfigs((configRes.platforms || []) as PlatformConfig[]);
+    if (setupRes) setFbSetup(setupRes);
   }, []);
 
   useEffect(() => {
@@ -167,9 +171,33 @@ export default function SocialAccountsPage() {
         actions={<span className="text-sm text-gray-500">One-click official API connections</span>}
       />
 
+      <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <strong>Facebook setup required in Meta Dashboard:</strong> App must include the{" "}
+        <em>Manage everything on your Page</em> use case + Facebook Login for Business configuration.
+        If you see &quot;Invalid Scopes&quot;, create a new <strong>Business</strong> Meta app (see docs below).
+      </div>
+
       <div className="mb-6 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
         <strong>Quick connect:</strong> Facebook = authorize your Page via Meta OAuth (Pages API token). Telegram = paste bot
         token once (auto-verified).
+        {fbSetup && (
+          <div className="mt-3 rounded border border-blue-200 bg-white p-3 text-xs text-gray-800">
+            <p>
+              <strong>App ID:</strong> {String(fbSetup.appId || "missing")} |{" "}
+              <strong>Config ID:</strong> {fbSetup.hasConfigId ? String(fbSetup.configIdPreview) : "missing"}
+              {fbSetup.configIdLooksLikeAppId ? (
+                <span className="ml-2 font-bold text-red-600">Config ID = App ID (wrong!)</span>
+              ) : null}
+            </p>
+            <p className="mt-1 break-all">
+              <strong>Redirect URI (Meta me exactly ye paste karo):</strong>{" "}
+              <code>{String(fbSetup.redirectUri || "")}</code>
+            </p>
+            {Array.isArray(fbSetup.missingEnv) && (fbSetup.missingEnv as string[]).length > 0 && (
+              <p className="mt-1 text-red-600">Missing Vercel env: {(fbSetup.missingEnv as string[]).join(", ")}</p>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
