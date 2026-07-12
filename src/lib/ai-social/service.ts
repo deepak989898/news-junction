@@ -75,6 +75,10 @@ export async function updateSocialSettings(patch: Partial<SocialManagerSettings>
   return getSocialSettings();
 }
 
+function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
+  return Object.fromEntries(Object.entries(obj).filter(([, value]) => value !== undefined)) as T;
+}
+
 export async function upsertSocialAccount(input: {
   platform: SocialPlatform;
   accountName: string;
@@ -90,7 +94,7 @@ export async function upsertSocialAccount(input: {
     .where("platform", "==", input.platform)
     .limit(1)
     .get();
-  const payload: Omit<SocialAccount, "id"> = {
+  const payload = stripUndefined({
     platform: input.platform,
     accountName: input.accountName,
     accountId: input.accountId,
@@ -99,17 +103,17 @@ export async function upsertSocialAccount(input: {
     tokenExpiresAt: input.tokenExpiresAt,
     scopes: input.scopes || [],
     enabled: input.enabled ?? true,
-    status: "connected",
+    status: "connected" as const,
     lastCheckedAt: nowIso(),
     createdAt: nowIso(),
     updatedAt: nowIso(),
-  };
+  });
   if (existing.empty) {
     const ref = await getAdminDb().collection("socialAccounts").add(payload);
     return { id: ref.id, ...payload };
   }
   const ref = existing.docs[0].ref;
-  await ref.update({ ...payload, createdAt: existing.docs[0].data().createdAt || nowIso() });
+  await ref.update(stripUndefined({ ...payload, createdAt: existing.docs[0].data().createdAt || nowIso() }));
   const doc = await ref.get();
   return { id: doc.id, ...doc.data() } as SocialAccount;
 }
