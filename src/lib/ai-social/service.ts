@@ -269,8 +269,28 @@ export async function schedulePost(input: Omit<SocialPostQueueItem, "id" | "crea
   return { id: ref.id, ...payload };
 }
 
-function isWithinBusinessHours(settings: SocialManagerSettings) {
-  const hour = new Date().getHours();
+function getSiteUrl(): string {
+  return (process.env.NEXT_PUBLIC_SITE_URL || "https://news-junction.vercel.app").replace(/\/$/, "");
+}
+
+function absoluteMediaUrl(url?: string): string | undefined {
+  if (!url) return undefined;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${getSiteUrl()}${url.startsWith("/") ? url : `/${url}`}`;
+}
+
+function currentHourInTimezone(timezone: string): number {
+  const formatted = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    hour12: false,
+    timeZone: timezone || "Asia/Kolkata",
+  }).format(new Date());
+  return Number(formatted);
+}
+
+function isWithinBusinessHours(settings: SocialManagerSettings, bypass = false): boolean {
+  if (bypass) return true;
+  const hour = currentHourInTimezone(settings.timezone || "Asia/Kolkata");
   return hour >= settings.businessHoursStart && hour <= settings.businessHoursEnd;
 }
 
@@ -288,11 +308,12 @@ async function publishToPlatform(
   if (platform === "telegram") {
     const chatId = process.env.TELEGRAM_CHANNEL_ID;
     if (!chatId) throw new Error("TELEGRAM_CHANNEL_ID not configured");
-    const url = imageUrl
+    const image = absoluteMediaUrl(imageUrl);
+    const url = image
       ? `https://api.telegram.org/bot${token}/sendPhoto`
       : `https://api.telegram.org/bot${token}/sendMessage`;
-    const body = imageUrl
-      ? { chat_id: chatId, photo: imageUrl, caption: text }
+    const body = image
+      ? { chat_id: chatId, photo: image, caption: text }
       : { chat_id: chatId, text };
     const res = await fetch(url, {
       method: "POST",
@@ -306,11 +327,12 @@ async function publishToPlatform(
   if (platform === "facebook") {
     const pageId = accountId || process.env.FACEBOOK_PAGE_ID;
     if (!pageId) throw new Error("Facebook Page ID not configured. Reconnect the Page in Social Accounts.");
-    const endpoint = imageUrl
-      ? `https://graph.facebook.com/v20.0/${pageId}/photos`
-      : `https://graph.facebook.com/v20.0/${pageId}/feed`;
-    const body = imageUrl
-      ? new URLSearchParams({ url: imageUrl, caption: text, access_token: token })
+    const image = absoluteMediaUrl(imageUrl);
+    const endpoint = image
+      ? `https://graph.facebook.com/v25.0/${pageId}/photos`
+      : `https://graph.facebook.com/v25.0/${pageId}/feed`;
+    const body = image
+      ? new URLSearchParams({ url: image, caption: text, access_token: token })
       : new URLSearchParams({ message: text, access_token: token });
     const res = await fetch(endpoint, {
       method: "POST",
@@ -318,8 +340,15 @@ async function publishToPlatform(
       body,
       signal: AbortSignal.timeout(20000),
     });
-    if (!res.ok) throw new Error(`Facebook publish failed: ${res.status}`);
-    return { platformPostId: `facebook-${Date.now()}` };
+    const payload = (await res.json().catch(() => ({}))) as {
+      id?: string;
+      post_id?: string;
+      error?: { message?: string; code?: number };
+    };
+    if (!res.ok || payload.error) {
+      throw new Error(payload.error?.message || `Facebook publish failed: HTTP ${res.status}`);
+    }
+    return { platformPostId: String(payload.post_id || payload.id || `facebook-${Date.now()}`) };
   }
   if (platform === "linkedin") {
     throw new Error("LinkedIn publishing requires app-specific OAuth scope setup. Configure via social accounts.");
@@ -336,8 +365,9 @@ async function publishToPlatform(
   throw new Error(`Unsupported platform ${platform}`);
 }
 
-export async function processSocialQueue(limit = 20) {
+export async function processSocialQueue(limit = 20, options?: { force?: boolean }) {
   const settings = await getSocialSettings();
+  const force = options?.force ?? false;
   const now = nowIso();
   const snap = await getAdminDb()
     .collection("socialPostQueue")
@@ -347,11 +377,27 @@ export async function processSocialQueue(limit = 20) {
     .get();
   let published = 0;
   let failed = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+  const skipReasons: string[] = [];
+
   for (const doc of snap.docs) {
     const item = doc.data() as SocialPostQueueItem;
-    if (item.status === "scheduled" && item.scheduledAt && item.scheduledAt > now) continue;
-    if (!settings.autoPublishEnabled && item.approvalStatus !== "approved") continue;
-    if (!isWithinBusinessHours(settings)) continue;
+    if (item.status === "scheduled" && item.scheduledAt && item.scheduledAt > now) {
+      skipped += 1;
+      skipReasons.push(`${doc.id}: scheduled for later`);
+      continue;
+    }
+    if (!settings.autoPublishEnabled && item.approvalStatus !== "approved") {
+      skipped += 1;
+      skipReasons.push(`${doc.id}: waiting for approval`);
+      continue;
+    }
+    if (!isWithinBusinessHours(settings, force)) {
+      skipped += 1;
+      skipReasons.push(`${doc.id}: outside business hours (${settings.timezone})`);
+      continue;
+    }
     await doc.ref.update({ status: "processing", updatedAt: nowIso() });
     try {
       const accountSnap = await getAdminDb()
@@ -370,7 +416,7 @@ export async function processSocialQueue(limit = 20) {
         token,
         account.accountId
       );
-      await doc.ref.update({ status: "published", publishedAt: nowIso(), updatedAt: nowIso() });
+      await doc.ref.update({ status: "published", publishedAt: nowIso(), updatedAt: nowIso(), errorMessage: null });
       published += 1;
       await syncAnalyticsOnPublish(item);
       await logSocial({
@@ -386,6 +432,7 @@ export async function processSocialQueue(limit = 20) {
       const canRetry = retryCount <= settings.maxRetries;
       const status: SocialQueueStatus = canRetry ? "pending" : "failed";
       const errorMessage = error instanceof Error ? error.message : "Publish failed";
+      errors.push(errorMessage);
       await doc.ref.update({
         status,
         retryCount,
@@ -404,7 +451,17 @@ export async function processSocialQueue(limit = 20) {
       });
     }
   }
-  return { checked: snap.size, published, failed };
+  return {
+    checked: snap.size,
+    published,
+    failed,
+    skipped,
+    errors: errors.slice(0, 5),
+    skipReasons: skipReasons.slice(0, 5),
+    businessHoursActive: isWithinBusinessHours(settings, true),
+    timezone: settings.timezone,
+    autoPublishEnabled: settings.autoPublishEnabled,
+  };
 }
 
 export async function bulkAction(input: {

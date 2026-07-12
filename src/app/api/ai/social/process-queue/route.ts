@@ -10,8 +10,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Super admin required" }, { status: 403 });
   }
   try {
-    const { limit = 20 } = await request.json().catch(() => ({ limit: 20 }));
-    const result = await processSocialQueue(Number(limit || 20));
+    const { limit = 20, force = true } = await request.json().catch(() => ({ limit: 20, force: true }));
+    const result = await processSocialQueue(Number(limit || 20), { force: Boolean(force) });
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to process social queue";
