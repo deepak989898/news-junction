@@ -14,11 +14,13 @@ import {
   generateSocialContentApi,
   getSocialDashboardApi,
   processSocialQueueApi,
+  publishSocialPostNowApi,
   scheduleSocialPostApi,
   updateSocialSettingsApi,
 } from "@/lib/ai-social/client-api";
 import toast from "react-hot-toast";
 
+const UI_VERSION = "v2.1";
 const PLATFORMS = ["facebook", "instagram", "x", "linkedin", "telegram"] as const;
 
 type BusyAction =
@@ -46,6 +48,31 @@ type QueueProcessResult = {
   autoPublishEnabled?: boolean;
 };
 
+type PublishNowResult = {
+  queueId?: string;
+  published?: number;
+  platform?: string;
+  platformPostId?: string;
+  pageId?: string;
+  accountName?: string;
+  error?: string;
+};
+
+const BUSY_LABELS: Record<BusyAction, string> = {
+  refresh: "Refreshing dashboard...",
+  generate: "AI is generating social captions...",
+  generateBreaking: "AI is generating breaking version...",
+  schedule: "Scheduling post...",
+  publishNow: "Publishing to Facebook/Telegram...",
+  processQueue: "Processing publish queue...",
+  saveSettings: "Saving settings...",
+  createCampaign: "Creating campaign...",
+  bulkPublish: "Bulk publishing selected posts...",
+  bulkRegenerateCaptions: "Regenerating captions...",
+  bulkRegenerateHashtags: "Regenerating hashtags...",
+  bulkCancel: "Cancelling selected posts...",
+};
+
 function formatQueueResult(result: QueueProcessResult): string {
   const parts = [
     `Checked: ${result.checked ?? 0}`,
@@ -67,6 +94,7 @@ function BusyButton({
   children,
   className = "",
   disabled = false,
+  loadingLabel,
 }: {
   busy: BusyAction | null;
   action: BusyAction;
@@ -75,18 +103,26 @@ function BusyButton({
   children: React.ReactNode;
   className?: string;
   disabled?: boolean;
+  loadingLabel?: string;
 }) {
   const isLoading = busy === current;
   const isDisabled = Boolean(busy) || disabled;
   return (
     <button
       type="button"
-      className={`inline-flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+      className={`inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 ${isLoading ? "ring-2 ring-blue-400 ring-offset-1" : ""} ${className}`}
       onClick={onClick}
       disabled={isDisabled}
+      aria-busy={isLoading}
     >
-      {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-      {isLoading ? "Processing..." : children}
+      {isLoading ? (
+        <>
+          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          <span className="font-semibold">{loadingLabel || "Please wait..."}</span>
+        </>
+      ) : (
+        children
+      )}
     </button>
   );
 }
@@ -108,6 +144,7 @@ export default function AiSocialManagerPage() {
   const [selectedQueueIds, setSelectedQueueIds] = useState<string[]>([]);
   const [campaign, setCampaign] = useState({ name: "", startDate: "", endDate: "", platforms: ["facebook"], categories: [] as string[] });
   const [settingsDraft, setSettingsDraft] = useState<Record<string, unknown>>({});
+  const [lastResult, setLastResult] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
 
   const load = async (silent = false) => {
     if (!silent) setBusy("refresh");
@@ -197,28 +234,42 @@ export default function AiSocialManagerPage() {
     }
     const action: BusyAction = publishNow ? "publishNow" : "schedule";
     setBusy(action);
-    const toastId = toast.loading(publishNow ? "Queuing post for publish..." : "Scheduling post...");
+    const toastId = toast.loading(BUSY_LABELS[action]);
     try {
-      await scheduleSocialPostApi({
-        articleId: selectedArticleId,
-        platform: selectedPlatform,
-        text: editableText,
-        hashtags,
-        cta,
-        imageUrl: selectedArticle?.imageUrl || undefined,
-        language: "en",
-        scheduledAt: publishNow ? undefined : scheduleAt || undefined,
-        approvalStatus: publishNow ? "approved" : "pending",
-      });
       if (publishNow) {
-        toast.loading("Publishing to platform...", { id: toastId });
-        await runProcessQueue(true);
+        const result = (await publishSocialPostNowApi({
+          articleId: selectedArticleId,
+          platform: selectedPlatform,
+          text: editableText,
+          hashtags,
+          cta,
+          imageUrl: selectedArticle?.imageUrl || undefined,
+          language: "en",
+        })) as PublishNowResult;
+        const msg = `Published to ${result.platform || selectedPlatform} (${result.accountName || "account"}) · Post ID: ${result.platformPostId || "n/a"}`;
+        setLastResult({ type: "success", message: msg });
+        toast.success(msg, { id: toastId, duration: 10000 });
       } else {
-        toast.success("Post scheduled", { id: toastId });
+        await scheduleSocialPostApi({
+          articleId: selectedArticleId,
+          platform: selectedPlatform,
+          text: editableText,
+          hashtags,
+          cta,
+          imageUrl: selectedArticle?.imageUrl || undefined,
+          language: "en",
+          scheduledAt: scheduleAt || undefined,
+          approvalStatus: "pending",
+        });
+        const msg = "Post scheduled — click Process Queue or enable Auto Publish to publish.";
+        setLastResult({ type: "info", message: msg });
+        toast.success(msg, { id: toastId });
       }
       await load(true);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Schedule failed", { id: toastId });
+      const msg = e instanceof Error ? e.message : publishNow ? "Publish failed" : "Schedule failed";
+      setLastResult({ type: "error", message: msg });
+      toast.error(msg, { id: toastId, duration: 10000 });
     } finally {
       setBusy(null);
     }
@@ -227,7 +278,14 @@ export default function AiSocialManagerPage() {
   const processQueue = async () => {
     setBusy("processQueue");
     try {
-      await runProcessQueue(true);
+      const result = await runProcessQueue(true);
+      if (result) {
+        const summary = formatQueueResult(result);
+        setLastResult({
+          type: (result.published ?? 0) > 0 ? "success" : (result.failed ?? 0) > 0 ? "error" : "info",
+          message: summary,
+        });
+      }
       await load(true);
     } finally {
       setBusy(null);
@@ -299,10 +357,21 @@ export default function AiSocialManagerPage() {
 
   return (
     <RoleGuard>
+      {busy && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-[1px]">
+          <div className="mx-4 max-w-md rounded-2xl bg-white p-8 text-center shadow-2xl">
+            <div className="mx-auto mb-4 h-14 w-14 animate-spin rounded-full border-4 border-[#1a2b4c] border-t-transparent" />
+            <p className="text-lg font-bold text-[#1a2b4c]">{BUSY_LABELS[busy]}</p>
+            <p className="mt-2 text-sm text-gray-500">Do not close this page until finished.</p>
+          </div>
+        </div>
+      )}
+
       <AdminTopbar
         title="AI Social Manager"
         actions={
           <div className="flex items-center gap-3">
+            <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">{UI_VERSION}</span>
             <span className="text-sm text-gray-500">Content distribution and scheduling</span>
             <BusyButton
               busy={busy}
@@ -317,10 +386,24 @@ export default function AiSocialManagerPage() {
         }
       />
 
+      {lastResult && (
+        <div
+          className={`mb-4 rounded-lg border px-4 py-3 text-sm whitespace-pre-wrap ${
+            lastResult.type === "success"
+              ? "border-green-300 bg-green-50 text-green-900"
+              : lastResult.type === "error"
+                ? "border-red-300 bg-red-50 text-red-900"
+                : "border-blue-300 bg-blue-50 text-blue-900"
+          }`}
+        >
+          <strong>Last action:</strong> {lastResult.message}
+        </div>
+      )}
+
       {busy && (
         <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800">
           <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
-          Action in progress — please wait until it finishes.
+          {BUSY_LABELS[busy]}
         </div>
       )}
 
@@ -395,10 +478,10 @@ export default function AiSocialManagerPage() {
         <div className="rounded-xl bg-white p-5 shadow-sm lg:col-span-2">
           <h3 className="mb-3 font-semibold text-[#1a2b4c]">AI Content Generator + Platform Preview</h3>
           <div className="mb-3 flex flex-wrap gap-2">
-            <BusyButton busy={busy} action="generate" current="generate" onClick={() => generate(false)} className="rounded border px-3 py-2 text-sm">
+            <BusyButton busy={busy} action="generate" current="generate" loadingLabel="Generating..." onClick={() => generate(false)} className="rounded border px-3 py-2 text-sm">
               <Wand2 className="h-4 w-4" /> Generate
             </BusyButton>
-            <BusyButton busy={busy} action="generateBreaking" current="generateBreaking" onClick={() => generate(true)} className="rounded border px-3 py-2 text-sm">
+            <BusyButton busy={busy} action="generateBreaking" current="generateBreaking" loadingLabel="Generating..." onClick={() => generate(true)} className="rounded border px-3 py-2 text-sm">
               <AlertTriangle className="h-4 w-4" /> Breaking Version
             </BusyButton>
           </div>
@@ -416,13 +499,13 @@ export default function AiSocialManagerPage() {
           <input className="mt-2 w-full rounded border px-3 py-2 text-sm" placeholder="hashtags,comma,separated" value={hashtags.join(",")} onChange={(e) => setHashtags(e.target.value.split(",").map((x) => x.trim()).filter(Boolean))} disabled={Boolean(busy)} />
           <input className="mt-2 w-full rounded border px-3 py-2 text-sm" placeholder="CTA" value={cta} onChange={(e) => setCta(e.target.value)} disabled={Boolean(busy)} />
           <div className="mt-3 flex flex-wrap gap-2">
-            <BusyButton busy={busy} action="schedule" current="schedule" onClick={() => schedulePost(false)} className="rounded bg-[#c41e20] px-4 py-2 text-sm font-bold text-white">
+            <BusyButton busy={busy} action="schedule" current="schedule" loadingLabel="Scheduling..." onClick={() => schedulePost(false)} className="rounded bg-[#c41e20] px-4 py-2 text-sm font-bold text-white">
               <CalendarClock className="h-4 w-4" /> Schedule
             </BusyButton>
-            <BusyButton busy={busy} action="publishNow" current="publishNow" onClick={() => schedulePost(true)} className="rounded border px-4 py-2 text-sm">
+            <BusyButton busy={busy} action="publishNow" current="publishNow" loadingLabel="Publishing..." onClick={() => schedulePost(true)} className="rounded border-2 border-[#1a2b4c] bg-white px-4 py-2 text-sm font-bold text-[#1a2b4c]">
               <Send className="h-4 w-4" /> Publish Now
             </BusyButton>
-            <BusyButton busy={busy} action="processQueue" current="processQueue" onClick={processQueue} className="rounded border px-4 py-2 text-sm">
+            <BusyButton busy={busy} action="processQueue" current="processQueue" loadingLabel="Processing queue..." onClick={processQueue} className="rounded border px-4 py-2 text-sm">
               <Layers className="h-4 w-4" /> Process Queue
             </BusyButton>
           </div>

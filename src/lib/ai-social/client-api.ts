@@ -48,6 +48,8 @@ export const generateSocialContentApi = (payload: Record<string, unknown>) =>
   callSocialApi("/api/ai/social/generate", "POST", payload);
 export const scheduleSocialPostApi = (payload: Record<string, unknown>) =>
   callSocialApi("/api/ai/social/schedule", "POST", payload);
+export const publishSocialPostNowApi = (payload: Record<string, unknown>) =>
+  callSocialApi("/api/ai/social/publish-now", "POST", payload);
 export const processSocialQueueApi = (payload?: Record<string, unknown>) =>
   callSocialApi("/api/ai/social/process-queue", "POST", payload || {});
 export const bulkSocialActionApi = (payload: Record<string, unknown>) =>

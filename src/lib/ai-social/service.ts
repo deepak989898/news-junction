@@ -269,6 +269,99 @@ export async function schedulePost(input: Omit<SocialPostQueueItem, "id" | "crea
   return { id: ref.id, ...payload };
 }
 
+export async function publishPostImmediately(input: {
+  articleId: string;
+  platform: SocialPlatform;
+  text: string;
+  hashtags?: string[];
+  cta?: string;
+  imageUrl?: string;
+  language?: "hi" | "en";
+  createdBy: string;
+}) {
+  await resetStaleProcessingItems();
+  const item = await schedulePost({
+    articleId: input.articleId,
+    platform: input.platform,
+    text: input.text,
+    hashtags: input.hashtags || [],
+    cta: input.cta || "Read full story on News Junction.",
+    imageUrl: input.imageUrl,
+    language: input.language || "en",
+    approvalStatus: "approved",
+    createdBy: input.createdBy,
+  });
+  const queueId = item.id;
+  if (!queueId) throw new Error("Failed to create queue item");
+
+  const docRef = getAdminDb().collection("socialPostQueue").doc(queueId);
+  const snap = await docRef.get();
+  if (!snap.exists) throw new Error("Queue item not found");
+  const queueItem = snap.data() as SocialPostQueueItem;
+
+  const accountSnap = await getAdminDb()
+    .collection("socialAccounts")
+    .where("platform", "==", queueItem.platform)
+    .where("enabled", "==", true)
+    .limit(1)
+    .get();
+  if (accountSnap.empty) {
+    await docRef.update({ status: "failed", errorMessage: `No connected account for ${queueItem.platform}`, updatedAt: nowIso() });
+    throw new Error(`No connected account for ${queueItem.platform}. Connect in Social Accounts.`);
+  }
+
+  const account = accountSnap.docs[0].data() as SocialAccount;
+  await docRef.update({ status: "processing", updatedAt: nowIso() });
+
+  try {
+    const token = decrypt(account.tokenEncrypted);
+    const publishResult = await publishToPlatform(
+      queueItem.platform,
+      `${queueItem.text}\n\n${queueItem.hashtags.join(" ")}\n${queueItem.cta}`.trim(),
+      queueItem.imageUrl,
+      token,
+      account.accountId
+    );
+    await docRef.update({
+      status: "published",
+      publishedAt: nowIso(),
+      updatedAt: nowIso(),
+      errorMessage: null,
+      platformPostId: publishResult.platformPostId,
+    });
+    await syncAnalyticsOnPublish(queueItem);
+    await logSocial({
+      articleId: queueItem.articleId,
+      queueId,
+      platform: queueItem.platform,
+      actionType: "publish_post",
+      status: "success",
+      message: `Published to ${queueItem.platform}: ${publishResult.platformPostId}`,
+    });
+    return {
+      queueId,
+      published: 1,
+      failed: 0,
+      platform: queueItem.platform,
+      platformPostId: publishResult.platformPostId,
+      pageId: account.accountId,
+      accountName: account.accountName,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Publish failed";
+    await docRef.update({ status: "failed", errorMessage, updatedAt: nowIso(), retryCount: 1 });
+    await logSocial({
+      articleId: queueItem.articleId,
+      queueId,
+      platform: queueItem.platform,
+      actionType: "publish_post",
+      status: "failed",
+      message: errorMessage,
+    });
+    throw new Error(errorMessage);
+  }
+}
+
 function getSiteUrl(): string {
   return (process.env.NEXT_PUBLIC_SITE_URL || "https://news-junction.vercel.app").replace(/\/$/, "");
 }
@@ -296,6 +389,70 @@ function isWithinBusinessHours(settings: SocialManagerSettings, bypass = false):
 
 function backoffMs(retryCount: number) {
   return Math.min(5 * 60 * 1000, 2000 * 2 ** retryCount);
+}
+
+async function resetStaleProcessingItems(maxAgeMs = 3 * 60 * 1000) {
+  const snap = await getAdminDb().collection("socialPostQueue").where("status", "==", "processing").limit(50).get();
+  const cutoff = Date.now() - maxAgeMs;
+  await Promise.all(
+    snap.docs.map(async (doc) => {
+      const updatedAt = String(doc.data().updatedAt || "");
+      const ts = updatedAt ? new Date(updatedAt).getTime() : 0;
+      if (!ts || ts < cutoff) {
+        await doc.ref.update({ status: "pending", updatedAt: nowIso(), errorMessage: "Reset after interrupted publish" });
+      }
+    })
+  );
+}
+
+async function publishToFacebook(pageId: string, token: string, text: string, imageUrl?: string) {
+  const postFeed = async (message: string) => {
+    const res = await fetch(`https://graph.facebook.com/v25.0/${pageId}/feed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ message, access_token: token }),
+      signal: AbortSignal.timeout(20000),
+    });
+    const payload = (await res.json().catch(() => ({}))) as {
+      id?: string;
+      error?: { message?: string; code?: number };
+    };
+    if (!res.ok || payload.error) {
+      throw new Error(payload.error?.message || `Facebook feed publish failed: HTTP ${res.status}`);
+    }
+    return { platformPostId: String(payload.id || `facebook-${Date.now()}`) };
+  };
+
+  const image = absoluteMediaUrl(imageUrl);
+  if (!image) return postFeed(text);
+
+  const postPhoto = async () => {
+    const res = await fetch(`https://graph.facebook.com/v25.0/${pageId}/photos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ url: image, caption: text, access_token: token }),
+      signal: AbortSignal.timeout(20000),
+    });
+    const payload = (await res.json().catch(() => ({}))) as {
+      id?: string;
+      post_id?: string;
+      error?: { message?: string; code?: number };
+    };
+    if (!res.ok || payload.error) {
+      throw new Error(payload.error?.message || `Facebook photo publish failed: HTTP ${res.status}`);
+    }
+    return { platformPostId: String(payload.post_id || payload.id || `facebook-${Date.now()}`) };
+  };
+
+  try {
+    return await postPhoto();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (/image|url|photo|download|fetch|invalid/i.test(message)) {
+      return postFeed(`${text}\n\n${image}`);
+    }
+    throw error;
+  }
 }
 
 async function publishToPlatform(
@@ -327,28 +484,7 @@ async function publishToPlatform(
   if (platform === "facebook") {
     const pageId = accountId || process.env.FACEBOOK_PAGE_ID;
     if (!pageId) throw new Error("Facebook Page ID not configured. Reconnect the Page in Social Accounts.");
-    const image = absoluteMediaUrl(imageUrl);
-    const endpoint = image
-      ? `https://graph.facebook.com/v25.0/${pageId}/photos`
-      : `https://graph.facebook.com/v25.0/${pageId}/feed`;
-    const body = image
-      ? new URLSearchParams({ url: image, caption: text, access_token: token })
-      : new URLSearchParams({ message: text, access_token: token });
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-      signal: AbortSignal.timeout(20000),
-    });
-    const payload = (await res.json().catch(() => ({}))) as {
-      id?: string;
-      post_id?: string;
-      error?: { message?: string; code?: number };
-    };
-    if (!res.ok || payload.error) {
-      throw new Error(payload.error?.message || `Facebook publish failed: HTTP ${res.status}`);
-    }
-    return { platformPostId: String(payload.post_id || payload.id || `facebook-${Date.now()}`) };
+    return publishToFacebook(pageId, token, text, imageUrl);
   }
   if (platform === "linkedin") {
     throw new Error("LinkedIn publishing requires app-specific OAuth scope setup. Configure via social accounts.");
@@ -368,6 +504,7 @@ async function publishToPlatform(
 export async function processSocialQueue(limit = 20, options?: { force?: boolean }) {
   const settings = await getSocialSettings();
   const force = options?.force ?? false;
+  await resetStaleProcessingItems();
   const now = nowIso();
   const snap = await getAdminDb()
     .collection("socialPostQueue")
@@ -388,7 +525,7 @@ export async function processSocialQueue(limit = 20, options?: { force?: boolean
       skipReasons.push(`${doc.id}: scheduled for later`);
       continue;
     }
-    if (!settings.autoPublishEnabled && item.approvalStatus !== "approved") {
+    if (!force && !settings.autoPublishEnabled && item.approvalStatus !== "approved") {
       skipped += 1;
       skipReasons.push(`${doc.id}: waiting for approval`);
       continue;

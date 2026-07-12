@@ -14,6 +14,9 @@
     },
     "src/app/api/cron/process-social-queue/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/ai/social/publish-now/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
