@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyCronRequest } from "@/lib/automation/cron-auth";
+import { verifyCronRequest, getCronAuthFailureHint } from "@/lib/automation/cron-auth";
 import { getSocialSettings, processSocialQueue } from "@/lib/ai-social/service";
 
 export const runtime = "nodejs";
@@ -7,7 +7,10 @@ export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
   if (!verifyCronRequest(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized", hint: getCronAuthFailureHint() },
+      { status: 401 }
+    );
   }
 
   try {

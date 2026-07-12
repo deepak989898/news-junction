@@ -69,9 +69,15 @@ export default function AutomationSettingsPage() {
 
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
           <p className="font-semibold">30-minute auto publish (cron-job.org)</p>
-          <p className="mt-1">URL: <code className="text-xs">https://news-junction.vercel.app/api/cron/auto-publish-cycle</code></p>
-          <p className="mt-1">Header: <code className="text-xs">Authorization: Bearer YOUR_CRON_SECRET</code></p>
-          <p className="mt-1">Schedule: every 30 minutes. Set Max Articles Per Day to 48 for full coverage.</p>
+          <p className="mt-2 font-medium">Easiest setup — put secret in URL (no headers needed):</p>
+          <p className="mt-1 break-all text-xs">
+            https://news-junction.vercel.app/api/cron/auto-publish-cycle?cron_secret=YOUR_CRON_SECRET
+          </p>
+          <p className="mt-2 font-medium">Or use header:</p>
+          <p className="mt-1">Key: <code className="text-xs">x-cron-secret</code> → Value: your CRON_SECRET (no Bearer)</p>
+          <p className="mt-1">Or Key: <code className="text-xs">Authorization</code> → Value: <code className="text-xs">Bearer YOUR_CRON_SECRET</code></p>
+          <p className="mt-2 text-red-700">Wrong: Key = &quot;Authorization: Bearer&quot; — that causes 401.</p>
+          <p className="mt-1">Schedule: every 30 minutes. Max Articles Per Day = 48 recommended.</p>
         </div>
 
         <ToggleSwitch
