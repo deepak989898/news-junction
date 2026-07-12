@@ -36,10 +36,14 @@ export async function GET(request: NextRequest) {
   try {
     parseOAuthState(state);
     const result = await completeFacebookOAuth(code);
+    const hint =
+      result.configuredPageId && !result.matchedConfiguredId
+        ? ` Connected Page ID ${result.pageId} (update FACEBOOK_PAGE_ID in Vercel if needed).`
+        : "";
     return redirectToAccounts({
       status: "success",
       platform: "facebook",
-      message: `Connected Facebook Page: ${result.pageName}`,
+      message: `Connected Facebook Page: ${result.pageName} (${result.pageId}).${hint}`,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Facebook connect failed";

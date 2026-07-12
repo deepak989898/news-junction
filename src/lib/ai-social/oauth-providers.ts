@@ -65,6 +65,44 @@ async function fbGet<T>(path: string, params: Record<string, string>): Promise<T
   return data;
 }
 
+type FacebookPageAccount = {
+  id: string;
+  name: string;
+  access_token: string;
+  tasks?: string[];
+};
+
+function canPublishToPage(page: FacebookPageAccount): boolean {
+  return (
+    !page.tasks?.length ||
+    page.tasks.some((task) => ["CREATE_CONTENT", "MANAGE"].includes(task))
+  );
+}
+
+function selectFacebookPage(
+  pages: FacebookPageAccount[],
+  configuredPageId: string
+): { page: FacebookPageAccount; matchedConfiguredId: boolean } {
+  const publishable = pages.filter(canPublishToPage);
+  const candidates = publishable.length ? publishable : pages;
+
+  if (configuredPageId) {
+    const exact = candidates.find((p) => p.id === configuredPageId);
+    if (exact) return { page: exact, matchedConfiguredId: true };
+  }
+
+  if (candidates.length === 1) {
+    return { page: candidates[0], matchedConfiguredId: candidates[0].id === configuredPageId };
+  }
+
+  const byName = candidates.find((p) => /news\s*junction/i.test(p.name));
+  if (byName) {
+    return { page: byName, matchedConfiguredId: byName.id === configuredPageId };
+  }
+
+  return { page: candidates[0], matchedConfiguredId: candidates[0].id === configuredPageId };
+}
+
 export async function completeFacebookOAuth(code: string) {
   const appId = requireEnv("FACEBOOK_APP_ID");
   const appSecret = requireEnv("FACEBOOK_APP_SECRET");
@@ -85,14 +123,7 @@ export async function completeFacebookOAuth(code: string) {
     fb_exchange_token: shortToken.access_token,
   });
 
-  const accounts = await fbGet<{
-    data: Array<{
-      id: string;
-      name: string;
-      access_token: string;
-      tasks?: string[];
-    }>;
-  }>("/me/accounts", {
+  const accounts = await fbGet<{ data: FacebookPageAccount[] }>("/me/accounts", {
     access_token: longToken.access_token,
     fields: "id,name,access_token,tasks",
   });
@@ -101,20 +132,9 @@ export async function completeFacebookOAuth(code: string) {
     throw new Error("No Facebook Pages found. Create a Page and grant Page access during authorization.");
   }
 
-  const page =
-    (configuredPageId && accounts.data.find((p) => p.id === configuredPageId)) ||
-    accounts.data[0];
+  const { page, matchedConfiguredId } = selectFacebookPage(accounts.data, configuredPageId);
 
-  if (configuredPageId && page.id !== configuredPageId) {
-    throw new Error(
-      `FACEBOOK_PAGE_ID (${configuredPageId}) was not returned for this Facebook account. Use the Page admin account that manages that Page.`
-    );
-  }
-
-  const canPublish =
-    !page.tasks?.length ||
-    page.tasks.some((task) => ["CREATE_CONTENT", "MANAGE"].includes(task));
-  if (!canPublish) {
+  if (!canPublishToPage(page)) {
     throw new Error(
       `Facebook account lacks CREATE_CONTENT permission on Page "${page.name}". Use a Page admin account.`
     );
@@ -129,7 +149,13 @@ export async function completeFacebookOAuth(code: string) {
     enabled: true,
   });
 
-  return { pageName: page.name, pageId: page.id };
+  return {
+    pageName: page.name,
+    pageId: page.id,
+    configuredPageId: configuredPageId || null,
+    matchedConfiguredId,
+    availablePages: accounts.data.map((p) => ({ id: p.id, name: p.name })),
+  };
 }
 
 export async function connectTelegramBot(botToken: string) {
