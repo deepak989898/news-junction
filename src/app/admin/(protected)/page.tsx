@@ -38,7 +38,7 @@ export default function AdminDashboardPage() {
 
   return (
     <div>
-      <AdminTopbar title="Dashboard" />
+      <AdminTopbar title="Dashboard" hideBack />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatsCard title="Total News" value={stats?.totalNews || 0} icon={Newspaper} color="navy" />

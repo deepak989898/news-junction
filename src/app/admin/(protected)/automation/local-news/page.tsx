@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import AdminTopbar from "@/components/layout/AdminTopbar";
 
 export default function LocalNewsAutomationPage() {
   return (
-    <div className="space-y-4 p-6">
-      <h1 className="text-2xl font-bold">Local News Automation</h1>
+    <div className="space-y-4">
+      <AdminTopbar title="Local News Automation" />
       <p className="text-gray-600">
         India-first quotas: 95% India target, max 5% international auto-publish per day.
         International articles defer to approval queue when quota is full.
