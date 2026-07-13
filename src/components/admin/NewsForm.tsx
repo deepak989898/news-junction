@@ -4,6 +4,7 @@ import { useState, useEffect, FormEvent, ChangeEvent } from "react";
 import { NewsFormData, Category, MediaItem } from "@/types";
 import { createSlug } from "@/lib/utils";
 import { getAllCategories, isNewsSlugTaken } from "@/firebase/firestore";
+import { regenerateArticleImageApi } from "@/lib/automation/client-api";
 import FormInput from "./FormInput";
 import FormTextarea from "./FormTextarea";
 import RichTextEditor from "./RichTextEditor";
@@ -12,7 +13,7 @@ import MediaPicker from "./MediaPicker";
 import ToggleSwitch from "./ToggleSwitch";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import toast from "react-hot-toast";
-import { Eye, X } from "lucide-react";
+import { Eye, X, Sparkles, Loader2 } from "lucide-react";
 import Image from "next/image";
 
 interface NewsFormProps {
@@ -61,6 +62,7 @@ export default function NewsForm({
   const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [regeneratingImage, setRegeneratingImage] = useState(false);
 
   useEffect(() => {
     getAllCategories().then(setCategories).catch(() => {});
@@ -126,6 +128,33 @@ export default function NewsForm({
       imageAltHi: item.altHi || prev.imageAltHi,
       imageAltEn: item.altEn || prev.imageAltEn,
     }));
+  };
+
+  const handleRegenerateAiImage = async () => {
+    if (!articleId) {
+      toast.error("Save the article first before regenerating AI image");
+      return;
+    }
+    if (!formData.titleEn.trim() && !formData.titleHi.trim()) {
+      toast.error("Add a headline first — AI image is based on the title");
+      return;
+    }
+    setRegeneratingImage(true);
+    const toastId = toast.loading("Generating new AI image from headline... (30–60 sec)");
+    try {
+      const result = await regenerateArticleImageApi(articleId, {
+        titleEn: formData.titleEn,
+        titleHi: formData.titleHi,
+        summaryEn: formData.summaryEn,
+        categoryId: formData.categoryId,
+      });
+      setFormData((prev) => ({ ...prev, imageUrl: result.imageUrl }));
+      toast.success("New AI image generated and saved to article", { id: toastId, duration: 5000 });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to regenerate image", { id: toastId });
+    } finally {
+      setRegeneratingImage(false);
+    }
   };
 
   return (
@@ -199,7 +228,29 @@ export default function NewsForm({
 
         {/* Image */}
         <section>
-          <h3 className="mb-4 text-sm font-bold uppercase tracking-wider text-gray-500">Featured Image</h3>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500">Featured Image</h3>
+            {articleId && (
+              <button
+                type="button"
+                onClick={handleRegenerateAiImage}
+                disabled={regeneratingImage || saving}
+                className="inline-flex items-center gap-2 rounded-lg border border-[#1a2b4c] bg-white px-4 py-2 text-sm font-medium text-[#1a2b4c] hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {regeneratingImage ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                {regeneratingImage ? "Generating..." : "Regenerate AI Image"}
+              </button>
+            )}
+          </div>
+          {articleId && (
+            <p className="mb-3 text-xs text-gray-500">
+              Creates a new OpenAI image from the current headline and summary. Takes about 30–60 seconds. Click Update Article to keep other edits.
+            </p>
+          )}
           <ImageUploader
             value={formData.imageUrl}
             onChange={(url) => setFormData((p) => ({ ...p, imageUrl: url }))}

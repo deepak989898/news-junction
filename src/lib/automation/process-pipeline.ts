@@ -12,7 +12,7 @@ import {
 import { generateArticleContent } from "./ai-processor";
 import { checkDuplicate } from "./duplicate-checker";
 import { detectRiskLevel, shouldAutoPublish } from "./risk-detector";
-import { resolveAutomationArticleImage } from "./image-generator";
+import { resolveAutomationArticleImage, generateAutomationArticleImage } from "./image-generator";
 import { RawNewsStatus } from "./types";
 
 async function resolveImageForRawItem(
@@ -272,6 +272,70 @@ export async function repairPublishedNewsImage(newsId: string): Promise<{
   }
 
   return { imageUrl, source };
+}
+
+export async function regenerateArticleImage(
+  newsId: string,
+  overrides?: {
+    titleEn?: string;
+    titleHi?: string;
+    summaryEn?: string;
+    categoryId?: string;
+  }
+): Promise<{ imageUrl: string; source: "ai" }> {
+  const settings = await getAutomationSettings();
+  if (settings.generateAiImages === false) {
+    throw new Error("AI image generation is disabled. Enable it in Automation Settings.");
+  }
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is not configured on the server.");
+  }
+
+  const db = getAdminDb();
+  const newsDoc = await db.collection("news").doc(newsId).get();
+  if (!newsDoc.exists) throw new Error("News article not found");
+  const newsData = newsDoc.data()!;
+
+  const titleEn = (overrides?.titleEn || String(newsData.titleEn || newsData.titleHi || "")).trim();
+  const titleHi = (overrides?.titleHi || String(newsData.titleHi || newsData.titleEn || "")).trim();
+  const summaryEn = (overrides?.summaryEn || String(newsData.summaryEn || newsData.summaryHi || "")).trim().slice(0, 500);
+  const categoryId = overrides?.categoryId || String(newsData.categoryId || "desh");
+
+  if (!titleEn && !titleHi) throw new Error("Article title is required to generate an image");
+
+  const category = await getCategoryById(categoryId);
+  const categoryNameEn = (category as { nameEn?: string })?.nameEn || "India";
+
+  const linkedRawNewsId = newsData.automationRawNewsId as string | undefined;
+  const storageId = linkedRawNewsId || `manual-${newsId}`;
+
+  if (linkedRawNewsId) {
+    await updateRawNews(linkedRawNewsId, { generatedImageUrl: FieldValue.delete() });
+  }
+
+  const generated = await generateAutomationArticleImage({
+    rawNewsId: storageId,
+    titleEn: titleEn || titleHi,
+    titleHi: titleHi || titleEn,
+    summaryEn: summaryEn || titleEn,
+    categoryId,
+    categoryNameEn,
+  });
+
+  if (!generated) {
+    throw new Error("AI image generation failed. Please try again.");
+  }
+
+  await db.collection("news").doc(newsId).update({
+    imageUrl: generated,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  if (linkedRawNewsId) {
+    await updateRawNews(linkedRawNewsId, { generatedImageUrl: generated });
+  }
+
+  return { imageUrl: generated, source: "ai" };
 }
 
 export async function rejectRawNews(rawNewsId: string, reason?: string) {

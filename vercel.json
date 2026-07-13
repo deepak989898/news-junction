@@ -20,6 +20,9 @@
     },
     "src/app/api/ai/social/publish-now/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/admin/news/regenerate-image/route.ts": {
+      "maxDuration": 120
     }
   },
   "crons": [

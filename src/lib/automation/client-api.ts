@@ -86,6 +86,21 @@ export async function triggerAutomation(action: "fetch" | "process", batchSize =
   return adminApiPost<ProcessBatchResult>("/api/automation/trigger", { action, batchSize });
 }
 
+export async function regenerateArticleImageApi(
+  newsId: string,
+  overrides?: {
+    titleEn?: string;
+    titleHi?: string;
+    summaryEn?: string;
+    categoryId?: string;
+  }
+) {
+  return adminApiPost<{ success: boolean; imageUrl: string; source: string }>(
+    "/api/admin/news/regenerate-image",
+    { newsId, ...overrides }
+  );
+}
+
 export async function triggerProcessBatches(rounds = 5, batchSize = 1) {
   const totals = { processed: 0, published: 0, pending: 0, failed: 0, duplicates: 0, rounds: 0 };
 
