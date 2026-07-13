@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { NewsArticle } from "@/types";
-import { formatRelativeTime, toDate } from "@/lib/utils";
+import { formatDateTime, getArticlePublishDate } from "@/lib/utils";
 import Link from "next/link";
 import { Pencil, Trash2 } from "lucide-react";
 import Image from "next/image";
@@ -83,8 +83,8 @@ export default function NewsTable({ articles, onDelete }: NewsTableProps) {
                     {article.status === "published" ? "Published" : "Draft"}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-xs text-gray-500">
-                  {formatRelativeTime(toDate(article.createdAt), "en")}
+                <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
+                  {formatDateTime(getArticlePublishDate(article), "en")}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">

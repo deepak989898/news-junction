@@ -1,4 +1,4 @@
-import { formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { hi, enUS } from "date-fns/locale";
 import slugify from "slugify";
 import { Language, NewsArticle } from "@/types";
@@ -40,12 +40,36 @@ export function formatRelativeTime(
   });
 }
 
-export function toDate(timestamp: { toDate?: () => Date } | null | undefined): Date | null {
+/** Full date + time with AM/PM for admin tables. */
+export function formatDateTime(
+  date: Date | null | undefined,
+  language: Language = "en"
+): string {
+  if (!date) return "—";
+  const pattern = language === "hi" ? "dd MMM yyyy, hh:mm a" : "MMM d, yyyy h:mm a";
+  return format(date, pattern, { locale: language === "hi" ? hi : enUS });
+}
+
+export function toDate(
+  timestamp: { toDate?: () => Date } | string | Date | null | undefined
+): Date | null {
   if (!timestamp) return null;
+  if (timestamp instanceof Date) return timestamp;
+  if (typeof timestamp === "string") {
+    const parsed = new Date(timestamp);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
   if (typeof timestamp.toDate === "function") {
     return timestamp.toDate();
   }
   return null;
+}
+
+export function getArticlePublishDate(article: {
+  publishedAt?: { toDate?: () => Date } | string | Date | null;
+  createdAt?: { toDate?: () => Date } | string | Date | null;
+}): Date | null {
+  return toDate(article.publishedAt) || toDate(article.createdAt);
 }
 
 export function formatNumber(num: number): string {

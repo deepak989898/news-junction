@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Pencil, Trash2, Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import { NewsArticle, NewsFilters, Category } from "@/types";
-import { formatRelativeTime, toDate } from "@/lib/utils";
+import { formatDateTime, getArticlePublishDate } from "@/lib/utils";
 import { canBulkDelete, canDeleteNews } from "@/lib/permissions";
 import { useAuth } from "@/contexts/AuthContext";
 import StatusBadge from "./StatusBadge";
@@ -68,8 +68,8 @@ export default function NewsManagementTable({
 
     result.sort((a, b) => {
       if (filters.sort === "mostViewed") return b.views - a.views;
-      const aTime = toDate(a.createdAt)?.getTime() || 0;
-      const bTime = toDate(b.createdAt)?.getTime() || 0;
+      const aTime = getArticlePublishDate(a)?.getTime() || 0;
+      const bTime = getArticlePublishDate(b)?.getTime() || 0;
       return filters.sort === "oldest" ? aTime - bTime : bTime - aTime;
     });
 
@@ -248,7 +248,7 @@ export default function NewsManagementTable({
                   <th className="px-4 py-3 font-semibold text-gray-600">Category</th>
                   <th className="px-4 py-3 font-semibold text-gray-600">Status</th>
                   <th className="px-4 py-3 font-semibold text-gray-600">Views</th>
-                  <th className="px-4 py-3 font-semibold text-gray-600">Date</th>
+                  <th className="px-4 py-3 font-semibold text-gray-600">Published</th>
                   <th className="px-4 py-3 font-semibold text-gray-600">Actions</th>
                 </tr>
               </thead>
@@ -280,8 +280,8 @@ export default function NewsManagementTable({
                       <StatusBadge status={article.status} />
                     </td>
                     <td className="px-4 py-3 text-gray-600">{article.views}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
-                      {formatRelativeTime(toDate(article.createdAt), "en")}
+                    <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
+                      {formatDateTime(getArticlePublishDate(article), "en")}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
