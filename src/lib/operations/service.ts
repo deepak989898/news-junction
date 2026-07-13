@@ -486,15 +486,30 @@ export async function getLogs(limit = 200) {
 }
 
 export async function getDependencyStatus() {
+  const db = getAdminDb();
+  let socialAccounts: "Connected" | "Needs Attention" = "Needs Attention";
+  try {
+    const socialSnap = await db.collection("socialAccounts").where("status", "==", "connected").limit(1).get();
+    if (!socialSnap.empty) socialAccounts = "Connected";
+  } catch {
+    socialAccounts = "Needs Attention";
+  }
+
+  const hasPush =
+    Boolean(process.env.FCM_SERVER_KEY) ||
+    Boolean(process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY) ||
+    Boolean(process.env.FIREBASE_MESSAGING_SENDER_ID);
+
   return {
     aiProvider: process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY ? "Connected" : "Needs Attention",
     googleAnalytics: process.env.GA4_PROPERTY_ID ? "Connected" : "Disconnected",
     searchConsole: process.env.GSC_SITE_URL ? "Connected" : "Disconnected",
     clarity: process.env.CLARITY_PROJECT_ID ? "Connected" : "Disconnected",
-    firebase: process.env.FIREBASE_PROJECT_ID ? "Connected" : "Connected",
+    firebase:
+      process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? "Connected" : "Disconnected",
     vercel: process.env.VERCEL ? "Connected" : "Needs Attention",
-    pushNotifications: "Needs Attention",
-    socialAccounts: "Needs Attention",
+    pushNotifications: hasPush ? "Connected" : "Needs Attention",
+    socialAccounts,
   };
 }
 
