@@ -10,6 +10,7 @@ import { canBulkDelete, canDeleteNews } from "@/lib/permissions";
 import { useAuth } from "@/contexts/AuthContext";
 import StatusBadge from "./StatusBadge";
 import ConfirmModal from "./ConfirmModal";
+import ImagePreviewModal from "./ImagePreviewModal";
 import toast from "react-hot-toast";
 
 const PAGE_SIZE = 10;
@@ -39,6 +40,11 @@ export default function NewsManagementTable({
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [bulkAction, setBulkAction] = useState<"publish" | "draft" | "delete" | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [previewImage, setPreviewImage] = useState<{
+    url: string;
+    title: string;
+    alt: string;
+  } | null>(null);
 
   const filtered = useMemo(() => {
     let result = [...articles];
@@ -264,9 +270,20 @@ export default function NewsManagementTable({
                     </td>
                     <td className="px-4 py-3">
                       {article.imageUrl ? (
-                        <div className="relative h-10 w-14 overflow-hidden rounded">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPreviewImage({
+                              url: article.imageUrl,
+                              title: article.titleEn || article.titleHi,
+                              alt: article.imageAltEn || article.imageAltHi || article.titleHi,
+                            })
+                          }
+                          className="relative block h-10 w-14 overflow-hidden rounded ring-offset-1 transition hover:ring-2 hover:ring-[#1a2b4c]/30 focus:outline-none focus:ring-2 focus:ring-[#1a2b4c]"
+                          title="Click to view full image"
+                        >
                           <Image src={article.imageUrl} alt="" fill className="object-cover" sizes="56px" />
-                        </div>
+                        </button>
                       ) : (
                         <div className="flex h-10 w-14 items-center justify-center rounded bg-gray-100 text-xs text-gray-400">N/A</div>
                       )}
@@ -362,6 +379,14 @@ export default function NewsManagementTable({
         onConfirm={handleBulkConfirm}
         onCancel={() => setBulkAction(null)}
         loading={processing}
+      />
+
+      <ImagePreviewModal
+        open={!!previewImage}
+        imageUrl={previewImage?.url ?? ""}
+        alt={previewImage?.alt}
+        title={previewImage?.title}
+        onClose={() => setPreviewImage(null)}
       />
     </div>
   );
