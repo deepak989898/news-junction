@@ -35,6 +35,14 @@
     },
     "src/app/api/admin/news/regenerate-image/route.ts": {
       "maxDuration": 120
+    },
+    "src/app/api/ai/generate-video-package/route.ts": {
+      "maxDuration": 120,
+      "memory": 3009
+    },
+    "src/app/api/ai/render-video-package/route.ts": {
+      "maxDuration": 120,
+      "memory": 3009
     }
   },
   "crons": [

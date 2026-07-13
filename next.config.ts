@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["firebase-admin", "jwks-rsa", "jose", "sharp", "@google/genai"],
+  serverExternalPackages: ["firebase-admin", "jwks-rsa", "jose", "sharp", "@google/genai", "ffmpeg-static"],
+  outputFileTracingIncludes: {
+    "/api/ai/generate-video-package": ["./node_modules/ffmpeg-static/ffmpeg"],
+    "/api/ai/render-video-package": ["./node_modules/ffmpeg-static/ffmpeg"],
+  },
     images: {
     remotePatterns: [
       {

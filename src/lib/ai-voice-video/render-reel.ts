@@ -4,9 +4,9 @@ import { spawn } from "child_process";
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
-import ffmpegPath from "ffmpeg-static";
 import sharp from "sharp";
 import { loadAssetBuffer } from "@/lib/resolve-public-url";
+import { isFfmpegLikelyAvailable, resolveFfmpegBinary } from "./ffmpeg-path";
 import type { VideoPlatform } from "./types";
 
 const REEL_SIZE: Record<VideoPlatform, { width: number; height: number }> = {
@@ -49,6 +49,7 @@ export async function renderReelMp4(args: {
   audioUrl: string;
   platform?: VideoPlatform;
 }): Promise<{ buffer: Buffer; durationSec: number }> {
+  const ffmpegPath = await resolveFfmpegBinary();
   if (!ffmpegPath) {
     throw new Error("ffmpeg binary not available on this server");
   }
@@ -111,5 +112,5 @@ export async function renderReelMp4(args: {
 }
 
 export function isReelRenderAvailable(): boolean {
-  return Boolean(ffmpegPath);
+  return isFfmpegLikelyAvailable();
 }
