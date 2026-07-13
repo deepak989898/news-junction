@@ -45,7 +45,7 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  working: "Working",
+  working: "Ready",
   partially_configured: "Partially Configured",
   configuration_required: "Configuration Required",
   not_implemented: "Not Implemented",
@@ -145,18 +145,23 @@ export default function SystemVerificationPage() {
                   <strong>Run / Quick test</strong> = checks one thing only (e.g. RSS fetch works, API key exists).
                 </li>
                 <li>
-                  <strong>Feature status</strong> = all required setup steps below must be done for green{" "}
-                  <strong>Working</strong>.
+                  <strong>100% + green Ready</strong> = all setup + manual steps done.
                 </li>
                 <li>
-                  Amber <strong>Partially Configured</strong> = some steps done — complete the red checklist items.
+                  <strong>Manual steps</strong> (marked in checklist) = you must use the feature once (e.g. generate audio, run SEO audit).
+                </li>
+                <li>
+                  <strong>Optional</strong> items (gray) = enhancements only — do not affect %.
+                </li>
+                <li>
+                  Amber = setup or manual steps still missing — complete red ✗ items.
                 </li>
               </ul>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-xl bg-white p-4 shadow-sm">
-                <p className="text-xs text-gray-500">Working</p>
+                <p className="text-xs text-gray-500">Ready (100% configured)</p>
                 <p className="text-2xl font-bold text-green-600">{counts.working}</p>
               </div>
               <div className="rounded-xl bg-white p-4 shadow-sm">
@@ -264,6 +269,11 @@ export default function SystemVerificationPage() {
                             {STATUS_LABELS[f.status] || f.status}
                           </span>
                           <p className="mt-1 text-xs text-gray-500">{f.label}</p>
+                          {f.status === "working" && f.hasKnownLimits && (
+                            <p className="mt-1 text-xs text-blue-700">
+                              Setup complete. Some platforms/features have known limits — see description.
+                            </p>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <div className="min-w-[72px]">
@@ -294,27 +304,42 @@ export default function SystemVerificationPage() {
                         </td>
                         <td className="px-4 py-3 min-w-[220px]">
                           <ul className="space-y-1 text-xs">
-                            {(f.checklist || []).map((item) => (
-                              <li key={item.id} className="flex items-start gap-1.5">
-                                {item.done ? (
-                                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-600" />
-                                ) : (
-                                  <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-500" />
-                                )}
-                                <span className={item.done ? "text-green-800" : "font-medium text-red-700"}>
-                                  {item.label}
-                                  {!item.required ? " (optional)" : ""}
-                                  {!item.done && item.adminPath ? (
-                                    <>
-                                      {" — "}
-                                      <Link href={item.adminPath} className="text-[#c41e20] underline">
-                                        Fix
-                                      </Link>
-                                    </>
-                                  ) : null}
-                                </span>
-                              </li>
-                            ))}
+                            {(f.checklist || []).map((item) => {
+                              const isOptional = item.kind === "optional";
+                              const isManual = item.kind === "manual";
+                              const icon = item.done ? (
+                                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-600" />
+                              ) : isOptional ? (
+                                <span className="mt-0.5 inline-block h-3.5 w-3.5 shrink-0 rounded-full border border-gray-400" />
+                              ) : (
+                                <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-500" />
+                              );
+                              const textClass = item.done
+                                ? "text-green-800"
+                                : isOptional
+                                  ? "text-gray-500"
+                                  : isManual
+                                    ? "font-medium text-orange-800"
+                                    : "font-medium text-red-700";
+                              return (
+                                <li key={item.id} className="flex items-start gap-1.5">
+                                  {icon}
+                                  <span className={textClass}>
+                                    {isManual && !item.done ? "Action: " : ""}
+                                    {item.label}
+                                    {isOptional ? " (optional)" : isManual ? " (manual)" : ""}
+                                    {!item.done && !isOptional && item.adminPath ? (
+                                      <>
+                                        {" — "}
+                                        <Link href={item.adminPath} className="text-[#c41e20] underline">
+                                          Fix
+                                        </Link>
+                                      </>
+                                    ) : null}
+                                  </span>
+                                </li>
+                              );
+                            })}
                             {!f.checklist?.length && <span className="text-gray-400">—</span>}
                           </ul>
                         </td>

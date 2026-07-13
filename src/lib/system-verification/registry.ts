@@ -31,7 +31,8 @@ export interface VerificationChecklistItem {
   id: string;
   label: string;
   done: boolean;
-  required: boolean;
+  /** setup = env/config; manual = must use feature once; optional = enhancement */
+  kind: "setup" | "manual" | "optional";
   adminPath?: string;
 }
 
@@ -53,8 +54,8 @@ export interface VerificationFeature {
   /** 0–100 based on required checklist items completed */
   completionPercent?: number;
   checklist?: VerificationChecklistItem[];
-  /** Some features cannot reach "working" due to known product limits */
-  maxStatus?: VerificationStatus;
+  /** Feature works but has documented product limits (e.g. FB+Telegram only) */
+  hasKnownLimits?: boolean;
 }
 
 export interface VerificationTestResult {
@@ -596,15 +597,24 @@ function fail(testId: VerificationTestId, testedAt: string, started: number, mes
   return { testId, ok: false, message, durationMs: Date.now() - started, testedAt };
 }
 
-/** Features that can show green "Working" when all checklist steps are done */
-const CAN_FULLY_WORK = new Set([
-  "news_collection",
-  "ai_hindi",
-  "ai_english",
-  "duplicate_detection",
-  "logs",
-  "cron_jobs",
-  "local_locations",
+/** Features with documented product limits — still show green when 100% configured */
+const HAS_KNOWN_LIMITS = new Set([
+  "ai_translation",
+  "seo_generation",
+  "ai_images",
+  "social_captions",
+  "social_posting",
+  "newsletter_gen",
+  "ai_analytics",
+  "reports",
+  "trending",
+  "internal_linking",
+  "sitemap",
+  "schema_metadata",
+  "mobile_sync",
+  "monitoring",
+  "admin_permissions",
+  "audio_news",
 ]);
 
 interface RuntimeVerificationContext {
@@ -617,10 +627,22 @@ interface RuntimeVerificationContext {
   vercel: boolean;
   socialEncKey: boolean;
   automationEnabled: boolean;
+  generateAiImages: boolean;
   aiProvider: string;
   hasActiveSources: boolean;
   hasDistrictsSeeded: boolean;
   hasConnectedSocial: boolean;
+  hasPublishedArticles: boolean;
+  hasGeneratedAudio: boolean;
+  hasGeneratedAiMedia: boolean;
+  hasSeoActivity: boolean;
+  hasTrendingArticle: boolean;
+  hasSocialQueueActivity: boolean;
+  hasAiContentActivity: boolean;
+  hasArticleViews: boolean;
+  hasGeoTaggedArticles: boolean;
+  hasOperationsHealthCheck: boolean;
+  hasAdminRoles: boolean;
 }
 
 async function loadRuntimeContext(): Promise<RuntimeVerificationContext> {
@@ -635,27 +657,61 @@ async function loadRuntimeContext(): Promise<RuntimeVerificationContext> {
     vercel: envPresent("VERCEL"),
     socialEncKey: envPresent("SOCIAL_TOKEN_ENCRYPTION_KEY"),
     automationEnabled: false,
+    generateAiImages: false,
     aiProvider: "openai",
     hasActiveSources: false,
     hasDistrictsSeeded: false,
     hasConnectedSocial: false,
+    hasPublishedArticles: false,
+    hasGeneratedAudio: false,
+    hasGeneratedAiMedia: false,
+    hasSeoActivity: false,
+    hasTrendingArticle: false,
+    hasSocialQueueActivity: false,
+    hasAiContentActivity: false,
+    hasArticleViews: false,
+    hasGeoTaggedArticles: false,
+    hasOperationsHealthCheck: false,
+    hasAdminRoles: false,
   };
 
   if (!adminCreds) return ctx;
 
   try {
     const db = getAdminDb();
-    const [settings, sourcesSnap, districtsSnap, socialSnap] = await Promise.all([
+    const [settings, sourcesSnap, districtsSnap, socialSnap, publishedSnap, voiceSnap, mediaSnap, seoSnap, trendingSnap, socialQueueSnap, contentSnap, healthSnap, adminUsersSnap] =
+      await Promise.all([
       getAutomationSettings(),
       db.collection("sources").where("isActive", "==", true).limit(1).get(),
       db.collection("districts").limit(1).get(),
       db.collection("socialAccounts").where("status", "==", "connected").limit(1).get(),
+      db.collection("news").where("status", "==", "published").limit(20).get(),
+      db.collection("voiceVideoLogs").limit(1).get(),
+      db.collection("aiMediaLogs").limit(1).get(),
+      db.collection("aiSeoLogs").limit(1).get(),
+      db.collection("news").where("isTrending", "==", true).limit(10).get(),
+      db.collection("socialPostQueue").limit(1).get(),
+      db.collection("aiContentLogs").limit(1).get(),
+      db.collection("healthChecks").doc("latest").get(),
+      db.collection("users").where("role", "in", ["super_admin", "editor", "admin"]).limit(1).get(),
     ]);
     ctx.automationEnabled = Boolean(settings.automationEnabled);
+    ctx.generateAiImages = Boolean(settings.generateAiImages);
     ctx.aiProvider = settings.aiProvider || "openai";
     ctx.hasActiveSources = !sourcesSnap.empty;
     ctx.hasDistrictsSeeded = !districtsSnap.empty;
     ctx.hasConnectedSocial = !socialSnap.empty;
+    ctx.hasPublishedArticles = !publishedSnap.empty;
+    ctx.hasGeneratedAudio = !voiceSnap.empty;
+    ctx.hasGeneratedAiMedia = !mediaSnap.empty;
+    ctx.hasSeoActivity = !seoSnap.empty;
+    ctx.hasTrendingArticle = trendingSnap.docs.some((d) => String(d.data().status) === "published");
+    ctx.hasSocialQueueActivity = !socialQueueSnap.empty;
+    ctx.hasAiContentActivity = !contentSnap.empty;
+    ctx.hasArticleViews = publishedSnap.docs.some((d) => Number(d.data().views || 0) > 0);
+    ctx.hasGeoTaggedArticles = publishedSnap.docs.some((d) => Boolean(d.data().stateId || d.data().geoScope));
+    ctx.hasOperationsHealthCheck = healthSnap.exists;
+    ctx.hasAdminRoles = !adminUsersSnap.empty;
   } catch {
     // keep defaults
   }
@@ -663,30 +719,46 @@ async function loadRuntimeContext(): Promise<RuntimeVerificationContext> {
   return ctx;
 }
 
-function checklistItem(
-  id: string,
-  label: string,
-  done: boolean,
-  adminPath?: string,
-  required = true
-): VerificationChecklistItem {
-  return { id, label, done, required, adminPath };
+/** Cap completion % — placeholder / partial products never show false 100% */
+const MAX_COMPLETION: Record<string, number> = {
+  newsletter_gen: 50,
+  newsletter_delivery: 0,
+  push_notifications: 0,
+  mobile_sync: 75,
+  admin_permissions: 80,
+};
+
+function setupItem(id: string, label: string, done: boolean, adminPath?: string): VerificationChecklistItem {
+  return { id, label, done, kind: "setup", adminPath };
+}
+
+function manualItem(id: string, label: string, done: boolean, adminPath?: string): VerificationChecklistItem {
+  return { id, label, done, kind: "manual", adminPath };
+}
+
+function optionalItem(id: string, label: string, done: boolean, adminPath?: string): VerificationChecklistItem {
+  return { id, label, done, kind: "optional", adminPath };
 }
 
 function statusFromChecklist(
   items: VerificationChecklistItem[],
   featureId: string
 ): { status: VerificationStatus; completionPercent: number } {
-  const required = items.filter((i) => i.required);
-  const doneCount = required.filter((i) => i.done).length;
-  const completionPercent = required.length ? Math.round((doneCount / required.length) * 100) : 0;
-  const canFullyWork = CAN_FULLY_WORK.has(featureId);
+  const scored = items.filter((i) => i.kind === "setup" || i.kind === "manual");
+  const doneCount = scored.filter((i) => i.done).length;
+  let completionPercent = scored.length ? Math.round((doneCount / scored.length) * 100) : 0;
 
-  if (doneCount === required.length) {
-    return {
-      status: canFullyWork ? "working" : "partially_configured",
-      completionPercent,
-    };
+  const cap = MAX_COMPLETION[featureId];
+  if (cap != null) completionPercent = Math.min(completionPercent, cap);
+
+  if (scored.length === 0) {
+    return { status: "unknown", completionPercent: 0 };
+  }
+  if (completionPercent === 100 && !HAS_KNOWN_LIMITS.has(featureId)) {
+    return { status: "working", completionPercent };
+  }
+  if (completionPercent === 100 && HAS_KNOWN_LIMITS.has(featureId)) {
+    return { status: "working", completionPercent };
   }
   if (doneCount === 0) {
     return { status: "configuration_required", completionPercent };
@@ -702,100 +774,147 @@ function buildChecklist(featureId: string, ctx: RuntimeVerificationContext): Ver
   switch (featureId) {
     case "news_collection":
       return [
-        checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds),
-        checklistItem("public_fb", "Public Firebase config", ctx.publicFb),
-        checklistItem("cron", "CRON_SECRET on Vercel", ctx.cron),
-        checklistItem("sources", "At least 1 active news source", ctx.hasActiveSources, "/admin/sources"),
-        checklistItem("automation", "Automation enabled", ctx.automationEnabled, "/admin/automation/settings"),
+        setupItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+        setupItem("public_fb", "Public Firebase config", ctx.publicFb),
+        setupItem("cron", "CRON_SECRET on Vercel", ctx.cron),
+        setupItem("sources", "At least 1 active news source", ctx.hasActiveSources, "/admin/sources"),
+        setupItem("automation", "Automation enabled", ctx.automationEnabled, "/admin/automation/settings"),
       ];
     case "ai_hindi":
     case "ai_english":
       return [
-        checklistItem("ai_key", "OpenAI or Gemini API key", hasAiKey),
-        checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds),
-        checklistItem("provider", "AI provider matches API key", aiKeyMatchesProvider, "/admin/automation/settings"),
-        checklistItem("automation", "Automation enabled", ctx.automationEnabled, "/admin/automation/settings"),
+        setupItem("ai_key", "OpenAI or Gemini API key", hasAiKey),
+        setupItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+        setupItem("provider", "AI provider matches API key", aiKeyMatchesProvider, "/admin/automation/settings"),
+        setupItem("automation", "Automation enabled", ctx.automationEnabled, "/admin/automation/settings"),
+        manualItem("published", "At least 1 AI article published or in queue", ctx.hasPublishedArticles, "/admin/automation/queue"),
       ];
     case "ai_translation":
+      return [
+        setupItem("ai_key", "OpenAI or Gemini API key", hasAiKey),
+        manualItem("used", "Used translate action in Content Studio", ctx.hasAiContentActivity, "/admin/ai/content-studio"),
+      ];
     case "social_captions":
+      return [
+        setupItem("ai_key", "OpenAI or Gemini API key", hasAiKey),
+        manualItem("generated", "Generated social caption for an article", ctx.hasSocialQueueActivity || ctx.hasAiContentActivity, "/admin/ai/social-manager"),
+      ];
     case "newsletter_gen":
-      return [checklistItem("ai_key", "OpenAI or Gemini API key", hasAiKey)];
+      return [
+        setupItem("ai_key", "OpenAI or Gemini API key", hasAiKey),
+        manualItem("snippet", "Newsletter snippet only — full email system not built", false, "/admin/ai/content-studio"),
+      ];
     case "ai_images":
+      return [
+        setupItem("ai_key", "OpenAI or Gemini API key", hasAiKey),
+        setupItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+        setupItem("storage", "Firebase Storage bucket", envPresent("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET")),
+        setupItem("toggle", "Generate AI images enabled in settings", ctx.generateAiImages, "/admin/automation/settings"),
+        manualItem("generated", "At least 1 AI image generated (Media logs)", ctx.hasGeneratedAiMedia, "/admin/ai/media-studio"),
+      ];
     case "audio_news":
       return [
-        checklistItem("ai_key", "OpenAI or Gemini API key", hasAiKey),
-        checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds),
-        checklistItem("storage", "Firebase Storage bucket", envPresent("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET")),
-        checklistItem("images", "Generate AI images enabled", ctx.automationEnabled, "/admin/automation/settings"),
+        setupItem("ai_key", "OpenAI API key (TTS)", ctx.openAi),
+        setupItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+        setupItem("storage", "Firebase Storage bucket", envPresent("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET")),
+        manualItem("generated", "Generate audio from Voice & Video Studio", ctx.hasGeneratedAudio, "/admin/ai/voice-video-studio"),
       ];
     case "seo_generation":
+    case "internal_linking":
+      return [
+        setupItem("site_url", "NEXT_PUBLIC_SITE_URL set", ctx.siteUrl),
+        setupItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+        setupItem("ai_key", "OpenAI or Gemini API key", hasAiKey),
+        manualItem("seo_run", "Run SEO audit or apply from SEO Manager", ctx.hasSeoActivity, "/admin/ai/seo-manager"),
+      ];
     case "sitemap":
     case "schema_metadata":
       return [
-        checklistItem("site_url", "NEXT_PUBLIC_SITE_URL set", ctx.siteUrl),
-        checklistItem("admin", "Firebase Admin (article URLs in sitemap)", ctx.adminCreds),
-        checklistItem("ai_key", "AI key for SEO tools (optional)", hasAiKey, "/admin/ai/seo-manager", false),
+        setupItem("site_url", "NEXT_PUBLIC_SITE_URL set", ctx.siteUrl),
+        setupItem("admin", "Firebase Admin (article URLs)", ctx.adminCreds),
+        manualItem("published", "At least 1 published article live", ctx.hasPublishedArticles, "/admin/news"),
+        optionalItem("ai_key", "AI key for SEO tools", hasAiKey, "/admin/ai/seo-manager"),
       ];
     case "social_posting":
       return [
-        checklistItem("enc", "SOCIAL_TOKEN_ENCRYPTION_KEY", ctx.socialEncKey),
-        checklistItem("accounts", "Connected social account", ctx.hasConnectedSocial, "/admin/social/accounts"),
+        setupItem("enc", "SOCIAL_TOKEN_ENCRYPTION_KEY", ctx.socialEncKey),
+        setupItem("accounts", "Connected social account", ctx.hasConnectedSocial, "/admin/social/accounts"),
+        manualItem("posted", "At least 1 social post queued or published", ctx.hasSocialQueueActivity, "/admin/ai/social-manager"),
       ];
     case "push_notifications":
     case "newsletter_delivery":
-      return [checklistItem("impl", "Server implementation", false)];
+      return [setupItem("impl", "Server implementation not built yet", false)];
     case "ai_analytics":
       return [
-        checklistItem("admin", "Firebase Admin (internal views)", ctx.adminCreds),
-        checklistItem("ga4", "GA4 env (optional external)", envPresent("GA4_PROPERTY_ID"), undefined, false),
-        checklistItem("gsc", "Search Console env (optional)", envPresent("GSC_SITE_URL"), undefined, false),
+        setupItem("admin", "Firebase Admin (internal views)", ctx.adminCreds),
+        setupItem("articles", "Published articles exist for analytics", ctx.hasPublishedArticles, "/admin/news"),
+        manualItem("views", "Article view data recorded (open articles on site)", ctx.hasArticleViews),
+        optionalItem("ga4", "GA4 env for external analytics", envPresent("GA4_PROPERTY_ID")),
+        optionalItem("gsc", "Search Console env", envPresent("GSC_SITE_URL")),
       ];
     case "reports":
+      return [
+        setupItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+        setupItem("ai_key", "OpenAI or Gemini API key", hasAiKey),
+        manualItem("report", "Generate a report from Analytics Manager", ctx.hasAiContentActivity, "/admin/ai/analytics-manager"),
+      ];
     case "trending":
-      return [checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds)];
+      return [
+        setupItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+        setupItem("articles", "Published articles exist", ctx.hasPublishedArticles, "/admin/news"),
+        manualItem("trending", "Mark article trending or run trend discovery", ctx.hasTrendingArticle, "/admin/ai/analytics-manager"),
+      ];
     case "duplicate_detection":
     case "logs":
-      return [checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds)];
+      return [setupItem("admin", "Firebase Admin credentials", ctx.adminCreds)];
     case "local_locations":
       return [
-        checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds),
-        checklistItem("seed", "Districts seeded in Firestore", ctx.hasDistrictsSeeded, "/admin/locations"),
-        checklistItem("site_url", "NEXT_PUBLIC_SITE_URL set", ctx.siteUrl),
+        setupItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+        setupItem("seed", "Districts seeded in Firestore", ctx.hasDistrictsSeeded, "/admin/locations"),
+        setupItem("site_url", "NEXT_PUBLIC_SITE_URL set", ctx.siteUrl),
+        manualItem("backfill", "Articles tagged with location (backfill)", ctx.hasGeoTaggedArticles, "/admin/locations"),
       ];
-    case "internal_linking":
-      return [checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds)];
     case "mobile_sync":
       return [
-        checklistItem("public_fb", "Public Firebase config", ctx.publicFb),
-        checklistItem("site_url", "NEXT_PUBLIC_SITE_URL set", ctx.siteUrl),
+        setupItem("public_fb", "Public Firebase config", ctx.publicFb),
+        setupItem("site_url", "NEXT_PUBLIC_SITE_URL set", ctx.siteUrl),
+        manualItem("expo", "Mobile app built with Expo (see mobile-app/README)", envPresent("EXPO_PUBLIC_API_BASE_URL")),
       ];
     case "monitoring":
-      return [checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds)];
+      return [
+        setupItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+        manualItem("open", "Operations health check has run", ctx.hasOperationsHealthCheck, "/admin/ai/operations"),
+      ];
     case "cron_jobs":
       return [
-        checklistItem("cron", "CRON_SECRET on Vercel", ctx.cron),
-        checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds),
-        checklistItem("automation", "Automation enabled", ctx.automationEnabled, "/admin/automation/settings"),
-        checklistItem("vercel", "Deployed on Vercel (cron scheduler)", ctx.vercel),
+        setupItem("cron", "CRON_SECRET on Vercel", ctx.cron),
+        setupItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+        setupItem("automation", "Automation enabled", ctx.automationEnabled, "/admin/automation/settings"),
+        setupItem("vercel", "Deployed on Vercel (cron scheduler)", ctx.vercel),
       ];
     case "admin_permissions":
       return [
-        checklistItem("public_fb", "Firebase Auth configured", ctx.publicFb),
-        checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+        setupItem("public_fb", "Firebase Auth configured", ctx.publicFb),
+        setupItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+        manualItem("roles", "Admin user role set in Firestore users", ctx.hasAdminRoles, "/admin/settings"),
       ];
     default:
       return [];
   }
 }
 
-function labelFromStatus(status: VerificationStatus, completionPercent: number, featureId: string): string {
-  if (status === "working") return "VERIFIED WORKING";
+function labelFromStatus(status: VerificationStatus, featureId: string, completionPercent: number): string {
   if (status === "not_implemented") return "NOT IMPLEMENTED";
+  if (MAX_COMPLETION[featureId] != null && completionPercent < 100) {
+    if (featureId === "newsletter_gen") return "PLACEHOLDER ONLY — full newsletter not built";
+    if (featureId === "mobile_sync") return "PARTIAL — mobile app setup incomplete";
+  }
   if (status === "configuration_required") return "CONFIGURATION REQUIRED";
-  if (CAN_FULLY_WORK.has(featureId) && completionPercent === 100) return "VERIFIED WORKING";
-  if (completionPercent === 100) return "FULLY CONFIGURED (KNOWN LIMITS)";
-  if (completionPercent >= 50) return "PARTIALLY CONFIGURED";
-  return "CONFIGURATION REQUIRED";
+  if (status === "partially_configured") return "SETUP OR MANUAL STEPS REMAINING";
+  if (status === "working") {
+    return HAS_KNOWN_LIMITS.has(featureId) ? "READY — see feature notes below" : "VERIFIED WORKING";
+  }
+  return "UNKNOWN";
 }
 
 /** Live status from env + Firestore settings (Run test = one check only; this = full readiness) */
@@ -821,7 +940,8 @@ export async function buildFeatureRegistryAsync(): Promise<VerificationFeature[]
       checklist,
       completionPercent,
       status,
-      label: labelFromStatus(status, completionPercent, feature.id),
+      hasKnownLimits: HAS_KNOWN_LIMITS.has(feature.id),
+      label: labelFromStatus(status, feature.id, completionPercent),
     };
   });
 }
