@@ -138,6 +138,22 @@ export default function SystemVerificationPage() {
           </div>
         ) : (
           <>
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+              <p className="font-semibold">Run test (green ✓) vs Feature status — different things</p>
+              <ul className="mt-2 list-inside list-disc space-y-1 text-blue-800">
+                <li>
+                  <strong>Run / Quick test</strong> = checks one thing only (e.g. RSS fetch works, API key exists).
+                </li>
+                <li>
+                  <strong>Feature status</strong> = all required setup steps below must be done for green{" "}
+                  <strong>Working</strong>.
+                </li>
+                <li>
+                  Amber <strong>Partially Configured</strong> = some steps done — complete the red checklist items.
+                </li>
+              </ul>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-xl bg-white p-4 shadow-sm">
                 <p className="text-xs text-gray-500">Working</p>
@@ -222,14 +238,15 @@ export default function SystemVerificationPage() {
                     <tr>
                       <th className="px-4 py-3">Feature</th>
                       <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3">Label</th>
+                      <th className="px-4 py-3">Complete</th>
+                      <th className="px-4 py-3">Setup checklist</th>
                       <th className="px-4 py-3">Admin</th>
                       <th className="px-4 py-3">Test</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
                     {features.map((f) => (
-                      <tr key={f.id} className="hover:bg-gray-50">
+                      <tr key={f.id} className="hover:bg-gray-50 align-top">
                         <td className="px-4 py-3">
                           <p className="font-medium text-[#1a2b4c]">{f.name}</p>
                           <p className="text-xs text-gray-500">{f.nameHi}</p>
@@ -246,8 +263,61 @@ export default function SystemVerificationPage() {
                             <StatusIcon status={f.status} />
                             {STATUS_LABELS[f.status] || f.status}
                           </span>
+                          <p className="mt-1 text-xs text-gray-500">{f.label}</p>
                         </td>
-                        <td className="px-4 py-3 text-xs">{f.label}</td>
+                        <td className="px-4 py-3">
+                          <div className="min-w-[72px]">
+                            <p
+                              className={`text-lg font-bold ${
+                                (f.completionPercent ?? 0) === 100
+                                  ? "text-green-600"
+                                  : (f.completionPercent ?? 0) >= 50
+                                    ? "text-amber-600"
+                                    : "text-red-600"
+                              }`}
+                            >
+                              {f.completionPercent ?? 0}%
+                            </p>
+                            <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                              <div
+                                className={`h-full rounded-full ${
+                                  (f.completionPercent ?? 0) === 100
+                                    ? "bg-green-500"
+                                    : (f.completionPercent ?? 0) >= 50
+                                      ? "bg-amber-500"
+                                      : "bg-red-500"
+                                }`}
+                                style={{ width: `${f.completionPercent ?? 0}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 min-w-[220px]">
+                          <ul className="space-y-1 text-xs">
+                            {(f.checklist || []).map((item) => (
+                              <li key={item.id} className="flex items-start gap-1.5">
+                                {item.done ? (
+                                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-600" />
+                                ) : (
+                                  <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-500" />
+                                )}
+                                <span className={item.done ? "text-green-800" : "font-medium text-red-700"}>
+                                  {item.label}
+                                  {!item.required ? " (optional)" : ""}
+                                  {!item.done && item.adminPath ? (
+                                    <>
+                                      {" — "}
+                                      <Link href={item.adminPath} className="text-[#c41e20] underline">
+                                        Fix
+                                      </Link>
+                                    </>
+                                  ) : null}
+                                </span>
+                              </li>
+                            ))}
+                            {!f.checklist?.length && <span className="text-gray-400">—</span>}
+                          </ul>
+                        </td>
                         <td className="px-4 py-3">
                           {f.adminPath && (
                             <Link href={f.adminPath} className="text-[#c41e20] hover:underline text-xs">

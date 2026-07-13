@@ -27,6 +27,14 @@ export type VerificationTestId =
   | "analytics_env"
   | "site_url";
 
+export interface VerificationChecklistItem {
+  id: string;
+  label: string;
+  done: boolean;
+  required: boolean;
+  adminPath?: string;
+}
+
 export interface VerificationFeature {
   id: string;
   name: string;
@@ -42,6 +50,11 @@ export interface VerificationFeature {
   sensitiveTest?: boolean;
   lastError?: string;
   fixInstructions: string;
+  /** 0–100 based on required checklist items completed */
+  completionPercent?: number;
+  checklist?: VerificationChecklistItem[];
+  /** Some features cannot reach "working" due to known product limits */
+  maxStatus?: VerificationStatus;
 }
 
 export interface VerificationTestResult {
@@ -581,6 +594,236 @@ function ok(testId: VerificationTestId, testedAt: string, started: number, messa
 
 function fail(testId: VerificationTestId, testedAt: string, started: number, message: string): VerificationTestResult {
   return { testId, ok: false, message, durationMs: Date.now() - started, testedAt };
+}
+
+/** Features that can show green "Working" when all checklist steps are done */
+const CAN_FULLY_WORK = new Set([
+  "news_collection",
+  "ai_hindi",
+  "ai_english",
+  "duplicate_detection",
+  "logs",
+  "cron_jobs",
+  "local_locations",
+]);
+
+interface RuntimeVerificationContext {
+  adminCreds: boolean;
+  publicFb: boolean;
+  cron: boolean;
+  openAi: boolean;
+  gemini: boolean;
+  siteUrl: boolean;
+  vercel: boolean;
+  socialEncKey: boolean;
+  automationEnabled: boolean;
+  aiProvider: string;
+  hasActiveSources: boolean;
+  hasDistrictsSeeded: boolean;
+  hasConnectedSocial: boolean;
+}
+
+async function loadRuntimeContext(): Promise<RuntimeVerificationContext> {
+  const adminCreds = hasFirebaseAdminCreds();
+  const ctx: RuntimeVerificationContext = {
+    adminCreds,
+    publicFb: hasPublicFirebase(),
+    cron: hasCronSecret(),
+    openAi: hasOpenAi(),
+    gemini: hasGemini(),
+    siteUrl: envPresent("NEXT_PUBLIC_SITE_URL"),
+    vercel: envPresent("VERCEL"),
+    socialEncKey: envPresent("SOCIAL_TOKEN_ENCRYPTION_KEY"),
+    automationEnabled: false,
+    aiProvider: "openai",
+    hasActiveSources: false,
+    hasDistrictsSeeded: false,
+    hasConnectedSocial: false,
+  };
+
+  if (!adminCreds) return ctx;
+
+  try {
+    const db = getAdminDb();
+    const [settings, sourcesSnap, districtsSnap, socialSnap] = await Promise.all([
+      getAutomationSettings(),
+      db.collection("sources").where("isActive", "==", true).limit(1).get(),
+      db.collection("districts").limit(1).get(),
+      db.collection("socialAccounts").where("status", "==", "connected").limit(1).get(),
+    ]);
+    ctx.automationEnabled = Boolean(settings.automationEnabled);
+    ctx.aiProvider = settings.aiProvider || "openai";
+    ctx.hasActiveSources = !sourcesSnap.empty;
+    ctx.hasDistrictsSeeded = !districtsSnap.empty;
+    ctx.hasConnectedSocial = !socialSnap.empty;
+  } catch {
+    // keep defaults
+  }
+
+  return ctx;
+}
+
+function checklistItem(
+  id: string,
+  label: string,
+  done: boolean,
+  adminPath?: string,
+  required = true
+): VerificationChecklistItem {
+  return { id, label, done, required, adminPath };
+}
+
+function statusFromChecklist(
+  items: VerificationChecklistItem[],
+  featureId: string
+): { status: VerificationStatus; completionPercent: number } {
+  const required = items.filter((i) => i.required);
+  const doneCount = required.filter((i) => i.done).length;
+  const completionPercent = required.length ? Math.round((doneCount / required.length) * 100) : 0;
+  const canFullyWork = CAN_FULLY_WORK.has(featureId);
+
+  if (doneCount === required.length) {
+    return {
+      status: canFullyWork ? "working" : "partially_configured",
+      completionPercent,
+    };
+  }
+  if (doneCount === 0) {
+    return { status: "configuration_required", completionPercent };
+  }
+  return { status: "partially_configured", completionPercent };
+}
+
+function buildChecklist(featureId: string, ctx: RuntimeVerificationContext): VerificationChecklistItem[] {
+  const hasAiKey = ctx.openAi || ctx.gemini;
+  const aiKeyMatchesProvider =
+    ctx.aiProvider === "gemini" ? ctx.gemini : ctx.aiProvider === "openai" ? ctx.openAi : hasAiKey;
+
+  switch (featureId) {
+    case "news_collection":
+      return [
+        checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+        checklistItem("public_fb", "Public Firebase config", ctx.publicFb),
+        checklistItem("cron", "CRON_SECRET on Vercel", ctx.cron),
+        checklistItem("sources", "At least 1 active news source", ctx.hasActiveSources, "/admin/sources"),
+        checklistItem("automation", "Automation enabled", ctx.automationEnabled, "/admin/automation/settings"),
+      ];
+    case "ai_hindi":
+    case "ai_english":
+      return [
+        checklistItem("ai_key", "OpenAI or Gemini API key", hasAiKey),
+        checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+        checklistItem("provider", "AI provider matches API key", aiKeyMatchesProvider, "/admin/automation/settings"),
+        checklistItem("automation", "Automation enabled", ctx.automationEnabled, "/admin/automation/settings"),
+      ];
+    case "ai_translation":
+    case "social_captions":
+    case "newsletter_gen":
+      return [checklistItem("ai_key", "OpenAI or Gemini API key", hasAiKey)];
+    case "ai_images":
+    case "audio_news":
+      return [
+        checklistItem("ai_key", "OpenAI or Gemini API key", hasAiKey),
+        checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+        checklistItem("storage", "Firebase Storage bucket", envPresent("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET")),
+        checklistItem("images", "Generate AI images enabled", ctx.automationEnabled, "/admin/automation/settings"),
+      ];
+    case "seo_generation":
+    case "sitemap":
+    case "schema_metadata":
+      return [
+        checklistItem("site_url", "NEXT_PUBLIC_SITE_URL set", ctx.siteUrl),
+        checklistItem("admin", "Firebase Admin (article URLs in sitemap)", ctx.adminCreds),
+        checklistItem("ai_key", "AI key for SEO tools (optional)", hasAiKey, "/admin/ai/seo-manager", false),
+      ];
+    case "social_posting":
+      return [
+        checklistItem("enc", "SOCIAL_TOKEN_ENCRYPTION_KEY", ctx.socialEncKey),
+        checklistItem("accounts", "Connected social account", ctx.hasConnectedSocial, "/admin/social/accounts"),
+      ];
+    case "push_notifications":
+    case "newsletter_delivery":
+      return [checklistItem("impl", "Server implementation", false)];
+    case "ai_analytics":
+      return [
+        checklistItem("admin", "Firebase Admin (internal views)", ctx.adminCreds),
+        checklistItem("ga4", "GA4 env (optional external)", envPresent("GA4_PROPERTY_ID"), undefined, false),
+        checklistItem("gsc", "Search Console env (optional)", envPresent("GSC_SITE_URL"), undefined, false),
+      ];
+    case "reports":
+    case "trending":
+      return [checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds)];
+    case "duplicate_detection":
+    case "logs":
+      return [checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds)];
+    case "local_locations":
+      return [
+        checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+        checklistItem("seed", "Districts seeded in Firestore", ctx.hasDistrictsSeeded, "/admin/locations"),
+        checklistItem("site_url", "NEXT_PUBLIC_SITE_URL set", ctx.siteUrl),
+      ];
+    case "internal_linking":
+      return [checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds)];
+    case "mobile_sync":
+      return [
+        checklistItem("public_fb", "Public Firebase config", ctx.publicFb),
+        checklistItem("site_url", "NEXT_PUBLIC_SITE_URL set", ctx.siteUrl),
+      ];
+    case "monitoring":
+      return [checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds)];
+    case "cron_jobs":
+      return [
+        checklistItem("cron", "CRON_SECRET on Vercel", ctx.cron),
+        checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+        checklistItem("automation", "Automation enabled", ctx.automationEnabled, "/admin/automation/settings"),
+        checklistItem("vercel", "Deployed on Vercel (cron scheduler)", ctx.vercel),
+      ];
+    case "admin_permissions":
+      return [
+        checklistItem("public_fb", "Firebase Auth configured", ctx.publicFb),
+        checklistItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+      ];
+    default:
+      return [];
+  }
+}
+
+function labelFromStatus(status: VerificationStatus, completionPercent: number, featureId: string): string {
+  if (status === "working") return "VERIFIED WORKING";
+  if (status === "not_implemented") return "NOT IMPLEMENTED";
+  if (status === "configuration_required") return "CONFIGURATION REQUIRED";
+  if (CAN_FULLY_WORK.has(featureId) && completionPercent === 100) return "VERIFIED WORKING";
+  if (completionPercent === 100) return "FULLY CONFIGURED (KNOWN LIMITS)";
+  if (completionPercent >= 50) return "PARTIALLY CONFIGURED";
+  return "CONFIGURATION REQUIRED";
+}
+
+/** Live status from env + Firestore settings (Run test = one check only; this = full readiness) */
+export async function buildFeatureRegistryAsync(): Promise<VerificationFeature[]> {
+  const base = buildFeatureRegistry();
+  const ctx = await loadRuntimeContext();
+
+  return base.map((feature) => {
+    if (feature.status === "not_implemented") {
+      const checklist = buildChecklist(feature.id, ctx);
+      return {
+        ...feature,
+        checklist,
+        completionPercent: 0,
+        label: "NOT IMPLEMENTED",
+      };
+    }
+
+    const checklist = buildChecklist(feature.id, ctx);
+    const { status, completionPercent } = statusFromChecklist(checklist, feature.id);
+    return {
+      ...feature,
+      checklist,
+      completionPercent,
+      status,
+      label: labelFromStatus(status, completionPercent, feature.id),
+    };
+  });
 }
 
 export const CRON_JOBS = [

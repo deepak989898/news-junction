@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin, verifySuperAdmin } from "@/lib/auth/verify-admin";
 import {
-  buildFeatureRegistry,
+  buildFeatureRegistryAsync,
   runVerificationTest,
   CRON_JOBS,
   VerificationTestId,
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const features = buildFeatureRegistry();
+  const features = await buildFeatureRegistryAsync();
   const envStatus = {
     firebasePublic: features.find((f) => f.id === "news_collection")?.status,
     firebaseAdmin: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.FIREBASE_CLIENT_EMAIL),
