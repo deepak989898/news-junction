@@ -1,7 +1,8 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import GeoNewsListPage from "@/components/location/GeoNewsListPage";
-import { getCityBySlug, getDistrictById, getStateById } from "@/lib/location/service";
+import { getCityBySlug, getDistrictById } from "@/lib/location/district-registry";
+import { getStateById } from "@/lib/location/states";
 
 type Props = { params: Promise<{ citySlug: string }> };
 

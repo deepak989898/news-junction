@@ -1,17 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { MapPin, X } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import { MapPin, X, Loader2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePreferredLocation } from "@/contexts/LocationContext";
+import { getAllStates, getStateById } from "@/lib/location/service";
 import {
-  getAllStates,
-  getCitiesByState,
-  getDistrictsByState,
-  getStateById,
-  getCityById,
-  getDistrictById,
-} from "@/lib/location/service";
+  fetchDistrictsByState,
+  fetchCitiesByState,
+  fetchCitiesByDistrict,
+} from "@/lib/location/client-api";
+import { IndiaCity, IndiaDistrict } from "@/lib/location/types";
 
 export default function LocationSelector() {
   const { language } = useLanguage();
@@ -20,30 +19,81 @@ export default function LocationSelector() {
   const [stateId, setStateId] = useState(location?.stateId || "");
   const [districtId, setDistrictId] = useState(location?.districtId || "");
   const [cityId, setCityId] = useState(location?.cityId || "");
+  const [districts, setDistricts] = useState<IndiaDistrict[]>([]);
+  const [cities, setCities] = useState<IndiaCity[]>([]);
+  const [loadingDistricts, setLoadingDistricts] = useState(false);
+  const [loadingCities, setLoadingCities] = useState(false);
 
   const states = useMemo(() => getAllStates(), []);
-  const districts = useMemo(() => (stateId ? getDistrictsByState(stateId) : []), [stateId]);
-  const cities = useMemo(() => (stateId ? getCitiesByState(stateId) : []), [stateId]);
+
+  useEffect(() => {
+    if (!stateId) {
+      setDistricts([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingDistricts(true);
+    fetchDistrictsByState(stateId)
+      .then((d) => {
+        if (!cancelled) setDistricts(d);
+      })
+      .catch(() => {
+        if (!cancelled) setDistricts([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDistricts(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [stateId]);
+
+  useEffect(() => {
+    if (!stateId) {
+      setCities([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingCities(true);
+    const load = districtId
+      ? fetchCitiesByDistrict(districtId)
+      : fetchCitiesByState(stateId);
+    load
+      .then((c) => {
+        if (!cancelled) setCities(c);
+      })
+      .catch(() => {
+        if (!cancelled) setCities([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingCities(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [stateId, districtId]);
 
   const label = useMemo(() => {
     if (!location) {
       return language === "hi" ? "अपना क्षेत्र चुनें" : "Select your area";
     }
-    const city = location.cityId ? getCityById(location.cityId) : null;
-    const district = location.districtId ? getDistrictById(location.districtId) : null;
     const state = getStateById(location.stateId);
+    const district = districts.find((d) => d.id === location.districtId);
+    const city = cities.find((c) => c.id === location.cityId);
     if (city) return language === "hi" ? city.nameHi : city.nameEn;
     if (district) return language === "hi" ? district.nameHi : district.nameEn;
     if (state) return language === "hi" ? state.nameHi : state.nameEn;
     return language === "hi" ? "अपना क्षेत्र" : "Your area";
-  }, [location, language]);
+  }, [location, language, districts, cities]);
 
   const save = () => {
     if (!stateId) return;
+    const selectedCity = cities.find((c) => c.id === cityId);
     setLocation({
       stateId,
       districtId: districtId || undefined,
       cityId: cityId || undefined,
+      nearbyCityIds: selectedCity?.nearbyCityIds,
       selectedAt: new Date().toISOString(),
       source: "manual",
       preferredLanguage: language === "hi" ? "hi" : "en",
@@ -66,7 +116,7 @@ export default function LocationSelector() {
       {open && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
-          <div className="relative w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+          <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-5 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-bold text-[#1a2b4c]">
                 {language === "hi" ? "अपना क्षेत्र चुनें" : "Select your area"}
@@ -99,10 +149,14 @@ export default function LocationSelector() {
                 </select>
               </div>
 
-              {districts.length > 0 && (
+              {stateId && (
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-600">
+                  <label className="mb-1 flex items-center gap-2 text-xs font-semibold text-gray-600">
                     {language === "hi" ? "जिला" : "District"}
+                    {loadingDistricts && <Loader2 size={12} className="animate-spin" />}
+                    {!loadingDistricts && districts.length > 0 && (
+                      <span className="font-normal text-gray-400">({districts.length})</span>
+                    )}
                   </label>
                   <select
                     value={districtId}
@@ -111,6 +165,7 @@ export default function LocationSelector() {
                       setCityId("");
                     }}
                     className="w-full rounded-lg border px-3 py-2 text-sm"
+                    disabled={loadingDistricts}
                   >
                     <option value="">{language === "hi" ? "वैकल्पिक" : "Optional"}</option>
                     {districts.map((d) => (
@@ -122,15 +177,17 @@ export default function LocationSelector() {
                 </div>
               )}
 
-              {cities.length > 0 && (
+              {stateId && (
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-600">
+                  <label className="mb-1 flex items-center gap-2 text-xs font-semibold text-gray-600">
                     {language === "hi" ? "शहर" : "City"}
+                    {loadingCities && <Loader2 size={12} className="animate-spin" />}
                   </label>
                   <select
                     value={cityId}
                     onChange={(e) => setCityId(e.target.value)}
                     className="w-full rounded-lg border px-3 py-2 text-sm"
+                    disabled={loadingCities || cities.length === 0}
                   >
                     <option value="">{language === "hi" ? "वैकल्पिक" : "Optional"}</option>
                     {cities.map((c) => (

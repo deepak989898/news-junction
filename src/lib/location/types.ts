@@ -70,6 +70,7 @@ export interface UserPreferredLocation {
   stateId: string;
   districtId?: string;
   cityId?: string;
+  nearbyCityIds?: string[];
   selectedAt: string;
   source: "manual" | "browser";
   preferredLanguage?: "hi" | "en";

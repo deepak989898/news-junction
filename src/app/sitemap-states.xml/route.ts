@@ -1,5 +1,5 @@
 import { getSiteUrl } from "@/lib/seo";
-import { getAllStates } from "@/lib/location/service";
+import { getAllStates } from "@/lib/location/states";
 import { getAdminDb } from "@/lib/firebase-admin";
 
 function xmlEscape(s: string) {

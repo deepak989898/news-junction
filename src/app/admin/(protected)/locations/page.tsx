@@ -89,6 +89,12 @@ export default function AdminLocationsPage() {
         ) : (
           <>
             <p className="text-sm text-gray-500">Generated: {report.generatedAt}</p>
+            {"dataset" in report && report.dataset && (
+              <p className="text-sm text-gray-600">
+                Dataset: {(report.dataset as { districtCount?: number }).districtCount ?? "—"} districts,{" "}
+                {(report.dataset as { cityCount?: number }).cityCount ?? "—"} cities
+              </p>
+            )}
 
             <div className="grid gap-4 md:grid-cols-3">
               <div className="rounded-lg border p-4">

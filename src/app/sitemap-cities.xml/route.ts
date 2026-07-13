@@ -1,5 +1,5 @@
 import { getSiteUrl } from "@/lib/seo";
-import { INDIA_CITIES } from "@/lib/location/data/india-locations";
+import { getAllCities } from "@/lib/location/district-registry";
 import { getAdminDb } from "@/lib/firebase-admin";
 
 function xmlEscape(s: string) {
@@ -25,7 +25,7 @@ export async function GET() {
     // ignore
   }
 
-  const urls = INDIA_CITIES.filter((c) => cityIdsWithNews.has(c.id)).map(
+  const urls = getAllCities().filter((c) => cityIdsWithNews.has(c.id)).map(
     (c) => `${siteUrl}/city/${c.slug}`
   );
 

@@ -35,6 +35,9 @@ export const INDIA_STATES: IndiaState[] = [
   { id: "IN-LA", code: "LA", nameHi: "लद्दाख", nameEn: "Ladakh", slug: "ladakh", isActive: true },
   { id: "IN-CH", code: "CH", nameHi: "चंडीगढ़", nameEn: "Chandigarh", slug: "chandigarh", isActive: true },
   { id: "IN-PY", code: "PY", nameHi: "पुडुचेरी", nameEn: "Puducherry", slug: "puducherry", isActive: true },
+  { id: "IN-AN", code: "AN", nameHi: "अंडमान और निकोबार", nameEn: "Andaman and Nicobar Islands", slug: "andaman-nicobar", isActive: true },
+  { id: "IN-LD", code: "LD", nameHi: "लक्षद्वीप", nameEn: "Lakshadweep", slug: "lakshadweep", isActive: true },
+  { id: "IN-DN", code: "DN", nameHi: "दादरा और नगर हवेली और दमन और दीव", nameEn: "Dadra and Nagar Haveli and Daman and Diu", slug: "dadra-daman-diu", isActive: true },
 ];
 
 export const INTERNATIONAL_MARKERS =

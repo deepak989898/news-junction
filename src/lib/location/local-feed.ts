@@ -1,5 +1,4 @@
 import { UserPreferredLocation } from "./types";
-import { getNearbyCityIds } from "./service";
 
 export interface LocalFeedSection {
   id: string;
@@ -18,7 +17,7 @@ export function buildLocalFeedPlan(location: UserPreferredLocation | null) {
       nearbyCityIds: [] as string[],
     };
   }
-  const nearbyCityIds = location.cityId ? getNearbyCityIds(location.cityId) : [];
+  const nearbyCityIds = location.nearbyCityIds || [];
   return {
     sections: ["city", "district", "nearby", "state", "national", "international"],
     nearbyCityIds,

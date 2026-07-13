@@ -1,5 +1,5 @@
 import { getSiteUrl } from "@/lib/seo";
-import { INDIA_DISTRICTS } from "@/lib/location/data/india-locations";
+import { getAllDistricts } from "@/lib/location/district-registry";
 import { getStateById } from "@/lib/location/service";
 import { getAdminDb } from "@/lib/firebase-admin";
 
@@ -26,7 +26,7 @@ export async function GET() {
     // ignore
   }
 
-  const urls = INDIA_DISTRICTS.filter((d) => districtIdsWithNews.has(d.id)).map((d) => {
+  const urls = getAllDistricts().filter((d) => districtIdsWithNews.has(d.id)).map((d) => {
     const state = getStateById(d.stateId);
     return `${siteUrl}/state/${state?.slug || d.stateId}/district/${d.slug}`;
   });

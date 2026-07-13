@@ -1,12 +1,19 @@
-import { NextResponse } from "next/server";
-import { getAllStates, getDistrictsByState, getCitiesByState } from "@/lib/location/service";
+import { NextRequest, NextResponse } from "next/server";
+import { getAllStates } from "@/lib/location/states";
+import { getLocationDatasetMeta } from "@/lib/location/district-registry";
 
-/** Shared location dataset for web + mobile — single source of truth */
-export async function GET() {
-  const states = getAllStates();
+export const runtime = "nodejs";
+
+/** States list + dataset meta (lightweight, safe for all clients) */
+export async function GET(request: NextRequest) {
+  const resource = request.nextUrl.searchParams.get("resource") || "states";
+
+  if (resource === "meta") {
+    return NextResponse.json(getLocationDatasetMeta());
+  }
+
   return NextResponse.json({
-    states,
-    districts: states.flatMap((s) => getDistrictsByState(s.id)),
-    cities: states.flatMap((s) => getCitiesByState(s.id)),
+    states: getAllStates(),
+    meta: getLocationDatasetMeta(),
   });
 }

@@ -6,7 +6,6 @@ import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePreferredLocation } from "@/contexts/LocationContext";
 import { getPersonalizedLocalFeed, LocalFeedSectionResult } from "@/firebase/firestore";
-import { getNearbyCityIds } from "@/lib/location/service";
 import Link from "next/link";
 
 export default function LocalNewsFeed() {
@@ -25,12 +24,11 @@ export default function LocalNewsFeed() {
     async function load() {
       setLoading(true);
       try {
-        const nearbyCityIds = location?.cityId ? getNearbyCityIds(location.cityId) : [];
         const data = await getPersonalizedLocalFeed({
           stateId: location?.stateId,
           districtId: location?.districtId,
           cityId: location?.cityId,
-          nearbyCityIds,
+          nearbyCityIds: location?.nearbyCityIds || [],
         });
         setSections(data);
       } catch (error) {

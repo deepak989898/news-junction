@@ -16,7 +16,7 @@ import { resolveAutomationArticleImage, generateAutomationArticleImage } from ".
 import type { ArticleImageMetadata } from "@/lib/image-pipeline/types";
 import { analyzeArticleSubject } from "@/lib/image-pipeline/analysis";
 import { RawNewsStatus } from "./types";
-import { detectArticleLocation, geoFieldsToFirestore } from "@/lib/location/service";
+import { detectArticleLocation, geoFieldsToFirestore } from "@/lib/location/detection";
 import {
   getDailyNewsDistribution,
   shouldDeferInternationalArticle,

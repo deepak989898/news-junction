@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePreferredLocation } from "@/contexts/LocationContext";
 import { getPersonalizedLocalFeed, LocalFeedSectionResult } from "@/firebase/firestore";
-import { getNearbyCityIds, getStateById, getDistrictById, getCityById } from "@/lib/location/service";
+import { getStateById } from "@/lib/location/service";
+import { fetchDistrictsByState, fetchCitiesByState } from "@/lib/location/client-api";
 import NewsCard from "@/components/news/NewsCard";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import LocationSelector from "@/components/location/LocationSelector";
@@ -15,6 +16,7 @@ export default function MyNewsPage() {
   const { location, loaded } = usePreferredLocation();
   const [sections, setSections] = useState<LocalFeedSectionResult[]>([]);
   const [loading, setLoading] = useState(true);
+  const [areaLabel, setAreaLabel] = useState("");
 
   useEffect(() => {
     if (!loaded) return;
@@ -24,20 +26,33 @@ export default function MyNewsPage() {
     }
     (async () => {
       setLoading(true);
-      const data = await getPersonalizedLocalFeed({
-        stateId: location.stateId,
-        districtId: location.districtId,
-        cityId: location.cityId,
-        nearbyCityIds: location.cityId ? getNearbyCityIds(location.cityId) : [],
-      });
+      const [data, districts, cities] = await Promise.all([
+        getPersonalizedLocalFeed({
+          stateId: location.stateId,
+          districtId: location.districtId,
+          cityId: location.cityId,
+          nearbyCityIds: location.nearbyCityIds || [],
+        }),
+        location.districtId
+          ? fetchDistrictsByState(location.stateId).catch(() => [])
+          : Promise.resolve([]),
+        location.cityId
+          ? fetchCitiesByState(location.stateId).catch(() => [])
+          : Promise.resolve([]),
+      ]);
       setSections(data);
+      const state = getStateById(location.stateId);
+      const district = districts.find((d) => d.id === location.districtId);
+      const city = cities.find((c) => c.id === location.cityId);
+      const parts = [
+        city ? (language === "hi" ? city.nameHi : city.nameEn) : null,
+        district ? (language === "hi" ? district.nameHi : district.nameEn) : null,
+        state ? (language === "hi" ? state.nameHi : state.nameEn) : null,
+      ].filter(Boolean);
+      setAreaLabel(parts.join(", "));
       setLoading(false);
     })();
-  }, [location, loaded]);
-
-  const state = location?.stateId ? getStateById(location.stateId) : null;
-  const district = location?.districtId ? getDistrictById(location.districtId) : null;
-  const city = location?.cityId ? getCityById(location.cityId) : null;
+  }, [location, loaded, language]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
@@ -58,10 +73,10 @@ export default function MyNewsPage() {
         </div>
       )}
 
-      {location && (
+      {location && areaLabel && (
         <p className="mb-6 text-sm text-gray-600">
           {language === "hi" ? "आपका क्षेत्र: " : "Your area: "}
-          {[city?.nameHi || city?.nameEn, district?.nameHi, state?.nameHi].filter(Boolean).join(", ")}
+          {areaLabel}
         </p>
       )}
 

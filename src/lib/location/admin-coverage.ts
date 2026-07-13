@@ -1,13 +1,19 @@
 import { getAdminDb } from "@/lib/firebase-admin";
 import { getDailyNewsDistribution, DEFAULT_LOCAL_NEWS_SETTINGS } from "./quota";
-import { INDIA_CITIES, INDIA_DISTRICTS } from "./data/india-locations";
 import { INDIA_STATES } from "./data/india-states";
-import { detectArticleLocation, geoFieldsToFirestore } from "./service";
+import { detectArticleLocation } from "./detection";
+import { geoFieldsToFirestore } from "./geo-firestore";
+import {
+  getAllCities,
+  getAllDistricts,
+  getLocationDatasetMeta,
+} from "./district-registry";
 
 export interface LocationCoverageReport {
   generatedAt: string;
   distribution: Awaited<ReturnType<typeof getDailyNewsDistribution>>;
   settings: typeof DEFAULT_LOCAL_NEWS_SETTINGS;
+  dataset: ReturnType<typeof getLocationDatasetMeta>;
   statesWithNews: number;
   statesWithoutNews: string[];
   districtsWithNews: number;
@@ -21,6 +27,7 @@ export interface LocationCoverageReport {
 export async function getLocationCoverageReport(): Promise<LocationCoverageReport> {
   const db = getAdminDb();
   const distribution = await getDailyNewsDistribution();
+  const allCities = getAllCities();
 
   const snap = await db
     .collection("news")
@@ -56,7 +63,7 @@ export async function getLocationCoverageReport(): Promise<LocationCoverageRepor
   for (const state of INDIA_STATES.filter((s) => s.isActive)) {
     if (!statesWithNewsSet.has(state.id)) emptyLocationPages.push(`/state/${state.slug}`);
   }
-  for (const city of INDIA_CITIES.filter((c) => c.isActive)) {
+  for (const city of allCities.filter((c) => c.isActive)) {
     if (!citiesWithNewsSet.has(city.id)) emptyLocationPages.push(`/city/${city.slug}`);
   }
 
@@ -64,6 +71,7 @@ export async function getLocationCoverageReport(): Promise<LocationCoverageRepor
     generatedAt: new Date().toISOString(),
     distribution,
     settings: DEFAULT_LOCAL_NEWS_SETTINGS,
+    dataset: getLocationDatasetMeta(),
     statesWithNews: statesWithNewsSet.size,
     statesWithoutNews,
     districtsWithNews: districtsWithNewsSet.size,
@@ -159,20 +167,64 @@ export async function backfillArticleLocations(options: {
   return result;
 }
 
-export async function seedLocationsToFirestore(): Promise<{ states: number; districts: number; cities: number }> {
+async function commitBatches(
+  db: ReturnType<typeof getAdminDb>,
+  collection: string,
+  items: Record<string, unknown>[],
+  idField = "id"
+) {
+  const BATCH = 450;
+  let written = 0;
+  for (let i = 0; i < items.length; i += BATCH) {
+    const batch = db.batch();
+    const chunk = items.slice(i, i + BATCH);
+    for (const item of chunk) {
+      const id = String(item[idField]);
+      batch.set(
+        db.collection(collection).doc(id),
+        { ...item, updatedAt: new Date().toISOString() },
+        { merge: true }
+      );
+    }
+    await batch.commit();
+    written += chunk.length;
+  }
+  return written;
+}
+
+export async function seedLocationsToFirestore(): Promise<{
+  states: number;
+  districts: number;
+  cities: number;
+}> {
   const db = getAdminDb();
-  const batch = db.batch();
+  const districts = getAllDistricts();
+  const cities = getAllCities();
 
-  for (const s of INDIA_STATES) {
-    batch.set(db.collection("states").doc(s.id), { ...s, updatedAt: new Date().toISOString() }, { merge: true });
-  }
-  for (const d of INDIA_DISTRICTS) {
-    batch.set(db.collection("districts").doc(d.id), { ...d, updatedAt: new Date().toISOString() }, { merge: true });
-  }
-  for (const c of INDIA_CITIES) {
-    batch.set(db.collection("cities").doc(c.id), { ...c, updatedAt: new Date().toISOString() }, { merge: true });
-  }
+  await commitBatches(
+    db,
+    "states",
+    INDIA_STATES.map((s) => ({ ...s }))
+  );
+  await commitBatches(
+    db,
+    "districts",
+    districts.map((d) => ({ ...d }))
+  );
+  await commitBatches(
+    db,
+    "cities",
+    cities.map((c) => ({ ...c }))
+  );
 
-  await batch.commit();
-  return { states: INDIA_STATES.length, districts: INDIA_DISTRICTS.length, cities: INDIA_CITIES.length };
+  await db.collection("locationImportReports").add({
+    type: "seed",
+    states: INDIA_STATES.length,
+    districts: districts.length,
+    cities: cities.length,
+    dataset: getLocationDatasetMeta(),
+    createdAt: new Date().toISOString(),
+  });
+
+  return { states: INDIA_STATES.length, districts: districts.length, cities: cities.length };
 }
