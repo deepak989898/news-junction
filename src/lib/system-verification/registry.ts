@@ -308,6 +308,21 @@ export function buildFeatureRegistry(): VerificationFeature[] {
       fixInstructions: "duplicateThreshold automation settings में adjust करें।",
     },
     {
+      id: "local_locations",
+      name: "India Location & District Import",
+      nameHi: "स्थानीय समाचार / जिला डेटा",
+      status: adminCreds ? "partially_configured" : "configuration_required",
+      label: "IMPLEMENTED — SEED REQUIRED",
+      description:
+        "762 districts + cities dataset. Location selector, geo automation, राज्य page. Firestore seed via Admin → Locations.",
+      adminPath: "/admin/locations",
+      docPath: "/docs/hindi/LOCATION_SETUP_GUIDE.md",
+      requiredEnv: ["FIREBASE_SERVICE_ACCOUNT_KEY", "NEXT_PUBLIC_SITE_URL"],
+      externalAccounts: [],
+      fixInstructions:
+        "Admin → Locations → Seed Firestore (chunked). Then Backfill locations. Deploy firestore indexes.",
+    },
+    {
       id: "internal_linking",
       name: "Internal Linking",
       nameHi: "आंतरिक लिंकिंग",

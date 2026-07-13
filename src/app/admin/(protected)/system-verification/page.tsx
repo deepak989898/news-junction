@@ -318,9 +318,13 @@ export default function SystemVerificationPage() {
                     <Link href="/docs/hindi/ENV_SETUP_GUIDE.md" className="underline" target="_blank">
                       ENV_SETUP_GUIDE.md
                     </Link>
+                    ,{" "}
+                    <Link href="/docs/hindi/LOCATION_SETUP_GUIDE.md" className="underline" target="_blank">
+                      LOCATION_SETUP_GUIDE.md
+                    </Link>
                   </p>
                   <p className="mt-2 text-xs text-amber-700">
-                    <ExternalLink size={12} className="inline" /> Docs open from project /docs/hindi/ folder in repository.
+                    <ExternalLink size={12} className="inline" /> Docs served at /docs/hindi/*.md after deploy.
                   </p>
                 </div>
               </div>

@@ -65,6 +65,24 @@ interface AdminSidebarProps {
   onMobileClose?: () => void;
 }
 
+/** Highlight only the most specific nav item — avoids parent + child both active */
+function getActiveNavHref(pathname: string, items: typeof navItems): string | null {
+  let best: string | null = null;
+
+  for (const item of items) {
+    const matches =
+      item.href === "/admin"
+        ? pathname === "/admin"
+        : pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+    if (matches && (!best || item.href.length > best.length)) {
+      best = item.href;
+    }
+  }
+
+  return best;
+}
+
 export default function AdminSidebar({ mobileOpen = false, onMobileClose }: AdminSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -81,6 +99,8 @@ export default function AdminSidebar({ mobileOpen = false, onMobileClose }: Admi
     if (item.href === "/admin/ads") return canManageAds(adminUser.role);
     return item.roles.includes(adminUser.role);
   });
+
+  const activeHref = getActiveNavHref(pathname, visibleItems);
 
   const sidebarContent = (
     <>
@@ -101,10 +121,7 @@ export default function AdminSidebar({ mobileOpen = false, onMobileClose }: Admi
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-4">
         {visibleItems.map((item) => {
-          const isActive =
-            item.href === "/admin"
-              ? pathname === "/admin"
-              : pathname.startsWith(item.href);
+          const isActive = item.href === activeHref;
           const Icon = item.icon;
 
           return (

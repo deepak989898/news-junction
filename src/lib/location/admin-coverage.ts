@@ -197,34 +197,52 @@ export async function seedLocationsToFirestore(): Promise<{
   districts: number;
   cities: number;
 }> {
-  const db = getAdminDb();
-  const districts = getAllDistricts();
-  const cities = getAllCities();
+  const states = await seedLocationPhase("states");
+  const districts = await seedLocationPhase("districts");
+  const cities = await seedLocationPhase("cities");
 
-  await commitBatches(
-    db,
-    "states",
-    INDIA_STATES.map((s) => ({ ...s }))
-  );
-  await commitBatches(
-    db,
-    "districts",
-    districts.map((d) => ({ ...d }))
-  );
-  await commitBatches(
-    db,
-    "cities",
-    cities.map((c) => ({ ...c }))
-  );
-
-  await db.collection("locationImportReports").add({
+  await getAdminDb().collection("locationImportReports").add({
     type: "seed",
-    states: INDIA_STATES.length,
-    districts: districts.length,
-    cities: cities.length,
+    states: states.written,
+    districts: districts.written,
+    cities: cities.written,
     dataset: getLocationDatasetMeta(),
     createdAt: new Date().toISOString(),
   });
 
-  return { states: INDIA_STATES.length, districts: districts.length, cities: cities.length };
+  return {
+    states: states.written,
+    districts: districts.written,
+    cities: cities.written,
+  };
+}
+
+export type LocationSeedPhase = "states" | "districts" | "cities";
+
+export async function seedLocationPhase(
+  phase: LocationSeedPhase,
+  offset = 0,
+  limit = 200
+): Promise<{ phase: LocationSeedPhase; written: number; total: number; done: boolean; nextOffset: number }> {
+  const db = getAdminDb();
+
+  if (phase === "states") {
+    const items = INDIA_STATES.map((s) => ({ ...s }));
+    const written = await commitBatches(db, "states", items);
+    return { phase, written, total: items.length, done: true, nextOffset: items.length };
+  }
+
+  if (phase === "districts") {
+    const all = getAllDistricts().map((d) => ({ ...d }));
+    const slice = all.slice(offset, offset + limit);
+    const written = slice.length ? await commitBatches(db, "districts", slice) : 0;
+    const nextOffset = offset + slice.length;
+    return { phase, written, total: all.length, done: nextOffset >= all.length, nextOffset };
+  }
+
+  const all = getAllCities().map((c) => ({ ...c }));
+  const slice = all.slice(offset, offset + limit);
+  const written = slice.length ? await commitBatches(db, "cities", slice) : 0;
+  const nextOffset = offset + slice.length;
+  return { phase, written, total: all.length, done: nextOffset >= all.length, nextOffset };
 }
