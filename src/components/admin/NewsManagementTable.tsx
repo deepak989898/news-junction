@@ -42,6 +42,7 @@ export default function NewsManagementTable({
   const [processing, setProcessing] = useState(false);
   const [previewImage, setPreviewImage] = useState<{
     url: string;
+    largeUrl?: string;
     title: string;
     alt: string;
   } | null>(null);
@@ -274,7 +275,8 @@ export default function NewsManagementTable({
                           type="button"
                           onClick={() =>
                             setPreviewImage({
-                              url: article.imageUrl,
+                              url: article.imageLargeUrl || article.imageUrl,
+                              largeUrl: article.imageLargeUrl,
                               title: article.titleEn || article.titleHi,
                               alt: article.imageAltEn || article.imageAltHi || article.titleHi,
                             })

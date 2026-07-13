@@ -1,5 +1,12 @@
 import { ArticleImageAnalysis, ImagePipelineInput } from "./types";
 
+export const QUALITY_DIRECTIVES = `Technical quality requirements:
+- Ultra-sharp focus on the main subject, crisp edges, no motion blur, no soft focus
+- Professional Reuters/AP/BBC photojournalism quality with proper exposure and rich natural colors
+- High clarity and contrast — NOT faded, NOT washed out, NOT hazy, NOT low-resolution looking
+- Single unified photograph only — absolutely NO split-screen, NO diptych, NO side-by-side panels, NO before/after layout, NO collage, NO multiple frames
+- ONE coherent scene filling the entire 16:9 frame edge to edge`;
+
 const CATEGORY_STYLE: Record<string, string> = {
   khel: "sports stadium, equipment, or team atmosphere without identifiable athletes",
   technology: "modern technology, devices, innovation lab, or digital infrastructure",
@@ -34,7 +41,9 @@ Required context:
 ${analysis.location ? `Location: ${analysis.location}. ` : ""}${analysis.visualKeywords.join("; ")}.
 
 Style:
-realistic editorial photography or clean editorial illustration as appropriate for ${input.categoryNameEn} news.
+realistic editorial photography with tack-sharp detail, strong contrast, and natural vibrant colors — suitable for ${input.categoryNameEn} news.
+
+${QUALITY_DIRECTIVES}
 
 Composition:
 clear central subject, uncluttered background, strong visual hierarchy, suitable for a news website thumbnail and large article hero image.
@@ -69,7 +78,9 @@ Required context:
 ${analysis.location ? `Location: ${analysis.location}. ` : ""}${analysis.visualKeywords.join("; ")}.
 
 Style:
-realistic editorial photography or clean editorial illustration as appropriate.
+photorealistic editorial news photography with tack-sharp detail, strong contrast, and natural vibrant colors.
+
+${QUALITY_DIRECTIVES}
 
 Composition:
 clear central subject, uncluttered background, strong visual hierarchy, suitable for a news website thumbnail and large article hero image, center-weighted focal point.

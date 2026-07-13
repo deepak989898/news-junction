@@ -35,8 +35,8 @@ export const DEFAULT_IMAGE_PIPELINE_SETTINGS: ImagePipelineSettings = {
     vigyan: "/images/fallbacks/vigyan.webp",
   },
   defaultCategoryImage: "/logo.png",
-  minimumImageWidth: 640,
-  minimumImageHeight: 360,
+  minimumImageWidth: 800,
+  minimumImageHeight: 450,
 };
 
 export const PERSON_ROLE_KEYWORDS = [

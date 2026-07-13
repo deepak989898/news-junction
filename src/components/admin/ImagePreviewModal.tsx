@@ -18,11 +18,13 @@ export default function ImagePreviewModal({
   title,
   onClose,
 }: ImagePreviewModalProps) {
-  const [zoom, setZoom] = useState<"fit" | "full">("fit");
+  const [zoom, setZoom] = useState<"fit" | "full">("full");
+  const [dimensions, setDimensions] = useState<string>("");
 
   useEffect(() => {
     if (!open) return;
-    setZoom("fit");
+    setZoom("full");
+    setDimensions("");
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -32,27 +34,30 @@ export default function ImagePreviewModal({
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
-  }, [open, onClose]);
+  }, [open, onClose, imageUrl]);
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/85" onClick={onClose} aria-hidden />
-      <div className="relative flex max-h-[95vh] w-full max-w-6xl flex-col">
+      <div className="relative flex max-h-[95vh] w-full max-w-7xl flex-col">
         <div className="mb-3 flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             {title && (
               <p className="truncate text-sm font-medium text-white">{title}</p>
             )}
             <p className="mt-0.5 truncate text-xs text-white/60">{imageUrl}</p>
+            {dimensions && (
+              <p className="mt-0.5 text-xs text-white/50">Resolution: {dimensions}</p>
+            )}
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
               onClick={() => setZoom((z) => (z === "fit" ? "full" : "fit"))}
               className="rounded-lg bg-white/10 p-2 text-white hover:bg-white/20"
-              title={zoom === "fit" ? "View at full size" : "Fit to screen"}
+              title={zoom === "fit" ? "View at 100% size" : "Fit to screen"}
             >
               {zoom === "fit" ? <ZoomIn size={18} /> : <ZoomOut size={18} />}
             </button>
@@ -73,17 +78,24 @@ export default function ImagePreviewModal({
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
+            key={imageUrl}
             src={imageUrl}
             alt={alt}
+            decoding="async"
+            onLoad={(e) => {
+              const img = e.currentTarget;
+              setDimensions(`${img.naturalWidth} × ${img.naturalHeight}px`);
+            }}
             className={
               zoom === "fit"
                 ? "max-h-[80vh] max-w-full object-contain"
                 : "h-auto w-auto max-w-none object-none"
             }
+            style={{ imageRendering: zoom === "full" ? "auto" : "auto" }}
           />
         </div>
         <p className="mt-2 text-center text-xs text-white/50">
-          Click outside or press Esc to close · Toggle zoom to inspect image quality
+          Opens at 100% zoom for quality check · Toggle fit/100% · Esc to close
         </p>
       </div>
     </div>

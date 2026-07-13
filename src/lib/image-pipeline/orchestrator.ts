@@ -8,6 +8,7 @@ import {
   isUsableFirebaseImageUrl,
   measureImageQuality,
   optimizeAndUploadVariants,
+  isSourceLargeEnough,
 } from "./optimizer";
 import { getImagePipelineSettings } from "./settings";
 import { fetchPermittedImageBuffer } from "./source-fetcher";
@@ -29,6 +30,9 @@ async function hostSourceImage(
   if (!fetched) return { metadata: null, qualityScore: 0, clarityScore: 0 };
 
   const measured = await measureImageQuality(fetched.buffer);
+  if (!isSourceLargeEnough(measured.width, measured.height)) {
+    return { metadata: null, qualityScore: measured.qualityScore, clarityScore: measured.clarityScore };
+  }
   if (
     measured.width < settings.minimumImageWidth ||
     measured.height < settings.minimumImageHeight

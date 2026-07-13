@@ -18,6 +18,18 @@
     "src/app/api/cron/auto-publish-cycle/route.ts": {
       "maxDuration": 60
     },
+    "src/app/api/cron/fetch-google-trends/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/cron/research-trends/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/cron/process-trend-articles/route.ts": {
+      "maxDuration": 120
+    },
+    "src/app/api/cron/publish-trend-articles/route.ts": {
+      "maxDuration": 60
+    },
     "src/app/api/ai/social/publish-now/route.ts": {
       "maxDuration": 60
     },
@@ -45,6 +57,22 @@
     {
       "path": "/api/cron/auto-publish-cycle",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/fetch-google-trends",
+      "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/api/cron/research-trends",
+      "schedule": "45 2 * * *"
+    },
+    {
+      "path": "/api/cron/process-trend-articles",
+      "schedule": "5 3 * * *"
+    },
+    {
+      "path": "/api/cron/publish-trend-articles",
+      "schedule": "12 3 * * *"
     }
   ]
 }
