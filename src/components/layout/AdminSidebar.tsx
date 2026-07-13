@@ -25,6 +25,7 @@ import {
   Radar,
   Waypoints,
   ClipboardCheck,
+  MapPin,
 } from "lucide-react";
 import { logoutAdmin } from "@/firebase/auth";
 import { useAuth } from "@/contexts/AuthContext";
@@ -38,6 +39,9 @@ const navItems = [
   { href: "/admin/sources", label: "Sources", icon: Rss, roles: ["super_admin", "editor"] },
   { href: "/admin/automation", label: "Automation", icon: Bot, roles: ["super_admin", "editor"] },
   { href: "/admin/automation/google-trends", label: "Google Trends", icon: SearchCheck, roles: ["super_admin", "editor"] },
+  { href: "/admin/automation/local-news", label: "Local News", icon: MapPin, roles: ["super_admin", "editor"] },
+  { href: "/admin/locations", label: "Locations", icon: MapPin, roles: ["super_admin", "editor"] },
+  { href: "/admin/analytics/location-coverage", label: "Location Coverage", icon: BarChart3, roles: ["super_admin", "editor"] },
   { href: "/admin/system-verification", label: "System Verification", icon: ClipboardCheck, roles: ["super_admin"] },
   { href: "/admin/ai/content-studio", label: "AI Content Studio", icon: Sparkles, roles: ["super_admin", "editor"] },
   { href: "/admin/ai/seo-manager", label: "AI SEO Manager", icon: SearchCheck, roles: ["super_admin", "editor"] },

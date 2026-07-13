@@ -8,6 +8,7 @@ import LanguageToggle from "@/components/ui/LanguageToggle";
 import CategoryNav from "./CategoryNav";
 import AdSlotRenderer from "@/components/ads/AdSlotRenderer";
 import { BRAND } from "@/lib/constants";
+import LocationSelector from "@/components/location/LocationSelector";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSettings } from "@/contexts/SettingsContext";
 
@@ -51,6 +52,7 @@ export default function Header() {
         </div>
 
         <div className="flex items-center gap-3">
+          <LocationSelector />
           <Link
             href="/search"
             className="rounded-lg p-2 text-[#1a2b4c] transition-colors hover:bg-gray-100"

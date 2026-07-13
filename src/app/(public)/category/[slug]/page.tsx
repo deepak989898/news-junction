@@ -10,6 +10,7 @@ import PopularNews from "@/components/news/PopularNews";
 import AdSlotRenderer from "@/components/ads/AdSlotRenderer";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import Link from "next/link";
+import RajyaCategorySections from "@/components/location/RajyaCategorySections";
 
 export default function CategoryPage() {
   const params = useParams();
@@ -33,7 +34,7 @@ export default function CategoryPage() {
       setLoading(true);
       try {
         const [categoryNews, popularNews] = await Promise.all([
-          getNewsByCategory(slug),
+          slug === "rajya" ? Promise.resolve([]) : getNewsByCategory(slug),
           getPopularNews(5),
         ]);
         setArticles(categoryNews);
@@ -69,7 +70,9 @@ export default function CategoryPage() {
 
       <div className="grid gap-8 lg:grid-cols-3">
         <section className="lg:col-span-2">
-          {articles.length > 0 ? (
+          {slug === "rajya" ? (
+            <RajyaCategorySections />
+          ) : articles.length > 0 ? (
             <div className="rounded-xl bg-white p-4 shadow-sm">
               {articles.map((article) => (
                 <NewsCard key={article.id} article={article} variant="horizontal" />

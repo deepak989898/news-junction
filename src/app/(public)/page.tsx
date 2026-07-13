@@ -17,6 +17,7 @@ import {
   getPopularNews,
 } from "@/firebase/firestore";
 import { NewsArticle } from "@/types";
+import LocalNewsFeed from "@/components/location/LocalNewsFeed";
 
 export default function HomePage() {
   const { t } = useLanguage();
@@ -95,6 +96,8 @@ export default function HomePage() {
             </p>
           </div>
         )}
+
+        <LocalNewsFeed />
 
         {trending.length > 0 && (
           <section className="mt-10">

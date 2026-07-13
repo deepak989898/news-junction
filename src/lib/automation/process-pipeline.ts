@@ -16,6 +16,28 @@ import { resolveAutomationArticleImage, generateAutomationArticleImage } from ".
 import type { ArticleImageMetadata } from "@/lib/image-pipeline/types";
 import { analyzeArticleSubject } from "@/lib/image-pipeline/analysis";
 import { RawNewsStatus } from "./types";
+import { detectArticleLocation, geoFieldsToFirestore } from "@/lib/location/service";
+import {
+  getDailyNewsDistribution,
+  shouldDeferInternationalArticle,
+} from "@/lib/location/quota";
+
+function buildGeoForArticle(
+  aiOutput: { titleHi: string; titleEn: string; summaryHi: string; summaryEn: string },
+  categoryId: string,
+  sourceData?: Record<string, unknown>
+) {
+  const geo = detectArticleLocation({
+    titleHi: aiOutput.titleHi,
+    titleEn: aiOutput.titleEn,
+    summaryHi: aiOutput.summaryHi,
+    summaryEn: aiOutput.summaryEn,
+    categoryId,
+    sourceName: sourceData?.name as string | undefined,
+    sourceStateId: sourceData?.stateId as string | undefined,
+  });
+  return { geo, geoFields: geoFieldsToFirestore(geo) };
+}
 
 async function resolveImageForRawItem(
   rawNewsId: string,
@@ -179,19 +201,29 @@ export async function processRawNewsItem(
       categoryCount < settings.maxArticlesPerCategoryPerDay;
 
     const sourceDoc = await getAdminDb().collection("sources").doc(rawItem.sourceId).get();
+    const sourceData = sourceDoc.exists ? (sourceDoc.data() as Record<string, unknown>) : undefined;
     const sourceAutoPublish = sourceDoc.exists
-      ? Boolean(sourceDoc.data()?.autoPublishAllowed)
+      ? Boolean(sourceData?.autoPublishAllowed)
       : false;
 
-    const autoPublish = canPublish &&
+    const { geo, geoFields } = buildGeoForArticle(aiOutput, categoryId, sourceData);
+    const distribution = await getDailyNewsDistribution();
+    const intlDefer = shouldDeferInternationalArticle(geo.geoScope, geo.isIndiaNews, distribution);
+
+    let autoPublish = canPublish &&
       shouldAutoPublish(finalRisk, sourceAutoPublish, settings) &&
-      aiOutput.titleHi && aiOutput.contentHi;
+      aiOutput.titleHi && aiOutput.contentHi &&
+      !intlDefer.defer;
 
     await updateRawNews(rawNewsId, {
       aiOutput,
       riskLevel: finalRisk,
       categoryId,
       status: autoPublish ? "processing" : "pendingApproval",
+      geoScope: geo.geoScope,
+      geoConfidence: geo.geoConfidence,
+      isIndiaNews: geo.isIndiaNews,
+      ...(intlDefer.defer ? { errorMessage: intlDefer.reason } : {}),
     });
 
     if (autoPublish) {
@@ -219,6 +251,7 @@ export async function processRawNewsItem(
         imageMetadata: metadata,
         author: settings.defaultAuthorName,
         publish: true,
+        geoFields,
       });
 
       await logAutomation({
@@ -279,6 +312,8 @@ export async function approveAndPublishRawNews(rawNewsId: string): Promise<strin
     await updateRawNews(rawNewsId, { generatedImageUrl: imageUrl });
   }
 
+  const { geoFields } = buildGeoForArticle(rawItem.aiOutput, rawItem.categoryId);
+
   const newsId = await publishRawNewsToNews(rawNewsId, rawItem.aiOutput, {
     sourceName: rawItem.sourceName,
     sourceUrl: rawItem.sourceUrl,
@@ -290,6 +325,7 @@ export async function approveAndPublishRawNews(rawNewsId: string): Promise<strin
     imageMetadata: metadata,
     author: settings.defaultAuthorName,
     publish: true,
+    geoFields,
   });
 
   await logAutomation({

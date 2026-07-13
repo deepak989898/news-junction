@@ -80,6 +80,7 @@ export async function getUserPreferences(uid: string): Promise<UserPreferencePro
   return {
     uid,
     preferredLanguage: (asString(d.preferredLanguage) === "en" ? "en" : "hi") as "hi" | "en",
+    preferredLocation: d.preferredLocation as UserPreferenceProfile["preferredLocation"],
     preferredCategories: dedupeStrings(d.preferredCategories),
     followedTopics: dedupeStrings(d.followedTopics),
     followedAuthors: dedupeStrings(d.followedAuthors),

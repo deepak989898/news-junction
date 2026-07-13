@@ -128,6 +128,29 @@ function mapNewsDoc(id: string, data: Record<string, unknown>): NewsArticle {
     audioAssetHiId: (data.audioAssetHiId as string) || "",
     audioAssetEnId: (data.audioAssetEnId as string) || "",
     scheduledPublishAt: (data.scheduledPublishAt as Timestamp) || null,
+    countryCode: (data.countryCode as string) || undefined,
+    countryNameHi: (data.countryNameHi as string) || undefined,
+    countryNameEn: (data.countryNameEn as string) || undefined,
+    isIndiaNews: data.isIndiaNews !== undefined ? Boolean(data.isIndiaNews) : undefined,
+    geoScope: (data.geoScope as string) || undefined,
+    stateId: (data.stateId as string) || undefined,
+    stateNameHi: (data.stateNameHi as string) || undefined,
+    stateNameEn: (data.stateNameEn as string) || undefined,
+    stateSlug: (data.stateSlug as string) || undefined,
+    districtId: (data.districtId as string) || undefined,
+    districtNameHi: (data.districtNameHi as string) || undefined,
+    districtNameEn: (data.districtNameEn as string) || undefined,
+    districtSlug: (data.districtSlug as string) || undefined,
+    cityId: (data.cityId as string) || undefined,
+    cityNameHi: (data.cityNameHi as string) || undefined,
+    cityNameEn: (data.cityNameEn as string) || undefined,
+    citySlug: (data.citySlug as string) || undefined,
+    locality: (data.locality as string) || undefined,
+    geoConfidence: (data.geoConfidence as number) || undefined,
+    primaryLocation: (data.primaryLocation as string) || undefined,
+    isLocalNews: data.isLocalNews !== undefined ? Boolean(data.isLocalNews) : undefined,
+    locationDetectedBy: (data.locationDetectedBy as string) || undefined,
+    locationReviewed: data.locationReviewed !== undefined ? Boolean(data.locationReviewed) : undefined,
     createdAt: (data.createdAt as Timestamp) || null,
     updatedAt: (data.updatedAt as Timestamp) || null,
     publishedAt: (data.publishedAt as Timestamp) || null,
@@ -220,11 +243,173 @@ export async function getPopularNews(count = 5) {
 }
 
 export async function getNewsByCategory(categorySlug: string, count = 20) {
+  if (categorySlug === "rajya") {
+    return getRajyaCategoryNews(count);
+  }
   return getPublishedNews([
     where("categoryId", "==", categorySlug),
     orderBy("publishedAt", "desc"),
     limit(count),
   ]);
+}
+
+/** राज्य page — geo discovery, not subject category */
+export async function getRajyaCategoryNews(count = 30) {
+  return getPublishedNews([
+    where("isIndiaNews", "==", true),
+    where("geoScope", "in", ["state", "district", "city", "local"]),
+    orderBy("publishedAt", "desc"),
+    limit(count),
+  ]);
+}
+
+export async function getNewsByStateId(stateId: string, count = 12) {
+  return getPublishedNews([
+    where("stateId", "==", stateId),
+    orderBy("publishedAt", "desc"),
+    limit(count),
+  ]);
+}
+
+export async function getNewsByDistrictId(districtId: string, count = 12) {
+  return getPublishedNews([
+    where("districtId", "==", districtId),
+    orderBy("publishedAt", "desc"),
+    limit(count),
+  ]);
+}
+
+export async function getNewsByCityId(cityId: string, count = 12) {
+  return getPublishedNews([
+    where("cityId", "==", cityId),
+    orderBy("publishedAt", "desc"),
+    limit(count),
+  ]);
+}
+
+export async function getNationalIndiaNews(count = 12) {
+  return getPublishedNews([
+    where("isIndiaNews", "==", true),
+    where("geoScope", "==", "national"),
+    orderBy("publishedAt", "desc"),
+    limit(count),
+  ]);
+}
+
+export async function getInternationalNews(count = 6) {
+  return getPublishedNews([
+    where("geoScope", "==", "international"),
+    orderBy("publishedAt", "desc"),
+    limit(count),
+  ]);
+}
+
+function dedupeArticles(articles: NewsArticle[], excludeIds = new Set<string>()): NewsArticle[] {
+  const seen = new Set(excludeIds);
+  return articles.filter((a) => {
+    if (seen.has(a.id)) return false;
+    seen.add(a.id);
+    return true;
+  });
+}
+
+export interface LocalFeedSectionResult {
+  id: string;
+  titleHi: string;
+  titleEn: string;
+  articles: NewsArticle[];
+  isFallback?: boolean;
+  emptyMessageHi?: string;
+  emptyMessageEn?: string;
+}
+
+export async function getPersonalizedLocalFeed(opts: {
+  stateId?: string;
+  districtId?: string;
+  cityId?: string;
+  nearbyCityIds?: string[];
+}): Promise<LocalFeedSectionResult[]> {
+  const usedIds = new Set<string>();
+  const sections: LocalFeedSectionResult[] = [];
+
+  if (opts.cityId) {
+    const cityNews = dedupeArticles(await getNewsByCityId(opts.cityId, 8), usedIds);
+    cityNews.forEach((a) => usedIds.add(a.id));
+    sections.push({
+      id: "city",
+      titleHi: "आपके शहर की खबरें",
+      titleEn: "News from your city",
+      articles: cityNews,
+      emptyMessageHi: cityNews.length === 0 ? "आपके शहर में अभी नई खबर उपलब्ध नहीं है" : undefined,
+      emptyMessageEn: cityNews.length === 0 ? "No new news in your city right now" : undefined,
+    });
+
+    if (cityNews.length === 0 && opts.nearbyCityIds?.length) {
+      const nearbyArticles: NewsArticle[] = [];
+      for (const nid of opts.nearbyCityIds.slice(0, 4)) {
+        const items = await getNewsByCityId(nid, 4);
+        nearbyArticles.push(...dedupeArticles(items, usedIds));
+      }
+      nearbyArticles.slice(0, 8).forEach((a) => usedIds.add(a.id));
+      if (nearbyArticles.length > 0) {
+        sections.push({
+          id: "nearby",
+          titleHi: "आसपास की खबरें",
+          titleEn: "Nearby news",
+          articles: nearbyArticles.slice(0, 8),
+          isFallback: true,
+        });
+      }
+    }
+  }
+
+  if (opts.districtId) {
+    const districtNews = dedupeArticles(await getNewsByDistrictId(opts.districtId, 8), usedIds);
+    districtNews.forEach((a) => usedIds.add(a.id));
+    if (districtNews.length > 0) {
+      sections.push({
+        id: "district",
+        titleHi: "आपके जिले की खबरें",
+        titleEn: "News from your district",
+        articles: districtNews,
+      });
+    }
+  }
+
+  if (opts.stateId) {
+    const stateNews = dedupeArticles(await getNewsByStateId(opts.stateId, 10), usedIds);
+    stateNews.forEach((a) => usedIds.add(a.id));
+    if (stateNews.length > 0) {
+      sections.push({
+        id: "state",
+        titleHi: "आपके राज्य की खबरें",
+        titleEn: "News from your state",
+        articles: stateNews,
+        isFallback: Boolean(opts.cityId),
+      });
+    }
+  }
+
+  const national = dedupeArticles(await getNationalIndiaNews(10), usedIds);
+  national.forEach((a) => usedIds.add(a.id));
+  sections.push({
+    id: "national",
+    titleHi: "देश की बड़ी खबरें",
+    titleEn: "Top national news",
+    articles: national,
+  });
+
+  const international = dedupeArticles(await getInternationalNews(6), usedIds);
+  if (international.length > 0) {
+    sections.push({
+      id: "international",
+      titleHi: "दुनिया की प्रमुख खबरें",
+      titleEn: "Top world news",
+      articles: international,
+    });
+  }
+
+  return sections;
 }
 
 export async function getNewsBySlug(slug: string) {

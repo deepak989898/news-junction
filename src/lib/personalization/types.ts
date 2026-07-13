@@ -1,6 +1,14 @@
 export interface UserPreferenceProfile {
   uid: string;
   preferredLanguage?: "hi" | "en";
+  preferredLocation?: {
+    stateId: string;
+    districtId?: string;
+    cityId?: string;
+    selectedAt: string;
+    source: "manual" | "browser";
+    preferredLanguage?: "hi" | "en";
+  };
   preferredCategories: string[];
   followedTopics: string[];
   followedAuthors: string[];

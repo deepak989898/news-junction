@@ -268,6 +268,7 @@ export async function publishRawNewsToNews(
     author: string;
     publish?: boolean;
     imageMetadata?: import("@/lib/image-pipeline/types").ArticleImageMetadata;
+    geoFields?: Record<string, unknown>;
   }
 ): Promise<string> {
   const db = getAdminDb();
@@ -306,6 +307,7 @@ export async function publishRawNewsToNews(
     sourceCreditText: aiOutput.sourceCreditText,
     factCheckNotes: aiOutput.factCheckNotes,
     automationRawNewsId: rawNewsId,
+    ...(meta.geoFields || {}),
     ...(meta.imageMetadata
       ? Object.fromEntries(
           Object.entries(meta.imageMetadata).filter(
