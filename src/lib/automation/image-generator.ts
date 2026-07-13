@@ -198,9 +198,8 @@ export async function generateAutomationArticleImage(params: {
       prompt,
       size: "1536x1024",
       quality: "high",
-      response_format: "b64_json",
     }),
-    signal: AbortSignal.timeout(45000),
+    signal: AbortSignal.timeout(90000),
   });
 
   if (!response.ok) {
@@ -210,7 +209,9 @@ export async function generateAutomationArticleImage(params: {
 
   const data = await response.json();
   const b64 = data.data?.[0]?.b64_json as string | undefined;
-  if (!b64) return null;
+  if (!b64) {
+    throw new Error("OpenAI returned no image data. Check API quota and model access.");
+  }
 
   const rawBuffer = Buffer.from(b64, "base64");
   return optimizeAndUpload(params.rawNewsId, rawBuffer);

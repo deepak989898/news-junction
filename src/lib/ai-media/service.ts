@@ -189,7 +189,6 @@ async function generateWithProvider(args: {
       prompt,
       size,
       quality,
-      response_format: "b64_json",
     }),
     signal: AbortSignal.timeout(120000),
   });
