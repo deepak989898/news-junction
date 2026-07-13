@@ -167,6 +167,14 @@ export async function backfillArticleLocations(options: {
   return result;
 }
 
+function stripUndefined(obj: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
 async function commitBatches(
   db: ReturnType<typeof getAdminDb>,
   collection: string,
@@ -182,7 +190,7 @@ async function commitBatches(
       const id = String(item[idField]);
       batch.set(
         db.collection(collection).doc(id),
-        { ...item, updatedAt: new Date().toISOString() },
+        stripUndefined({ ...item, updatedAt: new Date().toISOString() }),
         { merge: true }
       );
     }

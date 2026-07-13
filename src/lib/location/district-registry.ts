@@ -38,16 +38,19 @@ export function getLocationRegistry() {
   const districtFile = districtsBundle as DistrictsFile;
   const citiesFile = citiesGeneratedBundle as CitiesFile;
 
-  const districts: IndiaDistrict[] = (districtFile.districts || []).map((d) => ({
-    id: d.id,
-    stateId: d.stateId,
-    nameHi: d.nameHi,
-    nameEn: d.nameEn,
-    slug: d.slug,
-    isActive: d.isActive !== false,
-    latitude: d.latitude,
-    longitude: d.longitude,
-  }));
+  const districts: IndiaDistrict[] = (districtFile.districts || []).map((d) => {
+    const row: IndiaDistrict = {
+      id: d.id,
+      stateId: d.stateId,
+      nameHi: d.nameHi,
+      nameEn: d.nameEn,
+      slug: d.slug,
+      isActive: d.isActive !== false,
+    };
+    if (d.latitude != null) row.latitude = d.latitude;
+    if (d.longitude != null) row.longitude = d.longitude;
+    return row;
+  });
 
   const cities = mergeCities(citiesFile.cities || [], INDIA_CITIES_TIER1);
 
