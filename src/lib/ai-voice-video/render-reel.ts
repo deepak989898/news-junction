@@ -6,6 +6,7 @@ import os from "os";
 import path from "path";
 import ffmpegPath from "ffmpeg-static";
 import sharp from "sharp";
+import { loadAssetBuffer } from "@/lib/resolve-public-url";
 import type { VideoPlatform } from "./types";
 
 const REEL_SIZE: Record<VideoPlatform, { width: number; height: number }> = {
@@ -34,14 +35,8 @@ function runProcess(cmd: string, args: string[]): Promise<{ stdout: string; stde
   });
 }
 
-async function fetchBuffer(url: string): Promise<Buffer> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(60000) });
-  if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
-  return Buffer.from(await res.arrayBuffer());
-}
-
 async function prepareReelFrame(imageUrl: string, width: number, height: number): Promise<Buffer> {
-  const raw = await fetchBuffer(imageUrl);
+  const raw = await loadAssetBuffer(imageUrl);
   return sharp(raw)
     .resize(width, height, { fit: "cover", position: "centre" })
     .jpeg({ quality: 92 })
@@ -67,7 +62,7 @@ export async function renderReelMp4(args: {
   try {
     const [frame, audio] = await Promise.all([
       prepareReelFrame(args.imageUrl, width, height),
-      fetchBuffer(args.audioUrl),
+      loadAssetBuffer(args.audioUrl),
     ]);
     await fs.writeFile(imagePath, frame);
     await fs.writeFile(audioPath, audio);

@@ -2,6 +2,7 @@ import { getAdminDb, getAdminStorage } from "@/lib/firebase-admin";
 import { callAI, estimateCost, estimateTokensFromText } from "@/lib/ai-studio/ai-client";
 import { getAISettings, getArticleById } from "@/lib/ai-studio/server-db";
 import { generateMediaAsset } from "@/lib/ai-media/service";
+import { resolvePublicUrl } from "@/lib/resolve-public-url";
 import { isReelRenderAvailable, renderReelMp4 } from "./render-reel";
 import { DEFAULT_TTS_SETTINGS, TTS_SETTINGS_DOC_ID, VOICE_VIDEO_SYSTEM_PROMPT, VoiceScriptAction } from "./defaults";
 import {
@@ -351,6 +352,23 @@ function buildScenes(script: string): VideoScene[] {
   }));
 }
 
+function pickArticleThumbnail(article: NewsDoc, generated?: string): string {
+  const candidates = [
+    generated,
+    asString(article.imageLargeUrl),
+    asString(article.imageUrl),
+    asString(article.imageMediumUrl),
+    "/logo.png",
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const resolved = resolvePublicUrl(candidate);
+    if (resolved) return resolved;
+  }
+  return resolvePublicUrl("/logo.png");
+}
+
 async function resolveAudioUrl(audioAssetId?: string): Promise<{ url: string; duration: number } | null> {
   if (!audioAssetId) return null;
   const doc = await getAdminDb().collection("audioAssets").doc(audioAssetId).get();
@@ -379,9 +397,11 @@ async function attachRenderedReel(
     return { videoUrl: "", videoDurationSec: 0, renderStatus: "skipped", renderError: "ffmpeg not available on server" };
   }
 
+  const thumbnailUrl = resolvePublicUrl(args.thumbnailUrl);
+
   try {
     const { buffer, durationSec } = await renderReelMp4({
-      imageUrl: args.thumbnailUrl,
+      imageUrl: thumbnailUrl,
       audioUrl: args.audioUrl,
       platform: args.platform,
     });
@@ -455,8 +475,9 @@ export async function generateVideoPackage(args: {
     });
     thumbnailUrl = assets[0]?.imageUrl || "";
   } catch {
-    thumbnailUrl = asString(article.imageUrl);
+    thumbnailUrl = "";
   }
+  thumbnailUrl = pickArticleThumbnail(article, thumbnailUrl);
 
   const audio = await resolveAudioUrl(args.audioAssetId);
 
