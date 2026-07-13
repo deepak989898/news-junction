@@ -42,20 +42,31 @@ export default function GoogleTrendsAdminPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
+  const getToken = useCallback(async () => {
+    const { getAuth } = await import("firebase/auth");
+    const { getFirebaseApp } = await import("@/firebase/config");
+    const user = getAuth(getFirebaseApp()).currentUser;
+    if (!user) throw new Error("Not authenticated — please log in again");
+    return user.getIdToken();
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/google-trends");
+      const token = await getToken();
+      const res = await fetch("/api/admin/google-trends", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) throw new Error("Failed to load");
       const data = await res.json();
       setTrends(data.trends || []);
       setSettings(data.settings);
-    } catch {
-      toast.error("Failed to load Google Trends data");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load Google Trends data");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [getToken]);
 
   useEffect(() => {
     load();
@@ -64,9 +75,13 @@ export default function GoogleTrendsAdminPage() {
   const runAction = async (action: string, trendId?: string) => {
     setBusy(action + (trendId || ""));
     try {
+      const token = await getToken();
       const res = await fetch("/api/admin/google-trends", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ action, trendId }),
       });
       const data = await res.json();
@@ -84,13 +99,23 @@ export default function GoogleTrendsAdminPage() {
     if (!settings) return;
     setBusy("toggle");
     try {
-      await fetch("/api/admin/google-trends", {
+      const token = await getToken();
+      const res = await fetch("/api/admin/google-trends", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ settings: { enabled: !settings.enabled } }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update settings");
+      }
       toast.success(settings.enabled ? "Google Trends disabled" : "Google Trends enabled");
       await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to toggle");
     } finally {
       setBusy(null);
     }
