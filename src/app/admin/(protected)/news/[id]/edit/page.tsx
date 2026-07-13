@@ -7,12 +7,23 @@ import NewsForm from "@/components/admin/NewsForm";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { getNewsById, updateNews, getAllCategories } from "@/firebase/firestore";
 import { NewsFormData, Category } from "@/types";
+import { analyzeArticleSubject } from "@/lib/image-pipeline/analysis";
 
 export default function EditNewsPage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
   const [initialData, setInitialData] = useState<NewsFormData | null>(null);
+  const [imageMeta, setImageMeta] = useState<{
+    imageOrigin?: string;
+    imageCredit?: string;
+    imageLicence?: string;
+    imageRelevanceScore?: number;
+    imageQualityScore?: number;
+    imagePrompt?: string;
+    imageStatus?: string;
+    isRealPersonPrimary?: boolean;
+  } | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -48,6 +59,31 @@ export default function EditNewsPage() {
             ? article.scheduledPublishAt.toDate().toISOString().slice(0, 16)
             : "",
         });
+        const analysis = analyzeArticleSubject({
+          articleId: article.id,
+          rawNewsId: "",
+          titleHi: article.titleHi,
+          titleEn: article.titleEn,
+          summaryHi: article.summaryHi,
+          summaryEn: article.summaryEn,
+          categoryId: article.categoryId,
+          categoryNameEn: article.categoryNameEn,
+          categoryNameHi: article.categoryNameHi,
+          sourceName: article.sourceName,
+          sourceUrl: article.sourceUrl,
+          originalLink: article.sourceUrl,
+          originalImage: article.imageOriginalUrl || "",
+        });
+        setImageMeta({
+          imageOrigin: article.imageOrigin,
+          imageCredit: article.imageCredit,
+          imageLicence: article.imageLicence,
+          imageRelevanceScore: article.imageRelevanceScore,
+          imageQualityScore: article.imageQualityScore,
+          imagePrompt: article.imagePrompt,
+          imageStatus: article.imageStatus,
+          isRealPersonPrimary: analysis.isRealPersonPrimary,
+        });
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -66,7 +102,13 @@ export default function EditNewsPage() {
     <div>
       <AdminTopbar title="Edit News" />
       <div className="rounded-xl bg-white p-4 shadow-sm md:p-6">
-        <NewsForm initialData={initialData} articleId={id} onSubmit={handleSubmit} submitLabel="Update Article" />
+        <NewsForm
+          initialData={initialData}
+          articleId={id}
+          imageMeta={imageMeta || undefined}
+          onSubmit={handleSubmit}
+          submitLabel="Update Article"
+        />
       </div>
     </div>
   );

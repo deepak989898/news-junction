@@ -267,6 +267,7 @@ export async function publishRawNewsToNews(
     imageUrl: string;
     author: string;
     publish?: boolean;
+    imageMetadata?: import("@/lib/image-pipeline/types").ArticleImageMetadata;
   }
 ): Promise<string> {
   const db = getAdminDb();
@@ -305,6 +306,13 @@ export async function publishRawNewsToNews(
     sourceCreditText: aiOutput.sourceCreditText,
     factCheckNotes: aiOutput.factCheckNotes,
     automationRawNewsId: rawNewsId,
+    ...(meta.imageMetadata
+      ? Object.fromEntries(
+          Object.entries(meta.imageMetadata).filter(
+            ([k, v]) => k !== "imageUrl" && k !== "imageAltHi" && k !== "imageAltEn" && v !== undefined
+          )
+        )
+      : {}),
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
     publishedAt: status === "published" ? FieldValue.serverTimestamp() : null,

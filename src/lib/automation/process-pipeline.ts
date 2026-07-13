@@ -13,6 +13,8 @@ import { generateArticleContent } from "./ai-processor";
 import { checkDuplicate } from "./duplicate-checker";
 import { detectRiskLevel, shouldAutoPublish } from "./risk-detector";
 import { resolveAutomationArticleImage, generateAutomationArticleImage } from "./image-generator";
+import type { ArticleImageMetadata } from "@/lib/image-pipeline/types";
+import { analyzeArticleSubject } from "@/lib/image-pipeline/analysis";
 import { RawNewsStatus } from "./types";
 
 async function resolveImageForRawItem(
@@ -21,25 +23,84 @@ async function resolveImageForRawItem(
     originalImage: string;
     generatedImageUrl?: string;
     categoryId: string;
+    sourceName?: string;
+    sourceUrl?: string;
+    originalLink?: string;
+    sourceId?: string;
   },
-  aiOutput: { titleEn: string; titleHi: string; summaryEn: string },
+  aiOutput: { titleEn: string; titleHi: string; summaryEn: string; summaryHi?: string },
   categoryNameEn: string,
-  options?: { preferHostedImage?: boolean }
-) {
+  categoryNameHi?: string,
+  options?: { preferHostedImage?: boolean; articleId?: string }
+): Promise<{ imageUrl: string; generated: boolean; metadata?: ArticleImageMetadata; requiresManualReview?: boolean }> {
   const settings = await getAutomationSettings();
-  return resolveAutomationArticleImage({
+
+  let sourceTrustLevel: "low" | "medium" | "high" = "medium";
+  if (rawItem.sourceId) {
+    const sourceDoc = await getAdminDb().collection("sources").doc(rawItem.sourceId).get();
+    if (sourceDoc.exists) {
+      sourceTrustLevel = (sourceDoc.data()?.trustLevel as "low" | "medium" | "high") || "medium";
+    }
+  }
+
+  const result = await resolveAutomationArticleImage({
     rawNewsId,
     originalImage: rawItem.originalImage,
     generatedImageUrl: rawItem.generatedImageUrl,
     titleEn: aiOutput.titleEn,
     titleHi: aiOutput.titleHi,
     summaryEn: aiOutput.summaryEn,
+    summaryHi: aiOutput.summaryHi || "",
     categoryId: rawItem.categoryId,
     categoryNameEn,
+    categoryNameHi,
+    sourceName: rawItem.sourceName || "",
+    sourceUrl: rawItem.sourceUrl || "",
+    originalLink: rawItem.originalLink || rawItem.sourceUrl || "",
+    sourceTrustLevel,
+    sourceAllowsImageReuse: sourceTrustLevel !== "low",
     fallbackImage: settings.defaultCategoryImage,
     generateAiImages: settings.generateAiImages !== false,
     preferHostedFirst: options?.preferHostedImage,
+    articleId: options?.articleId,
   });
+
+  return {
+    imageUrl: result.imageUrl,
+    generated: result.generated,
+    metadata: result.metadata,
+    requiresManualReview: result.requiresManualReview,
+  };
+}
+
+function applyImageMetadataToNewsUpdate(metadata?: ArticleImageMetadata): Record<string, unknown> {
+  if (!metadata) return {};
+  const update: Record<string, unknown> = {};
+  const fields: (keyof ArticleImageMetadata)[] = [
+    "imageOriginalUrl",
+    "imageThumbnailUrl",
+    "imageMediumUrl",
+    "imageLargeUrl",
+    "imageWebpUrl",
+    "imageCredit",
+    "imageSourceName",
+    "imageSourcePageUrl",
+    "imageLicence",
+    "imageOrigin",
+    "imageProvider",
+    "imagePrompt",
+    "imageRelevanceScore",
+    "imageQualityScore",
+    "imageStatus",
+    "focalPointX",
+    "focalPointY",
+    "imageGeneratedAt",
+    "imageFileHash",
+  ];
+  for (const key of fields) {
+    if (metadata[key] !== undefined) update[key] = metadata[key];
+  }
+  return update;
 }
 
 export async function processRawNewsItem(
@@ -134,13 +195,15 @@ export async function processRawNewsItem(
     });
 
     if (autoPublish) {
-      const { imageUrl, generated } = await resolveImageForRawItem(
+      const imageResult = await resolveImageForRawItem(
         rawNewsId,
         { ...rawItem, categoryId },
         aiOutput,
         categoryNameEn,
+        (catData as { nameHi?: string }).nameHi,
         options
       );
+      const { imageUrl, generated, metadata } = imageResult;
       if (generated && imageUrl !== settings.defaultCategoryImage) {
         await updateRawNews(rawNewsId, { generatedImageUrl: imageUrl });
       }
@@ -153,6 +216,7 @@ export async function processRawNewsItem(
         categoryNameHi: (catData as { nameHi?: string }).nameHi || "देश",
         categoryNameEn,
         imageUrl,
+        imageMetadata: metadata,
         author: settings.defaultAuthorName,
         publish: true,
       });
@@ -202,12 +266,14 @@ export async function approveAndPublishRawNews(rawNewsId: string): Promise<strin
   const category = await getCategoryById(rawItem.categoryId);
   const categoryNameEn = (category as { nameEn?: string })?.nameEn || "India";
 
-  const { imageUrl, generated } = await resolveImageForRawItem(
+  const imageResult = await resolveImageForRawItem(
     rawNewsId,
     rawItem,
     rawItem.aiOutput,
-    categoryNameEn
+    categoryNameEn,
+    (category as { nameHi?: string })?.nameHi
   );
+  const { imageUrl, generated, metadata } = imageResult;
 
   if (generated && imageUrl !== settings.defaultCategoryImage) {
     await updateRawNews(rawNewsId, { generatedImageUrl: imageUrl });
@@ -221,6 +287,7 @@ export async function approveAndPublishRawNews(rawNewsId: string): Promise<strin
     categoryNameHi: (category as { nameHi?: string })?.nameHi || "देश",
     categoryNameEn,
     imageUrl,
+    imageMetadata: metadata,
     author: settings.defaultAuthorName,
     publish: true,
   });
@@ -255,23 +322,26 @@ export async function repairPublishedNewsImage(newsId: string): Promise<{
   const category = await getCategoryById(rawItem.categoryId);
   const categoryNameEn = (category as { nameEn?: string })?.nameEn || "India";
 
-  const { imageUrl, source } = await resolveImageForRawItem(
+  const imageResult = await resolveImageForRawItem(
     rawNewsId,
     rawItem,
     rawItem.aiOutput,
-    categoryNameEn
+    categoryNameEn,
+    (category as { nameHi?: string })?.nameHi,
+    { articleId: newsId }
   );
-
+  const { imageUrl, metadata } = imageResult;
   const settings = await getAutomationSettings();
   if (imageUrl !== settings.defaultCategoryImage) {
     await db.collection("news").doc(newsId).update({
       imageUrl,
+      ...applyImageMetadataToNewsUpdate(metadata),
       updatedAt: FieldValue.serverTimestamp(),
     });
     await updateRawNews(rawNewsId, { generatedImageUrl: imageUrl });
   }
 
-  return { imageUrl, source };
+  return { imageUrl, source: metadata?.imageOrigin === "openai" ? "ai" : metadata?.imageOrigin === "source" ? "hosted" : "fallback" };
 }
 
 export async function regenerateArticleImage(
@@ -313,13 +383,37 @@ export async function regenerateArticleImage(
     await updateRawNews(linkedRawNewsId, { generatedImageUrl: FieldValue.delete() });
   }
 
+  const analysis = analyzeArticleSubject({
+    articleId: newsId,
+    rawNewsId: storageId,
+    titleEn: titleEn || titleHi,
+    titleHi: titleHi || titleEn,
+    summaryEn: summaryEn || titleEn,
+    summaryHi: String(newsData.summaryHi || ""),
+    categoryId,
+    categoryNameEn,
+    categoryNameHi: String(newsData.categoryNameHi || ""),
+    sourceName: String(newsData.sourceName || ""),
+    sourceUrl: String(newsData.sourceUrl || ""),
+    originalLink: String(newsData.sourceUrl || ""),
+    originalImage: "",
+  });
+
+  if (analysis.isRealPersonPrimary) {
+    throw new Error(
+      "Real-person article: AI face generation is disabled. Use a licensed or official image, or upload manually."
+    );
+  }
+
   const generated = await generateAutomationArticleImage({
     rawNewsId: storageId,
     titleEn: titleEn || titleHi,
     titleHi: titleHi || titleEn,
     summaryEn: summaryEn || titleEn,
+    summaryHi: String(newsData.summaryHi || ""),
     categoryId,
     categoryNameEn,
+    forceNeutral: false,
   });
 
   if (!generated) {
@@ -328,6 +422,9 @@ export async function regenerateArticleImage(
 
   await db.collection("news").doc(newsId).update({
     imageUrl: generated,
+    imageOrigin: "openai",
+    imageStatus: "approved",
+    imageGeneratedAt: new Date().toISOString(),
     updatedAt: FieldValue.serverTimestamp(),
   });
 

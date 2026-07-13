@@ -149,6 +149,10 @@ export default function ArticlePage() {
     setMeta('meta[property="og:title"]', article.ogTitle || seoTitle);
     setMeta('meta[property="og:description"]', article.ogDescription || description);
     setMeta('meta[property="og:url"]', canonicalUrl);
+    const ogImage = article.imageLargeUrl || article.imageWebpUrl || article.imageUrl;
+    if (ogImage && ogImage !== "/logo.png") {
+      setMeta('meta[property="og:image"]', ogImage.startsWith("http") ? ogImage : `${getSiteUrl()}${ogImage}`);
+    }
     setMeta('meta[name="twitter:title"]', article.twitterTitle || article.ogTitle || seoTitle);
     setMeta('meta[name="twitter:description"]', article.twitterDescription || article.ogDescription || description);
 
@@ -291,6 +295,12 @@ export default function ArticlePage() {
                 <NewsArticleImage
                   src={article.imageUrl}
                   alt={imageAlt || title}
+                  variant="hero"
+                  imageLargeUrl={article.imageLargeUrl}
+                  imageMediumUrl={article.imageMediumUrl}
+                  imageThumbnailUrl={article.imageThumbnailUrl}
+                  focalPointX={article.focalPointX}
+                  focalPointY={article.focalPointY}
                   fill
                   className=""
                   sizes="(max-width: 1024px) 100vw, 66vw"

@@ -19,6 +19,16 @@ import Image from "next/image";
 interface NewsFormProps {
   initialData?: NewsFormData;
   articleId?: string;
+  imageMeta?: {
+    imageOrigin?: string;
+    imageCredit?: string;
+    imageLicence?: string;
+    imageRelevanceScore?: number;
+    imageQualityScore?: number;
+    imagePrompt?: string;
+    imageStatus?: string;
+    isRealPersonPrimary?: boolean;
+  };
   onSubmit: (data: NewsFormData) => Promise<void>;
   submitLabel?: string;
 }
@@ -52,6 +62,7 @@ const defaultFormData: NewsFormData = {
 export default function NewsForm({
   initialData,
   articleId,
+  imageMeta,
   onSubmit,
   submitLabel = "Save Article",
 }: NewsFormProps) {
@@ -248,8 +259,26 @@ export default function NewsForm({
           </div>
           {articleId && (
             <p className="mb-3 text-xs text-gray-500">
-              Creates a new OpenAI image from the current headline and summary. Takes about 30–60 seconds. Click Update Article to keep other edits.
+              Creates a new OpenAI editorial image from the current headline and summary (30–60 seconds). Real-person articles block AI face generation — upload a licensed image instead.
             </p>
+          )}
+          {imageMeta?.isRealPersonPrimary && (
+            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              Real-person article: AI face generation is disabled. Use a licensed or official image.
+            </div>
+          )}
+          {imageMeta && (imageMeta.imageOrigin || imageMeta.imageRelevanceScore != null) && (
+            <div className="mb-3 grid gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs md:grid-cols-2">
+              {imageMeta.imageOrigin && <p><span className="font-semibold">Origin:</span> {imageMeta.imageOrigin}</p>}
+              {imageMeta.imageStatus && <p><span className="font-semibold">Status:</span> {imageMeta.imageStatus}</p>}
+              {imageMeta.imageRelevanceScore != null && <p><span className="font-semibold">Relevance:</span> {imageMeta.imageRelevanceScore}</p>}
+              {imageMeta.imageQualityScore != null && <p><span className="font-semibold">Quality:</span> {imageMeta.imageQualityScore}</p>}
+              {imageMeta.imageLicence && <p><span className="font-semibold">Licence:</span> {imageMeta.imageLicence}</p>}
+              {imageMeta.imageCredit && <p><span className="font-semibold">Credit:</span> {imageMeta.imageCredit}</p>}
+              {imageMeta.imagePrompt && (
+                <p className="md:col-span-2 line-clamp-3"><span className="font-semibold">Prompt:</span> {imageMeta.imagePrompt}</p>
+              )}
+            </div>
           )}
           <ImageUploader
             value={formData.imageUrl}

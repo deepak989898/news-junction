@@ -75,6 +75,7 @@ export interface AutomationSettings {
   lastFetchRun: string | null;
   lastProcessRun: string | null;
   lastCleanupRun: string | null;
+  imagePipeline?: import("@/lib/image-pipeline/types").ImagePipelineSettings;
 }
 
 export interface AutomationLog {

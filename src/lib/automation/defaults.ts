@@ -1,4 +1,5 @@
 import { AutomationSettings } from "./types";
+import { DEFAULT_IMAGE_PIPELINE_SETTINGS } from "@/lib/image-pipeline/defaults";
 
 export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
   automationEnabled: false,
@@ -18,6 +19,7 @@ export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
   lastFetchRun: null,
   lastProcessRun: null,
   lastCleanupRun: null,
+  imagePipeline: DEFAULT_IMAGE_PIPELINE_SETTINGS,
 };
 
 export const AUTOMATION_SETTINGS_DOC_ID = "automation";

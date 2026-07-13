@@ -1,0 +1,163 @@
+import { getAdminStorage } from "@/lib/firebase-admin";
+import {
+  buildFirebaseStorageDownloadUrl,
+  createStorageDownloadToken,
+  isFirebaseStorageUrl,
+} from "@/lib/firebase-storage-url";
+import { ImageVariantUrls } from "./types";
+import { hashImageBuffer } from "./source-fetcher";
+
+export const VARIANT_SIZES = {
+  large: { width: 1200, height: 675 },
+  medium: { width: 800, height: 450 },
+  thumbnail: { width: 480, height: 270 },
+  small: { width: 320, height: 180 },
+} as const;
+
+const WEBP_QUALITY = 86;
+
+export function isUsableFirebaseImageUrl(url: string): boolean {
+  return isFirebaseStorageUrl(url) && url.includes("firebasestorage.googleapis.com") && url.includes("token=");
+}
+
+async function getSharp() {
+  return (await import("sharp")).default;
+}
+
+export async function measureImageQuality(buffer: Buffer): Promise<{
+  width: number;
+  height: number;
+  clarityScore: number;
+  qualityScore: number;
+}> {
+  try {
+    const sharp = await getSharp();
+    const image = sharp(buffer);
+    const meta = await image.metadata();
+    const width = meta.width || 0;
+    const height = meta.height || 0;
+
+    const stats = await image.stats();
+    const avgStdDev =
+      stats.channels.reduce((sum, ch) => sum + (ch.stdev || 0), 0) / Math.max(stats.channels.length, 1);
+
+    let clarityScore = Math.min(100, Math.round(avgStdDev * 4));
+    let qualityScore = 50;
+
+    if (width >= 1200 && height >= 675) qualityScore += 30;
+    else if (width >= 800 && height >= 450) qualityScore += 20;
+    else if (width >= 640 && height >= 360) qualityScore += 10;
+    else qualityScore -= 20;
+
+    if (width < 320 || height < 180) qualityScore -= 30;
+
+    qualityScore = Math.max(0, Math.min(100, qualityScore));
+    clarityScore = Math.max(0, Math.min(100, clarityScore));
+
+    return { width, height, clarityScore, qualityScore };
+  } catch {
+    return { width: 0, height: 0, clarityScore: 40, qualityScore: 40 };
+  }
+}
+
+async function resizeVariant(
+  buffer: Buffer,
+  width: number,
+  height: number,
+  focalPoint?: { x: number; y: number }
+): Promise<Buffer> {
+  const sharp = await getSharp();
+  const position = focalPoint
+    ? `${Math.round(focalPoint.x * 100)}% ${Math.round(focalPoint.y * 100)}%`
+    : "attention";
+
+  return sharp(buffer)
+    .rotate()
+    .resize(width, height, {
+      fit: "cover",
+      position,
+      kernel: sharp.kernel.lanczos3,
+    })
+    .webp({ quality: WEBP_QUALITY, effort: 5, smartSubsample: true })
+    .toBuffer();
+}
+
+async function uploadVariant(
+  storagePath: string,
+  buffer: Buffer,
+  meta: Record<string, string>
+): Promise<string> {
+  const bucket = getAdminStorage().bucket();
+  const file = bucket.file(storagePath);
+  const downloadToken = createStorageDownloadToken();
+
+  await file.save(buffer, {
+    contentType: "image/webp",
+    resumable: false,
+    metadata: {
+      cacheControl: "public,max-age=31536000,immutable",
+      metadata: {
+        firebaseStorageDownloadTokens: downloadToken,
+        ...meta,
+      },
+    },
+  });
+
+  return buildFirebaseStorageDownloadUrl(bucket.name, storagePath, downloadToken);
+}
+
+export async function optimizeAndUploadVariants(
+  articleStorageId: string,
+  sourceBuffer: Buffer,
+  focalPoint?: { x: number; y: number }
+): Promise<{ variants: ImageVariantUrls; fileHash: string; qualityScore: number; clarityScore: number }> {
+  const fileHash = hashImageBuffer(sourceBuffer);
+  const measured = await measureImageQuality(sourceBuffer);
+  const ts = Date.now();
+  const basePath = `news/images/${articleStorageId}/${ts}`;
+
+  const [large, medium, thumbnail] = await Promise.all([
+    resizeVariant(sourceBuffer, VARIANT_SIZES.large.width, VARIANT_SIZES.large.height, focalPoint),
+    resizeVariant(sourceBuffer, VARIANT_SIZES.medium.width, VARIANT_SIZES.medium.height, focalPoint),
+    resizeVariant(sourceBuffer, VARIANT_SIZES.thumbnail.width, VARIANT_SIZES.thumbnail.height, focalPoint),
+  ]);
+
+  const [largeUrl, mediumUrl, thumbUrl] = await Promise.all([
+    uploadVariant(`${basePath}/large.webp`, large, {
+      width: String(VARIANT_SIZES.large.width),
+      height: String(VARIANT_SIZES.large.height),
+      variant: "large",
+    }),
+    uploadVariant(`${basePath}/medium.webp`, medium, {
+      width: String(VARIANT_SIZES.medium.width),
+      height: String(VARIANT_SIZES.medium.height),
+      variant: "medium",
+    }),
+    uploadVariant(`${basePath}/thumb.webp`, thumbnail, {
+      width: String(VARIANT_SIZES.thumbnail.width),
+      height: String(VARIANT_SIZES.thumbnail.height),
+      variant: "thumbnail",
+    }),
+  ]);
+
+  return {
+    variants: {
+      large: largeUrl,
+      medium: mediumUrl,
+      thumbnail: thumbUrl,
+      webp: largeUrl,
+    },
+    fileHash,
+    qualityScore: measured.qualityScore,
+    clarityScore: measured.clarityScore,
+  };
+}
+
+/** Backward-compatible single upload used by legacy callers */
+export async function optimizeAndUploadSingle(
+  articleStorageId: string,
+  sourceBuffer: Buffer
+): Promise<string> {
+  const result = await optimizeAndUploadVariants(articleStorageId, sourceBuffer);
+  return result.variants.large;
+}

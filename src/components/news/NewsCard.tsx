@@ -32,6 +32,17 @@ export default function NewsCard({
   const publishedDate = formatRelativeTime(toDate(article.publishedAt), language);
   const imageAlt = language === "hi" ? article.imageAltHi : article.imageAltEn;
 
+  const imageProps = (variantSize: "card" | "thumb" | "sidebar" = "card") => ({
+    src: article.imageUrl,
+    alt: imageAlt || title,
+    variant: variantSize,
+    imageMediumUrl: article.imageMediumUrl,
+    imageLargeUrl: article.imageLargeUrl,
+    imageThumbnailUrl: article.imageThumbnailUrl,
+    focalPointX: article.focalPointX,
+    focalPointY: article.focalPointY,
+  });
+
   if (variant === "hero-side") {
     return (
       <Link
@@ -41,8 +52,7 @@ export default function NewsCard({
         {showImage && article.imageUrl && (
           <div className="relative h-20 w-[7.5rem] shrink-0 overflow-hidden rounded-lg bg-gray-100 sm:h-24 sm:w-36">
             <NewsArticleImage
-              src={article.imageUrl}
-              alt={imageAlt || title}
+              {...imageProps("thumb")}
               fill
               className="transition-transform group-hover:scale-105"
               sizes="144px"
@@ -69,8 +79,7 @@ export default function NewsCard({
         {showImage && article.imageUrl && (
           <div className="relative h-24 w-40 shrink-0 overflow-hidden rounded-lg bg-gray-100 md:h-28 md:w-44">
             <NewsArticleImage
-              src={article.imageUrl}
-              alt={imageAlt || title}
+              {...imageProps("thumb")}
               fill
               className="transition-transform group-hover:scale-105"
               sizes="(max-width: 768px) 160px, 176px"
@@ -100,8 +109,7 @@ export default function NewsCard({
         {showImage && article.imageUrl && (
           <div className="relative mb-2 aspect-[16/9] overflow-hidden rounded-lg bg-gray-100">
             <NewsArticleImage
-              src={article.imageUrl}
-              alt={imageAlt || title}
+              {...imageProps("thumb")}
               fill
               className="transition-transform group-hover:scale-105"
               sizes="(max-width: 768px) 50vw, 200px"
@@ -124,8 +132,7 @@ export default function NewsCard({
       {showImage && article.imageUrl && (
         <div className="relative aspect-[16/9] overflow-hidden bg-gray-100">
           <NewsArticleImage
-            src={article.imageUrl}
-            alt={imageAlt || title}
+            {...imageProps("card")}
             fill
             className="transition-transform group-hover:scale-105"
             sizes="(max-width: 768px) 100vw, 33vw"

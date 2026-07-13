@@ -41,6 +41,7 @@ const navItems = [
   { href: "/admin/ai/content-studio", label: "AI Content Studio", icon: Sparkles, roles: ["super_admin", "editor"] },
   { href: "/admin/ai/seo-manager", label: "AI SEO Manager", icon: SearchCheck, roles: ["super_admin", "editor"] },
   { href: "/admin/ai/media-studio", label: "AI Media Studio", icon: ImagePlus, roles: ["super_admin", "editor"] },
+  { href: "/admin/ai/media-studio/image-audit", label: "Image Audit", icon: Image, roles: ["super_admin", "editor"] },
   { href: "/admin/ai/voice-video-studio", label: "AI Voice & Video Studio", icon: Mic2, roles: ["super_admin", "editor"] },
   { href: "/admin/ai/editorial-manager", label: "AI Editorial Manager", icon: ShieldCheck, roles: ["super_admin", "editor"] },
   { href: "/admin/ai/analytics-manager", label: "AI Analytics Manager", icon: BarChart3, roles: ["super_admin", "editor"] },
