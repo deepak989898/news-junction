@@ -75,6 +75,10 @@ export interface VideoPackage {
   audioAssetId?: string;
   subtitleUrl?: string;
   thumbnailUrl?: string;
+  videoUrl?: string;
+  videoDurationSec?: number;
+  renderStatus?: "pending" | "success" | "failed" | "skipped";
+  renderError?: string | null;
   caption: string;
   hashtags: string[];
   status: VideoPackageStatus;

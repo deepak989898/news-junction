@@ -3,6 +3,7 @@ import { verifyAdmin } from "@/lib/auth/verify-admin";
 import { generateVideoPackage } from "@/lib/ai-voice-video/service";
 
 export const runtime = "nodejs";
+export const maxDuration = 120;
 
 export async function POST(request: NextRequest) {
   const admin = await verifyAdmin(request);

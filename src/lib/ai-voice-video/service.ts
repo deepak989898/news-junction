@@ -2,6 +2,7 @@ import { getAdminDb, getAdminStorage } from "@/lib/firebase-admin";
 import { callAI, estimateCost, estimateTokensFromText } from "@/lib/ai-studio/ai-client";
 import { getAISettings, getArticleById } from "@/lib/ai-studio/server-db";
 import { generateMediaAsset } from "@/lib/ai-media/service";
+import { isReelRenderAvailable, renderReelMp4 } from "./render-reel";
 import { DEFAULT_TTS_SETTINGS, TTS_SETTINGS_DOC_ID, VOICE_VIDEO_SYSTEM_PROMPT, VoiceScriptAction } from "./defaults";
 import {
   AudioAsset,
@@ -350,6 +351,85 @@ function buildScenes(script: string): VideoScene[] {
   }));
 }
 
+async function resolveAudioUrl(audioAssetId?: string): Promise<{ url: string; duration: number } | null> {
+  if (!audioAssetId) return null;
+  const doc = await getAdminDb().collection("audioAssets").doc(audioAssetId).get();
+  if (!doc.exists) return null;
+  const data = doc.data() as Record<string, unknown>;
+  const url = asString(data.audioUrl);
+  if (!url) return null;
+  return { url, duration: Number(data.duration || 0) };
+}
+
+async function attachRenderedReel(
+  packageId: string,
+  articleId: string,
+  args: {
+    thumbnailUrl: string;
+    audioUrl: string;
+    audioDuration: number;
+    platform: VideoPlatform;
+    script: string;
+  }
+): Promise<{ videoUrl: string; videoDurationSec: number; renderStatus: "success" | "failed" | "skipped"; renderError: string | null }> {
+  if (!args.thumbnailUrl || !args.audioUrl) {
+    return { videoUrl: "", videoDurationSec: 0, renderStatus: "skipped", renderError: "Missing thumbnail or audio" };
+  }
+  if (!isReelRenderAvailable()) {
+    return { videoUrl: "", videoDurationSec: 0, renderStatus: "skipped", renderError: "ffmpeg not available on server" };
+  }
+
+  try {
+    const { buffer, durationSec } = await renderReelMp4({
+      imageUrl: args.thumbnailUrl,
+      audioUrl: args.audioUrl,
+      platform: args.platform,
+    });
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const storagePath = `ai-voice-video/reels/${articleId}/${packageId}/${stamp}.mp4`;
+    const videoUrl = await uploadBuffer(storagePath, buffer, "video/mp4");
+    const videoDurationSec = durationSec || args.audioDuration || estimatedDurationSeconds(args.script);
+    return { videoUrl, videoDurationSec, renderStatus: "success", renderError: null };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Reel render failed";
+    return { videoUrl: "", videoDurationSec: 0, renderStatus: "failed", renderError: message };
+  }
+}
+
+export async function renderVideoPackage(packageId: string, createdBy: string) {
+  const ref = getAdminDb().collection("videoPackages").doc(packageId);
+  const doc = await ref.get();
+  if (!doc.exists) throw new Error("Video package not found");
+  const data = doc.data() as Record<string, unknown>;
+  const audio = await resolveAudioUrl(asString(data.audioAssetId) || undefined);
+  if (!audio) throw new Error("Link audio to this package first (regenerate with audio)");
+
+  await ref.update({ renderStatus: "pending", updatedAt: nowIso() });
+
+  const render = await attachRenderedReel(packageId, asString(data.articleId), {
+    thumbnailUrl: asString(data.thumbnailUrl),
+    audioUrl: audio.url,
+    audioDuration: audio.duration,
+    platform: data.platform as VideoPlatform,
+    script: asString(data.script),
+  });
+
+  await ref.update({ ...render, updatedAt: nowIso() });
+  await logVoiceVideo({
+    articleId: asString(data.articleId),
+    actionType: "video_package_generation",
+    status: render.renderStatus === "success" ? "success" : "failed",
+    outputPreview: render.videoUrl || render.renderError || "",
+    createdBy,
+  });
+
+  if (render.renderStatus === "failed") {
+    throw new Error(render.renderError || "Reel render failed");
+  }
+
+  return { id: packageId, ...data, ...render };
+}
+
 export async function generateVideoPackage(args: {
   articleId: string;
   language: VoiceVideoLanguage;
@@ -378,6 +458,8 @@ export async function generateVideoPackage(args: {
     thumbnailUrl = asString(article.imageUrl);
   }
 
+  const audio = await resolveAudioUrl(args.audioAssetId);
+
   const payload: Omit<VideoPackage, "id"> = {
     articleId: args.articleId,
     language: args.language,
@@ -387,6 +469,10 @@ export async function generateVideoPackage(args: {
     audioAssetId: args.audioAssetId,
     subtitleUrl: args.subtitleUrl,
     thumbnailUrl,
+    videoUrl: "",
+    videoDurationSec: 0,
+    renderStatus: audio?.url ? "pending" : "skipped",
+    renderError: audio?.url ? null : "Generate and link audio before MP4 render",
     caption: args.caption,
     hashtags: args.hashtags,
     status: "generated",
@@ -394,15 +480,38 @@ export async function generateVideoPackage(args: {
     updatedAt: nowIso(),
   };
   const ref = await getAdminDb().collection("videoPackages").add(payload);
+
+  let finalPayload = { ...payload };
+  if (audio?.url) {
+    const render = await attachRenderedReel(ref.id, args.articleId, {
+      thumbnailUrl,
+      audioUrl: audio.url,
+      audioDuration: audio.duration,
+      platform: args.platform,
+      script: args.script,
+    });
+    finalPayload = { ...finalPayload, ...render };
+    await ref.update({ ...render, updatedAt: nowIso() });
+  }
+
   await logVoiceVideo({
     articleId: args.articleId,
     actionType: "video_package_generation",
-    status: "success",
-    outputPreview: JSON.stringify({ caption: args.caption, hashtags: args.hashtags }).slice(0, 280),
+    status: finalPayload.renderStatus === "failed" ? "failed" : "success",
+    outputPreview: JSON.stringify({
+      caption: args.caption,
+      videoUrl: finalPayload.videoUrl || null,
+      renderStatus: finalPayload.renderStatus,
+    }).slice(0, 280),
     estimatedCost: 0,
     createdBy: args.createdBy,
   });
-  return { id: ref.id, ...payload };
+
+  if (finalPayload.renderStatus === "failed") {
+    throw new Error(finalPayload.renderError || "Video package saved but MP4 render failed");
+  }
+
+  return { id: ref.id, ...finalPayload };
 }
 
 export async function generateDigest(args: {

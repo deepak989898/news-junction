@@ -27,6 +27,8 @@ export const generateSubtitlesApi = (payload: Record<string, unknown>) =>
   callVoiceVideoApi("/api/ai/generate-subtitles", "POST", payload);
 export const generateVideoPackageApi = (payload: Record<string, unknown>) =>
   callVoiceVideoApi("/api/ai/generate-video-package", "POST", payload);
+export const renderVideoPackageApi = (payload: Record<string, unknown>) =>
+  callVoiceVideoApi("/api/ai/render-video-package", "POST", payload);
 export const generateDigestApi = (payload: Record<string, unknown>) =>
   callVoiceVideoApi("/api/ai/generate-digest", "POST", payload);
 export const approveAudioVideoApi = (payload: Record<string, unknown>) =>

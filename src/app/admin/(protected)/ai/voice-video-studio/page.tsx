@@ -16,6 +16,7 @@ import {
   generateVideoPackageApi,
   generateVoiceScriptApi,
   getVoiceVideoStudioApi,
+  renderVideoPackageApi,
 } from "@/lib/ai-voice-video/client-api";
 import { VOICE_SCRIPT_ACTIONS } from "@/lib/ai-voice-video/defaults";
 import toast from "react-hot-toast";
@@ -64,6 +65,7 @@ export default function VoiceVideoStudioPage() {
   const [digestType, setDigestType] = useState<(typeof DIGEST_TYPES)[number]>("morning_bulletin");
   const [selectedDigestIds, setSelectedDigestIds] = useState<string[]>([]);
   const [settingsDraft, setSettingsDraft] = useState<Record<string, unknown>>({});
+  const [renderingId, setRenderingId] = useState<string | null>(null);
 
   const refresh = async () => {
     const [news, data] = await Promise.all([getAllNewsForAdmin(), getVoiceVideoStudioApi()]);
@@ -151,18 +153,37 @@ export default function VoiceVideoStudioPage() {
       toast.error("Generate audio first, then create video package");
       return;
     }
-    await generateVideoPackageApi({
-      articleId: selectedArticleId,
-      language,
-      platform,
-      script,
-      audioAssetId: linkedAudioId,
-      subtitleUrl: subtitleUrl || undefined,
-      caption,
-      hashtags: hashtags.split(",").map((x) => x.trim()).filter(Boolean),
-    });
-    toast.success("Video package generated with linked audio");
-    await refresh();
+    try {
+      await generateVideoPackageApi({
+        articleId: selectedArticleId,
+        language,
+        platform,
+        script,
+        audioAssetId: linkedAudioId,
+        subtitleUrl: subtitleUrl || undefined,
+        caption,
+        hashtags: hashtags.split(",").map((x) => x.trim()).filter(Boolean),
+      });
+      toast.success("Reel MP4 generated — preview below");
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Video package failed");
+      await refresh();
+    }
+  };
+
+  const rerunReelRender = async (packageId: string) => {
+    setRenderingId(packageId);
+    try {
+      await renderVideoPackageApi({ packageId });
+      toast.success("Reel MP4 rendered");
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Re-render failed");
+      await refresh();
+    } finally {
+      setRenderingId(null);
+    }
   };
 
   const runDigest = async () => {
@@ -318,20 +339,16 @@ export default function VoiceVideoStudioPage() {
             How to preview & publish
           </p>
           <ol className="mt-2 list-decimal space-y-1 pl-5 text-blue-800">
-            <li>Generate <strong>Script</strong> → <strong>Audio</strong> → <strong>Video Package</strong> (top section).</li>
+            <li>Generate <strong>Script</strong> → <strong>Audio</strong> → <strong>Generate Video Package</strong> — builds a 9:16 MP4 reel automatically.</li>
             <li>
-              <strong>Preview</strong> = play the linked audio below + view thumbnail & caption (no MP4 file is rendered — upload
-              audio + image manually to Reels/Shorts, or use AI Social Manager).
+              <strong>Preview</strong> = play the <strong>MP4 video</strong> below (thumbnail + voiceover combined).
             </li>
             <li>
-              <strong>Approve</strong> → review OK → <strong>Publish Package</strong> marks it ready in CMS.
-            </li>
-            <li>
-              Then open{" "}
+              <strong>Approve</strong> → <strong>Publish Package</strong> → post via{" "}
               <a href="/admin/ai/social-manager" className="font-semibold text-[#c41e20] underline">
                 AI Social Manager
               </a>{" "}
-              to schedule/post to Facebook or Telegram.
+              or download MP4 for manual upload.
             </li>
           </ol>
         </div>
@@ -340,6 +357,10 @@ export default function VoiceVideoStudioPage() {
             const linkedAudio = resolveLinkedAudio(p, audioAssets);
             const audioUrl = linkedAudio ? String(linkedAudio.audioUrl || "") : "";
             const thumbnailUrl = String(p.thumbnailUrl || "");
+            const videoUrl = String(p.videoUrl || "");
+            const renderStatus = String(p.renderStatus || "");
+            const renderError = String(p.renderError || "");
+            const videoDurationSec = Number(p.videoDurationSec || 0);
             const subtitleUrlPkg = String(p.subtitleUrl || "");
             const status = String(p.status || "draft");
             const scenes = (p.scenes as Record<string, unknown>[]) || [];
@@ -360,6 +381,41 @@ export default function VoiceVideoStudioPage() {
                 {Array.isArray(p.hashtags) && (p.hashtags as string[]).length > 0 ? (
                   <p className="mt-1 text-xs text-gray-500">#{((p.hashtags as string[]) || []).join(" #")}</p>
                 ) : null}
+
+                {renderStatus ? (
+                  <p className={`mt-2 text-xs font-medium ${renderStatus === "success" ? "text-green-700" : renderStatus === "failed" ? "text-red-700" : "text-amber-700"}`}>
+                    MP4 render: {renderStatus}
+                    {videoDurationSec > 0 ? ` · ${videoDurationSec}s` : ""}
+                    {renderError ? ` — ${renderError}` : ""}
+                  </p>
+                ) : null}
+
+                {videoUrl ? (
+                  <div className="mt-3">
+                    <p className="mb-1 text-xs font-semibold uppercase text-gray-500">Reel video preview (MP4 · 9:16)</p>
+                    <div className="max-w-xs overflow-hidden rounded-lg border bg-black">
+                      <video controls className="aspect-[9/16] w-full bg-black" preload="metadata" playsInline>
+                        <source src={videoUrl} type="video/mp4" />
+                      </video>
+                    </div>
+                    <a href={videoUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-[#c41e20] hover:underline">
+                      <ExternalLink className="h-3 w-3" />
+                      Download MP4
+                    </a>
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                    No MP4 yet.
+                    <button
+                      type="button"
+                      className="ml-2 rounded border border-[#1a2b4c] bg-[#1a2b4c] px-2 py-0.5 text-xs font-semibold text-white disabled:opacity-50"
+                      disabled={renderingId === String(p.id) || !audioUrl}
+                      onClick={() => rerunReelRender(String(p.id))}
+                    >
+                      {renderingId === String(p.id) ? "Rendering…" : "Generate MP4 Reel"}
+                    </button>
+                  </div>
+                )}
 
                 <div className="mt-3 grid gap-4 md:grid-cols-2">
                   <div>
@@ -476,6 +532,16 @@ export default function VoiceVideoStudioPage() {
                     <Save className="mr-1 inline h-3 w-3" />
                     Save Draft
                   </button>
+                  {videoUrl ? (
+                    <button
+                      type="button"
+                      className="rounded border px-2 py-1"
+                      disabled={renderingId === String(p.id)}
+                      onClick={() => rerunReelRender(String(p.id))}
+                    >
+                      {renderingId === String(p.id) ? "Re-rendering…" : "Re-render MP4"}
+                    </button>
+                  ) : null}
                   {status === "published" && (
                     <a
                       href="/admin/ai/social-manager"
