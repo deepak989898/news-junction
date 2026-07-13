@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Mic, Captions, Clapperboard, Check, X, Save, Upload, FileAudio } from "lucide-react";
+import { Mic, Captions, Clapperboard, Check, X, Save, Upload, FileAudio, Play, ExternalLink, Copy, Info } from "lucide-react";
 import AdminTopbar from "@/components/layout/AdminTopbar";
 import RoleGuard from "@/components/admin/RoleGuard";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
@@ -22,6 +22,30 @@ import toast from "react-hot-toast";
 
 const DIGEST_TYPES = ["morning_bulletin", "evening_bulletin", "top5", "category", "breaking_recap"] as const;
 const PLATFORMS = ["youtube_shorts", "instagram_reels", "facebook_reels", "telegram"] as const;
+
+function statusBadgeClass(status: string) {
+  switch (String(status).toLowerCase()) {
+    case "published":
+      return "bg-green-100 text-green-800 border-green-300";
+    case "approved":
+      return "bg-blue-100 text-blue-800 border-blue-300";
+    case "generated":
+      return "bg-amber-100 text-amber-900 border-amber-300";
+    case "rejected":
+      return "bg-red-100 text-red-800 border-red-300";
+    default:
+      return "bg-gray-100 text-gray-700 border-gray-300";
+  }
+}
+
+function resolveLinkedAudio(
+  pkg: Record<string, unknown>,
+  audioAssets: Record<string, unknown>[]
+): Record<string, unknown> | null {
+  const id = String(pkg.audioAssetId || "");
+  if (!id) return null;
+  return audioAssets.find((a) => String(a.id) === id) || null;
+}
 
 export default function VoiceVideoStudioPage() {
   const { adminUser } = useAuth();
@@ -116,17 +140,28 @@ export default function VoiceVideoStudioPage() {
 
   const runVideoPackage = async () => {
     if (!selectedArticleId || !script.trim()) return toast.error("Generate script first");
+    let linkedAudioId = audioId;
+    if (!linkedAudioId) {
+      const latest = audioAssets
+        .filter((a) => String(a.articleId) === selectedArticleId && String(a.status) !== "rejected")
+        .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))[0];
+      linkedAudioId = latest ? String(latest.id) : "";
+    }
+    if (!linkedAudioId) {
+      toast.error("Generate audio first, then create video package");
+      return;
+    }
     await generateVideoPackageApi({
       articleId: selectedArticleId,
       language,
       platform,
       script,
-      audioAssetId: audioId || undefined,
+      audioAssetId: linkedAudioId,
       subtitleUrl: subtitleUrl || undefined,
       caption,
       hashtags: hashtags.split(",").map((x) => x.trim()).filter(Boolean),
     });
-    toast.success("Video package generated");
+    toast.success("Video package generated with linked audio");
     await refresh();
   };
 
@@ -276,21 +311,183 @@ export default function VoiceVideoStudioPage() {
       </div>
 
       <div className="mb-6 rounded-xl bg-white p-5 shadow-sm">
-        <h3 className="mb-3 font-semibold text-[#1a2b4c]">Video Package Preview & Approval</h3>
-        <div className="space-y-3">
-          {filteredPackages.map((p) => (
-            <div key={String(p.id)} className="rounded border p-3">
-              <p className="text-sm font-medium">{String(p.platform)} · {String(p.language)} · {String(p.status)}</p>
-              <p className="text-sm text-gray-600">{String(p.caption || "")}</p>
-              {String(p.thumbnailUrl || "") && <img src={String(p.thumbnailUrl)} alt="thumbnail" className="mt-2 h-28 rounded object-cover" />}
-              <div className="mt-2 flex gap-2 text-xs">
-                <button className="rounded border px-2 py-1 text-green-700" onClick={() => reviewItem("video_package", String(p.id), "approve")}>Approve</button>
-                <button className="rounded border px-2 py-1 text-red-700" onClick={() => reviewItem("video_package", String(p.id), "reject")}>Reject</button>
-                <button className="rounded border px-2 py-1" onClick={() => reviewItem("video_package", String(p.id), "publish")}>Publish Package</button>
-                <button className="rounded border px-2 py-1" onClick={() => reviewItem("video_package", String(p.id), "save_draft")}>Save Draft</button>
+        <h3 className="mb-2 font-semibold text-[#1a2b4c]">Video Package Preview & Approval</h3>
+        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          <p className="flex items-start gap-2 font-medium">
+            <Info className="mt-0.5 h-4 w-4 shrink-0" />
+            How to preview & publish
+          </p>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-blue-800">
+            <li>Generate <strong>Script</strong> → <strong>Audio</strong> → <strong>Video Package</strong> (top section).</li>
+            <li>
+              <strong>Preview</strong> = play the linked audio below + view thumbnail & caption (no MP4 file is rendered — upload
+              audio + image manually to Reels/Shorts, or use AI Social Manager).
+            </li>
+            <li>
+              <strong>Approve</strong> → review OK → <strong>Publish Package</strong> marks it ready in CMS.
+            </li>
+            <li>
+              Then open{" "}
+              <a href="/admin/ai/social-manager" className="font-semibold text-[#c41e20] underline">
+                AI Social Manager
+              </a>{" "}
+              to schedule/post to Facebook or Telegram.
+            </li>
+          </ol>
+        </div>
+        <div className="space-y-4">
+          {filteredPackages.map((p) => {
+            const linkedAudio = resolveLinkedAudio(p, audioAssets);
+            const audioUrl = linkedAudio ? String(linkedAudio.audioUrl || "") : "";
+            const thumbnailUrl = String(p.thumbnailUrl || "");
+            const subtitleUrlPkg = String(p.subtitleUrl || "");
+            const status = String(p.status || "draft");
+            const scenes = (p.scenes as Record<string, unknown>[]) || [];
+            const canPublish = status === "approved" || status === "generated";
+
+            return (
+              <div key={String(p.id)} className={`rounded-lg border p-4 ${status === "published" ? "border-green-300 bg-green-50/40" : ""}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium capitalize">
+                    {String(p.platform).replace(/_/g, " ")} · {String(p.language)} · {String(p.id).slice(0, 8)}…
+                  </p>
+                  <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold capitalize ${statusBadgeClass(status)}`}>
+                    {status}
+                  </span>
+                </div>
+
+                {p.caption ? <p className="mt-2 text-sm text-gray-700">{String(p.caption)}</p> : null}
+                {Array.isArray(p.hashtags) && (p.hashtags as string[]).length > 0 ? (
+                  <p className="mt-1 text-xs text-gray-500">#{((p.hashtags as string[]) || []).join(" #")}</p>
+                ) : null}
+
+                <div className="mt-3 grid gap-4 md:grid-cols-2">
+                  <div>
+                    <p className="mb-1 text-xs font-semibold uppercase text-gray-500">Visual preview (thumbnail)</p>
+                    {thumbnailUrl ? (
+                      <div className="relative max-w-xs overflow-hidden rounded-lg border bg-gray-900">
+                        <img src={thumbnailUrl} alt="Reel thumbnail" className="h-52 w-full object-cover" />
+                        <a
+                          href={thumbnailUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="absolute bottom-2 right-2 flex items-center gap-1 rounded bg-black/70 px-2 py-1 text-xs text-white hover:bg-black"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          Open image
+                        </a>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-amber-700">No thumbnail — regenerate package or check article image.</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="mb-1 text-xs font-semibold uppercase text-gray-500">Audio preview (play reel voiceover)</p>
+                    {audioUrl ? (
+                      <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                        <p className="mb-2 flex items-center gap-1 text-xs text-green-800">
+                          <Play className="h-3 w-3" />
+                          Linked audio · {String(linkedAudio?.voice || "TTS")} · {String(linkedAudio?.status || "")}
+                        </p>
+                        <audio controls className="w-full" preload="metadata">
+                          <source src={audioUrl} type="audio/mpeg" />
+                        </audio>
+                        <a href={audioUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-[#c41e20] hover:underline">
+                          <ExternalLink className="h-3 w-3" />
+                          Download MP3
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                        No audio linked. Generate audio first, then regenerate video package with the same article selected.
+                      </div>
+                    )}
+
+                    {subtitleUrlPkg ? (
+                      <a
+                        href={subtitleUrlPkg}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-flex items-center gap-1 text-xs text-[#c41e20] hover:underline"
+                      >
+                        <Captions className="h-3 w-3" />
+                        Open subtitle file
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+
+                {scenes.length > 0 && (
+                  <details className="mt-3 rounded border bg-gray-50 p-2 text-sm">
+                    <summary className="cursor-pointer font-medium text-[#1a2b4c]">Scene script ({scenes.length} scenes)</summary>
+                    <ol className="mt-2 list-decimal space-y-1 pl-5 text-gray-700">
+                      {scenes.map((s) => (
+                        <li key={String(s.index)}>
+                          {String(s.line)}
+                          {s.visualSuggestion ? (
+                            <span className="block text-xs text-gray-500">{String(s.visualSuggestion)}</span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ol>
+                  </details>
+                )}
+
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  {p.caption ? (
+                    <button
+                      type="button"
+                      className="rounded border px-2 py-1"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(String(p.caption));
+                        toast.success("Caption copied");
+                      }}
+                    >
+                      <Copy className="mr-1 inline h-3 w-3" />
+                      Copy caption
+                    </button>
+                  ) : null}
+                  <button
+                    className="rounded border border-green-300 bg-green-50 px-2 py-1 text-green-800 disabled:opacity-40"
+                    disabled={status === "approved" || status === "published"}
+                    onClick={() => reviewItem("video_package", String(p.id), "approve")}
+                  >
+                    <Check className="mr-1 inline h-3 w-3" />
+                    Approve
+                  </button>
+                  <button
+                    className="rounded border border-red-200 bg-red-50 px-2 py-1 text-red-800"
+                    onClick={() => reviewItem("video_package", String(p.id), "reject")}
+                  >
+                    <X className="mr-1 inline h-3 w-3" />
+                    Reject
+                  </button>
+                  <button
+                    className="rounded border border-[#1a2b4c] bg-[#1a2b4c] px-2 py-1 font-semibold text-white disabled:opacity-40"
+                    disabled={!canPublish}
+                    title={status === "published" ? "Already published" : "Mark package as published / ready for social"}
+                    onClick={() => reviewItem("video_package", String(p.id), "publish")}
+                  >
+                    <Upload className="mr-1 inline h-3 w-3" />
+                    Publish Package
+                  </button>
+                  <button className="rounded border px-2 py-1" onClick={() => reviewItem("video_package", String(p.id), "save_draft")}>
+                    <Save className="mr-1 inline h-3 w-3" />
+                    Save Draft
+                  </button>
+                  {status === "published" && (
+                    <a
+                      href="/admin/ai/social-manager"
+                      className="rounded border border-green-400 bg-green-100 px-2 py-1 font-medium text-green-900 hover:bg-green-200"
+                    >
+                      → Post on Social Manager
+                    </a>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {!filteredPackages.length && <p className="text-sm text-gray-500">No video package generated yet.</p>}
         </div>
       </div>
