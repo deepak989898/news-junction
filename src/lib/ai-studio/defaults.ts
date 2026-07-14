@@ -11,7 +11,7 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   monthlyCostLimit: 50,
   requireApprovalForAIChanges: false,
   defaultTone: "neutral",
-  defaultLength: "long",
+  defaultLength: "detailed",
 };
 
 export const DEFAULT_PROMPT_TEMPLATES: Omit<AIPromptTemplate, "id" | "createdAt" | "updatedAt">[] = [

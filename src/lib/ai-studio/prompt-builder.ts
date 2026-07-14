@@ -85,10 +85,10 @@ export async function buildPrompt(
       userPrompt = `Shorten this summary to 1-2 sentences. Keep key facts.\nSummary: ${summary}`;
       break;
     case "improve_content":
-      userPrompt = `${template}\nTone: ${tone}.\nTitle: ${title}\nContent:\n${content.slice(0, 6000)}`;
+      userPrompt = `${template}\nTone: ${tone}. Length: long (target 6-9 HTML <p> paragraphs, ~450-750 words when facts allow). Do not invent.\nTitle: ${title}\nContent:\n${content.slice(0, 6000)}`;
       break;
     case "notes_to_article":
-      userPrompt = `Convert these rough notes into a structured news article in HTML (p tags only). Do not invent facts beyond notes.\nNotes:\n${content || summary}`;
+      userPrompt = `Convert these rough notes into a structured FULL news article in HTML (6-9 <p> tags when notes support it). Also keep a clear lead. Do not invent facts beyond notes.\nNotes:\n${content || summary}`;
       break;
     case "translate_hi_en":
       userPrompt = `${template}\nTranslate to English:\nTitle: ${ctx.titleHi || title}\nContent:\n${stripHtml(ctx.contentHi || content)}`;
