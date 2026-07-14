@@ -46,6 +46,15 @@ export interface GoogleTrendsSettings {
   lastResearchRun: string | null;
   lastProcessRun: string | null;
   lastPublishRun: string | null;
+  /** Last fetch counters shown in admin UI */
+  lastFetchSummary?: {
+    fetched: number;
+    skipped: number;
+    duplicates: number;
+    errors: number;
+    total: number;
+    message: string;
+  } | null;
   /** Set true only when official Google Trends API credentials are configured */
   officialApiConfigured: boolean;
 }

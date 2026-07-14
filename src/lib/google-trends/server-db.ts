@@ -41,6 +41,7 @@ export async function getGoogleTrendsSettings(): Promise<GoogleTrendsSettings> {
     lastResearchRun: data.lastResearchRun?.toDate?.()?.toISOString() || data.lastResearchRun || null,
     lastProcessRun: data.lastProcessRun?.toDate?.()?.toISOString() || data.lastProcessRun || null,
     lastPublishRun: data.lastPublishRun?.toDate?.()?.toISOString() || data.lastPublishRun || null,
+    lastFetchSummary: data.lastFetchSummary || null,
   };
 }
 
@@ -138,12 +139,20 @@ export async function getTrendTopicsByStatus(status: string, limit = 20): Promis
 
 export async function getRecentTrendTopics(limit = 100): Promise<TrendTopic[]> {
   const db = getAdminDb();
-  const snap = await db
-    .collection(COLLECTIONS.trendTopics)
-    .orderBy("createdAt", "desc")
-    .limit(limit)
-    .get();
-  return snap.docs.map((d) => mapTrendTopic(d.id, d.data()));
+  try {
+    const snap = await db
+      .collection(COLLECTIONS.trendTopics)
+      .orderBy("createdAt", "desc")
+      .limit(limit)
+      .get();
+    return snap.docs.map((d) => mapTrendTopic(d.id, d.data()));
+  } catch {
+    // Fallback when createdAt index / field is missing on early docs.
+    const snap = await db.collection(COLLECTIONS.trendTopics).limit(limit).get();
+    return snap.docs
+      .map((d) => mapTrendTopic(d.id, d.data()))
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  }
 }
 
 export async function findTrendByNormalizedTitle(normalizedTitle: string): Promise<TrendTopic | null> {

@@ -32,8 +32,17 @@ interface Settings {
   officialApiConfigured: boolean;
   maximumTopicsPerRun: number;
   minimumVerifiedSources: number;
+  minimumSearchVolume?: number;
   autoPublishLowRisk: boolean;
   lastFetchRun: string | null;
+  lastFetchSummary?: {
+    fetched: number;
+    skipped: number;
+    duplicates: number;
+    errors: number;
+    total: number;
+    message: string;
+  } | null;
 }
 
 export default function GoogleTrendsAdminPage() {
@@ -86,7 +95,15 @@ export default function GoogleTrendsAdminPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Action failed");
-      toast.success(`${action} completed`);
+      if (action === "fetch") {
+        const msg =
+          data.message ||
+          `Saved ${data.fetched ?? 0} · skipped ${data.skipped ?? 0} · duplicates ${data.duplicates ?? 0} · RSS ${data.total ?? 0}`;
+        if ((data.fetched ?? 0) > 0) toast.success(msg);
+        else toast.error(msg);
+      } else {
+        toast.success(`${action} completed`);
+      }
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Action failed");
@@ -167,6 +184,14 @@ export default function GoogleTrendsAdminPage() {
               <div className="rounded-lg bg-gray-50 p-3"><p className="text-gray-500">Published</p><p className="font-bold">{trends.filter((t) => t.status === "published").length}</p></div>
               <div className="rounded-lg bg-gray-50 p-3"><p className="text-gray-500">Last fetch</p><p className="font-bold text-xs">{settings?.lastFetchRun ? new Date(settings.lastFetchRun).toLocaleString() : "Never"}</p></div>
             </div>
+            {settings?.lastFetchSummary?.message && (
+              <p className="mt-3 text-xs text-gray-600">
+                Last result: {settings.lastFetchSummary.message}
+                {typeof settings.lastFetchSummary.total === "number" && (
+                  <> · RSS {settings.lastFetchSummary.total} · saved {settings.lastFetchSummary.fetched} · skipped {settings.lastFetchSummary.skipped} · duplicates {settings.lastFetchSummary.duplicates}</>
+                )}
+              </p>
+            )}
           </div>
 
           {loading ? (
@@ -187,6 +212,13 @@ export default function GoogleTrendsAdminPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y">
+                    {trends.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">
+                          No trends saved yet. Click <strong>Fetch Trends</strong> — if the toast says duplicates/skipped, there is nothing new to show.
+                        </td>
+                      </tr>
+                    )}
                     {trends.slice(0, 50).map((t) => (
                       <tr key={t.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3">

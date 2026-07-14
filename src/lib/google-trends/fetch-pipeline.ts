@@ -12,7 +12,14 @@ import { calculateTrendPriorityScore, mapGoogleCategoryToNewsJunction } from "./
 export async function runFetchGoogleTrends(options?: { isTest?: boolean }) {
   const settings = await getGoogleTrendsSettings();
   if (!settings.enabled && !options?.isTest) {
-    return { fetched: 0, skipped: 0, duplicates: 0, message: "Google Trends pipeline disabled" };
+    return {
+      fetched: 0,
+      skipped: 0,
+      duplicates: 0,
+      errors: 0,
+      total: 0,
+      message: "Google Trends pipeline disabled",
+    };
   }
 
   if (settings.mode === "officialApi" && !settings.officialApiConfigured) {
@@ -24,15 +31,34 @@ export async function runFetchGoogleTrends(options?: { isTest?: boolean }) {
     settings.mode = "rss";
   }
 
-  const items = await fetchGoogleTrends(
-    settings.mode === "officialApi" && settings.officialApiConfigured ? "officialApi" : "rss",
-    settings.country,
-    settings.maximumTopicsPerRun
-  );
+  // Older Firestore settings often keep minimumSearchVolume=1000, which skips most India RSS rows.
+  let minimumSearchVolume = Number(settings.minimumSearchVolume) || 200;
+  if (minimumSearchVolume > 200) {
+    minimumSearchVolume = 200;
+    await updateGoogleTrendsSettings({ minimumSearchVolume: 200 });
+  }
+
+  let items: Awaited<ReturnType<typeof fetchGoogleTrends>> = [];
+  try {
+    items = await fetchGoogleTrends(
+      settings.mode === "officialApi" && settings.officialApiConfigured ? "officialApi" : "rss",
+      settings.country,
+      settings.maximumTopicsPerRun
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Google Trends RSS fetch failed";
+    await logTrendAutomation({ type: "error", message, status: "failed" });
+    await updateGoogleTrendsSettings({
+      lastFetchRun: new Date().toISOString(),
+      lastFetchSummary: { fetched: 0, skipped: 0, duplicates: 0, errors: 1, total: 0, message },
+    });
+    return { fetched: 0, skipped: 0, duplicates: 0, errors: 1, total: 0, message };
+  }
 
   let fetched = 0;
   let duplicates = 0;
   let skipped = 0;
+  let errors = 0;
 
   for (const item of items) {
     try {
@@ -40,7 +66,7 @@ export async function runFetchGoogleTrends(options?: { isTest?: boolean }) {
         skipped += 1;
         continue;
       }
-      if (item.searchVolume < settings.minimumSearchVolume) {
+      if (item.searchVolume < minimumSearchVolume) {
         skipped += 1;
         continue;
       }
@@ -102,6 +128,7 @@ export async function runFetchGoogleTrends(options?: { isTest?: boolean }) {
         status: "fetched",
       });
     } catch (err) {
+      errors += 1;
       await logTrendAutomation({
         type: "error",
         message: err instanceof Error ? err.message : "Fetch item failed",
@@ -111,7 +138,23 @@ export async function runFetchGoogleTrends(options?: { isTest?: boolean }) {
     }
   }
 
-  await updateGoogleTrendsSettings({ lastFetchRun: new Date().toISOString() });
+  const message =
+    fetched > 0
+      ? `Saved ${fetched} trends`
+      : items.length === 0
+        ? "Google Trends RSS returned 0 topics"
+        : `No new trends saved (skipped ${skipped}, duplicates ${duplicates}, errors ${errors})`;
 
-  return { fetched, duplicates, skipped, total: items.length };
+  await logTrendAutomation({
+    type: "fetch",
+    message: `Fetch summary: RSS=${items.length}, saved=${fetched}, skipped=${skipped}, duplicates=${duplicates}, errors=${errors}`,
+    status: fetched > 0 ? "fetched" : "failed",
+  });
+
+  await updateGoogleTrendsSettings({
+    lastFetchRun: new Date().toISOString(),
+    lastFetchSummary: { fetched, skipped, duplicates, errors, total: items.length, message },
+  });
+
+  return { fetched, duplicates, skipped, errors, total: items.length, message };
 }
