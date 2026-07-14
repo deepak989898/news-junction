@@ -3,19 +3,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getBreakingNews } from "@/firebase/firestore";
-import { NewsArticle } from "@/types";
+import { Language, NewsArticle } from "@/types";
 import { getArticleTitle } from "@/lib/utils";
 import Link from "next/link";
 
 const MAX_BREAKING = 5;
-const SEPARATOR = "\u00A0\u00A0●\u00A0\u00A0";
+const SEPARATOR = "\u00A0\u00A0\u25CF\u00A0\u00A0";
 
 function TickerItems({
   articles,
   language,
 }: {
   articles: NewsArticle[];
-  language: "hi" | "en";
+  language: Language;
 }) {
   return (
     <>
@@ -29,7 +29,7 @@ function TickerItems({
             >
               {title}
             </Link>
-            <span className="select-none px-1 text-[#c41e20]/aria-hidden>
+            <span className="select-none px-1 text-[#c41e20]" aria-hidden="true">
               {SEPARATOR}
             </span>
           </span>
@@ -50,7 +50,6 @@ export default function BreakingTicker() {
   }, []);
 
   const durationSec = useMemo(() => {
-    // ~8–10s per headline so the loop feels like a TV news ticker
     return Math.max(28, articles.length * 9);
   }, [articles.length]);
 
@@ -62,22 +61,19 @@ export default function BreakingTicker() {
       role="region"
       aria-label={t.breakingNews}
     >
-      {/* Static label — never scrolls */}
       <div className="relative z-10 flex shrink-0 items-center bg-[#c41e20] px-3 py-2 text-xs font-bold uppercase tracking-wide text-white md:px-5 md:text-sm">
         {t.breakingNews}
       </div>
 
-      {/* Moving ticker track */}
       <div className="breaking-ticker-viewport relative min-w-0 flex-1 overflow-hidden py-2">
         <div
           className="breaking-ticker-track flex w-max items-center"
           style={{ animationDuration: `${durationSec}s` }}
         >
-          {/* Duplicate for seamless loop */}
           <div className="flex items-center pr-8">
             <TickerItems articles={articles} language={language} />
           </div>
-          <div className="flex items-center pr-8" aria-hidden>
+          <div className="flex items-center pr-8" aria-hidden="true">
             <TickerItems articles={articles} language={language} />
           </div>
         </div>
