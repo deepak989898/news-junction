@@ -5,7 +5,7 @@ import fs from "fs/promises";
 import os from "os";
 import path from "path";
 import sharp from "sharp";
-import { loadAssetBuffer } from "@/lib/resolve-public-url";
+import { loadAssetBuffer, loadAssetBufferWithFallbacks } from "@/lib/resolve-public-url";
 import { isFfmpegLikelyAvailable, resolveFfmpegBinary } from "./ffmpeg-path";
 import type { VideoPlatform } from "./types";
 
@@ -36,7 +36,23 @@ function runProcess(cmd: string, args: string[]): Promise<{ stdout: string; stde
 }
 
 async function prepareReelFrame(imageUrl: string, width: number, height: number): Promise<Buffer> {
-  const raw = await loadAssetBuffer(imageUrl);
+  let raw: Buffer;
+  try {
+    raw = await loadAssetBufferWithFallbacks(imageUrl, ["/logo.png", "/icon-512.png"]);
+  } catch {
+    // Last resort: solid brand frame so reel render still succeeds.
+    raw = await sharp({
+      create: {
+        width,
+        height,
+        channels: 3,
+        background: { r: 180, g: 20, b: 30 },
+      },
+    })
+      .jpeg({ quality: 90 })
+      .toBuffer();
+  }
+
   return sharp(raw)
     .resize(width, height, { fit: "cover", position: "centre" })
     .jpeg({ quality: 92 })

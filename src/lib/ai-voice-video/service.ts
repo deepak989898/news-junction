@@ -352,6 +352,16 @@ function buildScenes(script: string): VideoScene[] {
   }));
 }
 
+function isLikelyUsableImageUrl(url: string): boolean {
+  const value = url.trim();
+  if (!value) return false;
+  // Missing /images/fallbacks/* assets cause 404 on production.
+  if (/\/images\/fallbacks\//i.test(value)) return false;
+  if (value.startsWith("http://") || value.startsWith("https://")) return true;
+  if (value.startsWith("/") && !value.startsWith("//")) return true;
+  return false;
+}
+
 function pickArticleThumbnail(article: NewsDoc, generated?: string): string {
   const candidates = [
     generated,
@@ -359,10 +369,9 @@ function pickArticleThumbnail(article: NewsDoc, generated?: string): string {
     asString(article.imageUrl),
     asString(article.imageMediumUrl),
     "/logo.png",
-  ].filter(Boolean);
+  ].filter((c): c is string => Boolean(c) && isLikelyUsableImageUrl(String(c)));
 
   for (const candidate of candidates) {
-    if (!candidate) continue;
     const resolved = resolvePublicUrl(candidate);
     if (resolved) return resolved;
   }
