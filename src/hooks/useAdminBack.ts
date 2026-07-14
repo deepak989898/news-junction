@@ -51,7 +51,6 @@ const ADMIN_PAGE_LABELS: Record<string, string> = {
   "/admin/automation/settings": "Automation Settings",
   "/admin/automation/queue": "Approval Queue",
   "/admin/automation/google-trends": "Google Trends",
-  "/admin/automation/local-news": "Local News Automation",
   "/admin/sources": "Sources",
   "/admin/locations": "Locations",
   "/admin/analytics/location-coverage": "Location Coverage",
