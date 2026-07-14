@@ -55,6 +55,8 @@ function fallbackPlan(
     "gavel close-up as main subject",
     "category-only legal clipart",
     "unreadable text",
+    "Hindi / Tamil / Telugu / Devanagari / any Indic script",
+    "tofu boxes □□□ / garbled subtitle bars",
     "fake numbers",
     "watermarks",
     "collage",
@@ -67,6 +69,7 @@ function fallbackPlan(
           "platform logo larger than actor",
           "fake awards",
           "invented audience",
+          "native-script movie title — English only",
         ]
       : ["invented paperwork unless article is legal"]),
     ...(layout?.mustAvoidHints || []),
