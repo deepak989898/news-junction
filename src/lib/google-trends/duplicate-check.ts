@@ -8,11 +8,19 @@ export interface TrendDuplicateResult {
   reason?: string;
 }
 
+export type TrendDuplicateMode = "exact" | "full";
+
+/**
+ * Duplicate checks for Google Trends.
+ * - exact: only same normalizedTitle in trendTopics (used on fetch so discovery fills the table)
+ * - full: also compares against recent news / rawNews (used later if needed)
+ */
 export async function checkTrendDuplicate(
   title: string,
   normalizedTitle: string,
   threshold = 0.72,
-  excludeTrendId?: string
+  excludeTrendId?: string,
+  mode: TrendDuplicateMode = "exact"
 ): Promise<TrendDuplicateResult> {
   const db = getAdminDb();
 
@@ -33,6 +41,10 @@ export async function checkTrendDuplicate(
     }
   } catch {
     // Continue with softer checks if query fails.
+  }
+
+  if (mode === "exact") {
+    return { isDuplicate: false, duplicateScore: 0 };
   }
 
   let maxScore = 0;

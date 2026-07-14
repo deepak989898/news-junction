@@ -18,7 +18,7 @@ export async function runFetchGoogleTrends(options?: { isTest?: boolean }) {
       duplicates: 0,
       errors: 0,
       total: 0,
-      message: "Google Trends pipeline disabled",
+      message: "Google Trends pipeline disabled — click Enabled first",
     };
   }
 
@@ -31,11 +31,10 @@ export async function runFetchGoogleTrends(options?: { isTest?: boolean }) {
     settings.mode = "rss";
   }
 
-  // Older Firestore settings often keep minimumSearchVolume=1000, which skips most India RSS rows.
-  let minimumSearchVolume = Number(settings.minimumSearchVolume) || 200;
-  if (minimumSearchVolume > 200) {
-    minimumSearchVolume = 200;
-    await updateGoogleTrendsSettings({ minimumSearchVolume: 200 });
+  // Always use a low discovery floor so India RSS rows appear in the admin table.
+  const minimumSearchVolume = Math.min(Number(settings.minimumSearchVolume) || 0, 100);
+  if (settings.minimumSearchVolume !== minimumSearchVolume) {
+    await updateGoogleTrendsSettings({ minimumSearchVolume });
   }
 
   let items: Awaited<ReturnType<typeof fetchGoogleTrends>> = [];
@@ -43,7 +42,7 @@ export async function runFetchGoogleTrends(options?: { isTest?: boolean }) {
     items = await fetchGoogleTrends(
       settings.mode === "officialApi" && settings.officialApiConfigured ? "officialApi" : "rss",
       settings.country,
-      settings.maximumTopicsPerRun
+      Math.max(settings.maximumTopicsPerRun || 10, 10)
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Google Trends RSS fetch failed";
@@ -72,7 +71,8 @@ export async function runFetchGoogleTrends(options?: { isTest?: boolean }) {
       }
 
       const title = options?.isTest ? `SYSTEM_TEST_TREND_${item.title}` : item.title;
-      const dup = await checkTrendDuplicate(title, item.normalizedTitle);
+      // Exact match only — do not suppress discovery because similar published news already exists.
+      const dup = await checkTrendDuplicate(title, item.normalizedTitle, 0.72, undefined, "exact");
       if (dup.isDuplicate) {
         duplicates += 1;
         await logTrendAutomation({
@@ -142,8 +142,8 @@ export async function runFetchGoogleTrends(options?: { isTest?: boolean }) {
     fetched > 0
       ? `Saved ${fetched} trends`
       : items.length === 0
-        ? "Google Trends RSS returned 0 topics"
-        : `No new trends saved (skipped ${skipped}, duplicates ${duplicates}, errors ${errors})`;
+        ? "Google Trends RSS returned 0 topics (server may be blocked by Google)"
+        : `No new trends saved (skipped ${skipped}, duplicates ${duplicates}, errors ${errors} from ${items.length} RSS topics)`;
 
   await logTrendAutomation({
     type: "fetch",

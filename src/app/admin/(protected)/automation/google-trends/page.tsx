@@ -49,6 +49,7 @@ export default function GoogleTrendsAdminPage() {
   const [loading, setLoading] = useState(true);
   const [trends, setTrends] = useState<TrendRow[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [logs, setLogs] = useState<Array<{ id?: string; message?: string; status?: string; type?: string; createdAt?: string | null }>>([]);
   const [busy, setBusy] = useState<string | null>(null);
 
   const getToken = useCallback(async () => {
@@ -70,6 +71,7 @@ export default function GoogleTrendsAdminPage() {
       const data = await res.json();
       setTrends(data.trends || []);
       setSettings(data.settings);
+      setLogs(Array.isArray(data.logs) ? data.logs : []);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load Google Trends data");
     } finally {
@@ -100,7 +102,7 @@ export default function GoogleTrendsAdminPage() {
           data.message ||
           `Saved ${data.fetched ?? 0} · skipped ${data.skipped ?? 0} · duplicates ${data.duplicates ?? 0} · RSS ${data.total ?? 0}`;
         if ((data.fetched ?? 0) > 0) toast.success(msg);
-        else toast.error(msg);
+        else toast.error(msg || "Fetch finished but saved 0 trends");
       } else {
         toast.success(`${action} completed`);
       }
@@ -184,14 +186,14 @@ export default function GoogleTrendsAdminPage() {
               <div className="rounded-lg bg-gray-50 p-3"><p className="text-gray-500">Published</p><p className="font-bold">{trends.filter((t) => t.status === "published").length}</p></div>
               <div className="rounded-lg bg-gray-50 p-3"><p className="text-gray-500">Last fetch</p><p className="font-bold text-xs">{settings?.lastFetchRun ? new Date(settings.lastFetchRun).toLocaleString() : "Never"}</p></div>
             </div>
-            {settings?.lastFetchSummary?.message && (
-              <p className="mt-3 text-xs text-gray-600">
-                Last result: {settings.lastFetchSummary.message}
-                {typeof settings.lastFetchSummary.total === "number" && (
-                  <> · RSS {settings.lastFetchSummary.total} · saved {settings.lastFetchSummary.fetched} · skipped {settings.lastFetchSummary.skipped} · duplicates {settings.lastFetchSummary.duplicates}</>
-                )}
-              </p>
-            )}
+            {settings?.lastFetchSummary?.message ? (
+              <div className={`mt-3 rounded-lg px-3 py-2 text-sm ${(settings.lastFetchSummary.fetched || 0) > 0 ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-900"}`}>
+                <strong>Last fetch result:</strong> {settings.lastFetchSummary.message}
+                <span className="block text-xs mt-1 opacity-80">
+                  RSS {settings.lastFetchSummary.total} · saved {settings.lastFetchSummary.fetched} · skipped {settings.lastFetchSummary.skipped} · duplicates {settings.lastFetchSummary.duplicates} · errors {settings.lastFetchSummary.errors}
+                </span>
+              </div>
+            ) : null}
           </div>
 
           {loading ? (
@@ -249,6 +251,20 @@ export default function GoogleTrendsAdminPage() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+
+          {logs.length > 0 && (
+            <div className="rounded-xl bg-white p-4 shadow-sm">
+              <h3 className="text-sm font-semibold mb-2">Recent automation logs</h3>
+              <ul className="space-y-1 max-h-48 overflow-y-auto text-xs text-gray-600">
+                {logs.slice(0, 15).map((log, idx) => (
+                  <li key={log.id || idx} className="border-b border-gray-50 py-1">
+                    <span className="font-medium text-gray-800">{log.type || "log"}</span>
+                    {log.status ? ` · ${log.status}` : ""} — {log.message || ""}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>

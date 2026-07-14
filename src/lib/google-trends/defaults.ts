@@ -8,7 +8,7 @@ export const DEFAULT_GOOGLE_TRENDS_SETTINGS: GoogleTrendsSettings = {
   country: "IN",
   language: "hi",
   fetchIntervalMinutes: 60,
-  minimumSearchVolume: 200,
+  minimumSearchVolume: 0,
   activeOnly: true,
   maximumTopicsPerRun: 10,
   maximumArticlesPerDay: 12,
