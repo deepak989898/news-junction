@@ -55,13 +55,24 @@ export function normalizeTrendTitle(title: string): string {
     .trim();
 }
 
+function firstString(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const text = firstString(entry);
+      if (text) return text;
+    }
+  }
+  return "";
+}
+
 function extractNewsItems(item: GoogleTrendRssItem) {
   const items = item.newsItems || [];
   return items
     .map((n) => ({
-      title: n["ht:news_item_title"] || n.newsItemTitle || "",
-      url: n["ht:news_item_url"] || n.newsItemUrl || "",
-      snippet: n["ht:news_item_snippet"] || n.newsItemSnippet || "",
+      title: firstString(n["ht:news_item_title"] ?? n.newsItemTitle),
+      url: firstString(n["ht:news_item_url"] ?? n.newsItemUrl),
+      snippet: firstString(n["ht:news_item_snippet"] ?? n.newsItemSnippet),
     }))
     .filter((n) => n.title && n.url);
 }
@@ -117,7 +128,7 @@ export async function fetchGoogleTrendsRss(
       return {
         title,
         normalizedTitle: normalizeTrendTitle(title),
-        relatedQueries: relatedNews.map((n) => n.title).slice(0, 5),
+        relatedQueries: relatedNews.map((n) => n.title).filter(Boolean).slice(0, 5),
         searchVolume,
         category,
         sourceUrl: item.link || feedUrl,

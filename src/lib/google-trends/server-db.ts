@@ -101,8 +101,15 @@ function mapTrendTopic(id: string, data: FirebaseFirestore.DocumentData): TrendT
 
 export async function createTrendTopic(data: Omit<TrendTopic, "id" | "createdAt" | "updatedAt">) {
   const db = getAdminDb();
+  const relatedQueries = (Array.isArray(data.relatedQueries) ? data.relatedQueries : [])
+    .map((q) => (Array.isArray(q) ? String(q[0] || "") : String(q || "")))
+    .map((q) => q.trim())
+    .filter(Boolean)
+    .slice(0, 10);
+
   const ref = await db.collection(COLLECTIONS.trendTopics).add({
     ...data,
+    relatedQueries,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
