@@ -13,7 +13,7 @@ import ConfirmModal from "./ConfirmModal";
 import ImagePreviewModal from "./ImagePreviewModal";
 import toast from "react-hot-toast";
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 20;
 
 interface NewsManagementTableProps {
   articles: NewsArticle[];
@@ -140,7 +140,7 @@ export default function NewsManagementTable({
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="grid gap-3 rounded-xl bg-white p-4 shadow-sm md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-2 rounded-lg bg-white p-2 shadow-sm md:grid-cols-2 lg:grid-cols-5">
         <input
           type="text"
           placeholder="Search by title..."
@@ -240,36 +240,36 @@ export default function NewsManagementTable({
           <div className="p-12 text-center text-gray-500">No articles match your filters.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="w-full text-left text-xs">
               <thead className="border-b bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3">
+                  <th className="px-2 py-1.5">
                     <input
                       type="checkbox"
                       checked={selected.length === paginated.length && paginated.length > 0}
                       onChange={toggleSelectAll}
                     />
                   </th>
-                  <th className="px-4 py-3 font-semibold text-gray-600">Image</th>
-                  <th className="px-4 py-3 font-semibold text-gray-600">Title</th>
-                  <th className="px-4 py-3 font-semibold text-gray-600">Category</th>
-                  <th className="px-4 py-3 font-semibold text-gray-600">Status</th>
-                  <th className="px-4 py-3 font-semibold text-gray-600">Views</th>
-                  <th className="px-4 py-3 font-semibold text-gray-600">Published</th>
-                  <th className="px-4 py-3 font-semibold text-gray-600">Actions</th>
+                  <th className="px-2 py-1.5 font-semibold text-gray-600">Image</th>
+                  <th className="px-2 py-1.5 font-semibold text-gray-600">Title</th>
+                  <th className="px-2 py-1.5 font-semibold text-gray-600">Category</th>
+                  <th className="px-2 py-1.5 font-semibold text-gray-600">Status</th>
+                  <th className="px-2 py-1.5 font-semibold text-gray-600">Views</th>
+                  <th className="px-2 py-1.5 font-semibold text-gray-600">Published</th>
+                  <th className="px-2 py-1.5 font-semibold text-gray-600">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {paginated.map((article) => (
                   <tr key={article.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-1.5">
                       <input
                         type="checkbox"
                         checked={selected.includes(article.id)}
                         onChange={() => toggleSelect(article.id)}
                       />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-1.5">
                       {article.imageUrl ? (
                         <button
                           type="button"
@@ -290,19 +290,19 @@ export default function NewsManagementTable({
                         <div className="flex h-10 w-14 items-center justify-center rounded bg-gray-100 text-xs text-gray-400">N/A</div>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-1.5">
                       <p className="line-clamp-1 font-medium">{article.titleHi}</p>
                       <p className="line-clamp-1 text-xs text-gray-500">{article.titleEn}</p>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{article.categoryNameHi}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-1.5 text-gray-600">{article.categoryNameHi}</td>
+                    <td className="px-2 py-1.5">
                       <StatusBadge status={article.status} />
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{article.views}</td>
-                    <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
+                    <td className="px-2 py-1.5 text-gray-600">{article.views}</td>
+                    <td className="px-2 py-1.5 text-xs text-gray-600 whitespace-nowrap">
                       {formatDateTime(getArticlePublishDate(article), "en")}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-1.5">
                       <div className="flex items-center gap-1">
                         <Link
                           href={`/article/${article.slug}`}
@@ -339,7 +339,7 @@ export default function NewsManagementTable({
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t px-4 py-3">
+          <div className="flex items-center justify-between border-t px-2 py-1.5">
             <p className="text-sm text-gray-500">
               Page {page} of {totalPages} ({filtered.length} articles)
             </p>

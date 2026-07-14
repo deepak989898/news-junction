@@ -11,10 +11,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <AdminGuard>
       <AdminNavTracker />
-      <div className="min-h-screen bg-gray-50">
+      <div className="admin-compact min-h-screen bg-gray-50">
         <AdminSidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
-        <main className="lg:ml-64">
-          <div className="p-4 md:p-8">{children}</div>
+        <main className="lg:ml-56">
+          <div className="p-2 md:p-3 lg:p-4">{children}</div>
         </main>
       </div>
     </AdminGuard>

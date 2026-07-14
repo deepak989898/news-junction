@@ -19,16 +19,16 @@ const colorMap = {
 
 export default function StatsCard({ title, value, icon: Icon, color = "navy" }: StatsCardProps) {
   return (
-    <div className="rounded-xl bg-white p-6 shadow-sm">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-500">{title}</p>
-          <p className="mt-2 text-3xl font-bold text-[#1a2b4c]">
+    <div className="rounded-lg bg-white p-3 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-[11px] font-medium text-gray-500">{title}</p>
+          <p className="mt-0.5 text-xl font-bold leading-none text-[#1a2b4c]">
             {formatNumber(value)}
           </p>
         </div>
-        <div className={`rounded-lg p-3 ${colorMap[color]} text-white`}>
-          <Icon size={24} />
+        <div className={`shrink-0 rounded-md p-1.5 ${colorMap[color]} text-white`}>
+          <Icon size={16} />
         </div>
       </div>
     </div>
