@@ -83,6 +83,18 @@ export async function publishTrendArticle(trendId: string): Promise<string> {
     status: "published",
   });
 
+  try {
+    const { enrichArticleOnPublish } = await import("@/lib/article-enrichment/on-publish");
+    // Trends already have FAQ — still ensure links + push + meta/social
+    await enrichArticleOnPublish(ref.id, {
+      sendPush: true,
+      queueSocial: true,
+      forceFaq: !(Array.isArray(aiOutput.seoFaqItems) && (aiOutput.seoFaqItems as unknown[]).length >= 3),
+    });
+  } catch (err) {
+    console.error("enrich on trend publish failed:", err);
+  }
+
   return ref.id;
 }
 

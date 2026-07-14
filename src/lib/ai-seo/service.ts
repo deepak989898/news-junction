@@ -236,12 +236,19 @@ export async function generateInternalLinks(articleId: string): Promise<SeoInter
   if (!raw) throw new Error("Article not found");
   const article = raw as NewsDoc;
   const currentText = `${article.titleEn} ${article.summaryEn}`;
-  const candidates = await getAdminDb()
-    .collection("news")
-    .where("status", "==", "published")
-    .where("categoryId", "==", String(article.categoryId || ""))
-    .limit(60)
-    .get();
+  const candidatesSnap = await (async () => {
+    try {
+      return await getAdminDb()
+        .collection("news")
+        .where("status", "==", "published")
+        .where("categoryId", "==", String(article.categoryId || ""))
+        .limit(60)
+        .get();
+    } catch {
+      return await getAdminDb().collection("news").where("status", "==", "published").limit(60).get();
+    }
+  })();
+  const candidates = candidatesSnap;
 
   const now = new Date().toISOString();
   const list: SeoInternalLinkSuggestion[] = candidates.docs

@@ -30,6 +30,7 @@ export default function AnalyticsManagerPage() {
   const [settings, setSettings] = useState<AnalyticsAiSettings | null>(null);
   const [settingsDraft, setSettingsDraft] = useState<Partial<AnalyticsAiSettings>>({});
   const [reportType, setReportType] = useState<"daily" | "weekly" | "monthly">("daily");
+  const [applyingIdx, setApplyingIdx] = useState<number | null>(null);
 
   const load = async () => {
     const [s, g, c, t, r, st] = await Promise.all([
@@ -157,7 +158,31 @@ export default function AnalyticsManagerPage() {
             <div key={`${String(r.title)}-${idx}`} className="rounded border p-3 text-sm">
               <p className="font-semibold">{String(r.title)}</p>
               <p className="text-gray-600">{String(r.reason)}</p>
-              <p className="text-xs text-gray-500">Priority: {String(r.priority)} · Confidence: {String(r.confidence)}</p>
+              <p className="text-xs text-gray-500">Priority: {String(r.priority)} · Confidence: {String(r.confidence)} · Type: {String(r.recommendationType)}</p>
+              <button
+                className="mt-2 rounded bg-[#c41e20] px-3 py-1 text-xs font-bold text-white disabled:opacity-50"
+                disabled={applyingIdx === idx}
+                onClick={async () => {
+                  setApplyingIdx(idx);
+                  try {
+                    const { applyGrowthRecommendationApi } = await import("@/lib/article-enrichment/client-api");
+                    await applyGrowthRecommendationApi({
+                      recommendationId: r.id ? String(r.id) : undefined,
+                      recommendationType: String(r.recommendationType || ""),
+                      articleId: r.articleId ? String(r.articleId) : undefined,
+                      title: String(r.title || ""),
+                    });
+                    toast.success("Recommendation applied");
+                    await load();
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "Apply failed");
+                  } finally {
+                    setApplyingIdx(null);
+                  }
+                }}
+              >
+                {applyingIdx === idx ? "Applying…" : "Apply now"}
+              </button>
             </div>
           ))}
           {!recs.length && <p className="text-sm text-gray-500">No recommendations yet.</p>}

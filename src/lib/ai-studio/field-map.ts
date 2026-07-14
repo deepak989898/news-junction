@@ -18,7 +18,7 @@ export function getTargetField(
     translate_en_hi: "contentHi",
     bullet_summary: language === "en" ? "summaryEn" : "summaryHi",
     key_points: language === "en" ? "summaryEn" : "summaryHi",
-    faq: language === "en" ? "contentEn" : "contentHi",
+    faq: "seoFaqItems",
     generate_tags: "tags",
     category_suggestion: "categoryId",
     seo_title: "seoTitle",

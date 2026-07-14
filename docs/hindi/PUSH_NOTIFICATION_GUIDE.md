@@ -1,8 +1,8 @@
 # Push Notification Guide (Hindi)
 
-## Current Status: NOT IMPLEMENTED
+## Current Status: IMPLEMENTED (Expo Push)
 
-Push notification **delivery system** अभी पूरी तरह implement नहीं है।
+Push notification **delivery** अब server पर implement है।
 
 ## क्या exists है?
 
@@ -10,56 +10,39 @@ Push notification **delivery system** अभी पूरी तरह implement
 |-----------|--------|
 | AI `push_notification` text | ✅ Content Studio |
 | Mobile token registration | ✅ `userPushTokens` Firestore |
-| Mobile admin notifications UI | ⚠️ UI only |
-| Server FCM/Expo sender | ❌ Missing |
-| Web push / service worker | ❌ Missing |
-| `notifications` collection writer | ❌ Missing |
+| Mobile admin send UI | ✅ `/api/notifications/send` |
+| Server Expo push sender | ✅ `src/lib/notifications/push-send.ts` |
+| Auto-send on publish | ✅ `enrichArticleOnPublish` |
+| Delivery logs | ✅ `pushLogs` + `notifications` |
+| Web push / service worker | ❌ Optional future (VAPID) |
 
-## Mobile App
+## Auto behaviour
 
-- `mobile-app/services/notifications/push.ts` — Expo push token → Firestore
-- `mobile-app/app/admin/notifications.tsx` — schedule UI
-- **Bug:** POST `/api/operations/alerts` wrong payload — scheduling likely fails
+हर published article (manual / automation / Google Trends) पर:
+1. FAQ + internal links enrich होते हैं
+2. Push text बनता है
+3. Registered Expo tokens पर notification भेजी जाती है
+4. `news/{id}.pushSentAt` से duplicate send रोकते हैं
 
-## Required for Full Implementation
-
-### Firebase Cloud Messaging
-- `NEXT_PUBLIC_FIREBASE_VAPID_KEY`
-- Service worker for web push
-- FCM Admin SDK `messaging().send()` on server
-
-### Expo Push
-- Expo project ID (EAS)
-- Server call to `https://exp.host/--/api/v2/push/send`
-
-### Apple (iOS)
-- APNs key in Apple Developer + EAS credentials
-
-### Android
-- `google-services.json` in Expo project
-
-## Env Variables (Future)
+## Env Variables
 
 ```
-# Not wired in current codebase:
+# Optional — for higher Expo rate limits
+EXPO_ACCESS_TOKEN=
+
+# Optional future web push
 NEXT_PUBLIC_FIREBASE_VAPID_KEY=
-EXPO_PUBLIC_PROJECT_ID=
-FCM_SERVER_KEY=  # legacy — use Admin SDK
 ```
 
-## Admin Test (Current)
+Firebase Admin credentials already required for Firestore; Expo Push API public endpoint works without a key for basic volume.
 
-❌ Mass notification send — **not available**
+## Admin Test
 
-✅ AI push text generate: Content Studio → push_notification action
+1. Mobile app में login → notifications allow → token `userPushTokens` में save
+2. Web admin → publish any article **OR**
+3. Mobile admin → Push Notifications → Send Now
+4. Check Firestore `pushLogs` / `notifications`
 
 ## Status Label
 
-**NOT IMPLEMENTED** — caption/UI only
-
-## Recommended Next Steps
-
-1. Server route: `/api/notifications/send` with FCM/Expo
-2. Fix mobile admin API contract
-3. Admin composer on web admin
-4. Delivery logs in `notifications` collection
+**IMPLEMENTED** — Expo Push on publish + manual send

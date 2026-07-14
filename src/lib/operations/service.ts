@@ -498,7 +498,8 @@ export async function getDependencyStatus() {
   const hasPush =
     Boolean(process.env.FCM_SERVER_KEY) ||
     Boolean(process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY) ||
-    Boolean(process.env.FIREBASE_MESSAGING_SENDER_ID);
+    Boolean(process.env.EXPO_ACCESS_TOKEN) ||
+    Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
 
   return {
     aiProvider: process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY ? "Connected" : "Needs Attention",

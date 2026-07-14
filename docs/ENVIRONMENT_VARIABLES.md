@@ -60,6 +60,11 @@ Option B:
 - `FIREBASE_CLIENT_EMAIL`
 - `FIREBASE_PRIVATE_KEY`
 
+### Push notifications
+
+- `EXPO_ACCESS_TOKEN` (optional — Expo Push higher rate limits)
+- `NEXT_PUBLIC_FIREBASE_VAPID_KEY` (optional — future web push)
+
 ## Mobile (Expo)
 
 - `EXPO_PUBLIC_FIREBASE_API_KEY`

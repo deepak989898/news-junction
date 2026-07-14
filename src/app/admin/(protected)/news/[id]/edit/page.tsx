@@ -92,6 +92,14 @@ export default function EditNewsPage() {
   const handleSubmit = async (data: NewsFormData) => {
     const category = categories.find((c) => c.id === data.categoryId) || categories[1];
     await updateNews(id, data, category);
+    if (data.status === "published") {
+      try {
+        const { enrichArticleOnPublishApi } = await import("@/lib/article-enrichment/client-api");
+        await enrichArticleOnPublishApi(id, { sendPush: true, queueSocial: true });
+      } catch (err) {
+        console.error("enrich on edit publish failed:", err);
+      }
+    }
     router.push("/admin/news");
   };
 

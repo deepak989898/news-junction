@@ -49,6 +49,17 @@ export default function AdminNewsPage() {
 
   const handleBulkStatus = async (ids: string[], status: "draft" | "published") => {
     await bulkUpdateNewsStatus(ids, status);
+    if (status === "published") {
+      try {
+        const { enrichArticleOnPublishApi } = await import("@/lib/article-enrichment/client-api");
+        await Promise.all(
+          ids.map((id) => enrichArticleOnPublishApi(id, { sendPush: true, queueSocial: true }).catch(() => null))
+        );
+        toast.success("Published and enriched articles");
+      } catch {
+        toast.error("Published, but some enrichments failed");
+      }
+    }
     await loadData();
   };
 

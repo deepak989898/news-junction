@@ -52,7 +52,22 @@ export async function executeContentAction(
   if (actionType === "faq") {
     try {
       const jsonMatch = text.match(/\[[\s\S]*\]/);
-      if (jsonMatch) structured = { faq: JSON.parse(jsonMatch[0]) };
+      if (jsonMatch) {
+        const rawFaq = JSON.parse(jsonMatch[0]) as Record<string, string>[];
+        const seoFaqItems = rawFaq.map((item) => ({
+          questionHi: item.questionHi || item.question || item.q || "",
+          answerHi: item.answerHi || item.answer || item.a || "",
+          questionEn: item.questionEn || item.question || item.q || "",
+          answerEn: item.answerEn || item.answer || item.a || "",
+        }));
+        structured = { faq: seoFaqItems, seoFaqItems };
+        output = JSON.stringify(seoFaqItems);
+        const { getAdminDb } = await import("@/lib/firebase-admin");
+        await getAdminDb().collection("news").doc(articleId).update({
+          seoFaqItems,
+          updatedAt: new Date().toISOString(),
+        });
+      }
     } catch {
       /* keep raw text */
     }

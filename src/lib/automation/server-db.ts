@@ -328,6 +328,15 @@ export async function publishRawNewsToNews(
     aiOutput,
   });
 
+  if (status === "published") {
+    try {
+      const { enrichArticleOnPublish } = await import("@/lib/article-enrichment/on-publish");
+      await enrichArticleOnPublish(ref.id, { sendPush: true, queueSocial: true });
+    } catch (err) {
+      console.error("enrich on automation publish failed:", err);
+    }
+  }
+
   return ref.id;
 }
 

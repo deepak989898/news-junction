@@ -251,6 +251,20 @@ export default function AiSeoManagerPage() {
             <button className="rounded border px-3 py-2 text-sm" onClick={() => runTool("faq")} disabled={running === "faq"}>Generate FAQ</button>
           </div>
           <button className="mt-3 rounded bg-[#1a2b4c] px-4 py-2 text-sm font-bold text-white" onClick={runContentGap}>Run Content Gap Finder</button>
+          <button
+            className="mt-3 ml-2 rounded border border-[#c41e20] px-4 py-2 text-sm font-bold text-[#c41e20]"
+            onClick={async () => {
+              try {
+                const { backfillArticleEnrichmentApi } = await import("@/lib/article-enrichment/client-api");
+                const res = (await backfillArticleEnrichmentApi(40)) as { processed?: number };
+                toast.success(`Backfilled FAQ/links on ${res.processed ?? 0} articles`);
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Backfill failed");
+              }
+            }}
+          >
+            Backfill FAQ + Internal Links
+          </button>
         </div>
       </div>
 

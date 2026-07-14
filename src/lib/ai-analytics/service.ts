@@ -490,11 +490,16 @@ export async function getGrowthInsights() {
     }
   });
   const recs = [...deterministic, ...ai.recommendations].slice(0, 24);
-  await Promise.all(recs.map((r) => getAdminDb().collection("growthRecommendations").add(r)));
+  const saved = await Promise.all(
+    recs.map(async (r) => {
+      const ref = await getAdminDb().collection("growthRecommendations").add(r);
+      return { ...r, id: ref.id };
+    })
+  );
   await logAnalytics({
     actionType: "growth_insights",
     status: "success",
-    message: `Growth insights generated (${recs.length})`,
+    message: `Growth insights generated (${saved.length})`,
     metadata: {
       seoLogs: (seoDash.logs || []).length,
       socialQueue: ((social.queue || []) as unknown[]).length,
@@ -503,7 +508,7 @@ export async function getGrowthInsights() {
       voiceAudio: ((voice.audioAssets || []) as unknown[]).length,
     },
   });
-  return { recommendations: recs, advisory: ANALYTICS_ADVISORY_NOTE, generatedAt: nowIso() };
+  return { recommendations: saved, advisory: ANALYTICS_ADVISORY_NOTE, generatedAt: nowIso() };
 }
 
 export async function generateAnalyticsReport(args: {
