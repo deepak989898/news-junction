@@ -259,3 +259,31 @@ body {
 .admin-progress-bar {
   animation: admin-progress-slide 1.1s ease-in-out infinite;
 }
+
+/* ——— TV-style breaking news ticker (label static, headlines scroll) ——— */
+@keyframes breaking-ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.breaking-ticker-track {
+  animation-name: breaking-ticker-scroll;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+.breaking-ticker-viewport:hover .breaking-ticker-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breaking-ticker-track {
+    animation: none;
+    transform: none;
+  }
+}
