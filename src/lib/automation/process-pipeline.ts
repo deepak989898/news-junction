@@ -499,29 +499,36 @@ export async function regenerateArticleImage(
     forceNeutral: false,
   });
 
-  if (!generated) {
-    throw new Error("AI image generation failed. Please try again.");
+  if (!generated.url) {
+    throw new Error(
+      generated.skippedReason ||
+        (generated.prompt
+          ? `AI image generation failed: ${generated.prompt.slice(0, 180)}`
+          : "AI image generation failed. Please try again.")
+    );
   }
 
   await db.collection("news").doc(newsId).update({
-    imageUrl: generated,
-    imageLargeUrl: generated,
-    imageMediumUrl: generated,
-    imageWebpUrl: generated,
+    imageUrl: generated.url,
+    imageLargeUrl: generated.url,
+    imageMediumUrl: generated.url,
+    imageWebpUrl: generated.url,
     imageOrigin: "openai",
     imageProvider: "openai",
     imageStatus: "approved",
     imageLicence: "OpenAI editorial generation",
-    imagePrompt: `Person-first editorial generation for: ${titleEn || titleHi}`,
+    imagePrompt: generated.prompt || `Story-based editorial generation for: ${titleEn || titleHi}`,
+    imageRelevanceScore: generated.storyScore ?? null,
+    imageQualityScore: generated.visionScore ?? generated.clarityScore ?? null,
     imageGeneratedAt: new Date().toISOString(),
     updatedAt: FieldValue.serverTimestamp(),
   });
 
   if (linkedRawNewsId) {
-    await updateRawNews(linkedRawNewsId, { generatedImageUrl: generated });
+    await updateRawNews(linkedRawNewsId, { generatedImageUrl: generated.url });
   }
 
-  return { imageUrl: generated, source: "ai" };
+  return { imageUrl: generated.url, source: "ai" };
 }
 
 export async function rejectRawNews(rawNewsId: string, reason?: string) {

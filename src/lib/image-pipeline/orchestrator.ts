@@ -195,10 +195,12 @@ export async function resolveArticleImage(input: ImagePipelineInput): Promise<Im
                 imageProvider: "openai",
                 imageFileHash: generated.fileHash,
                 imageGeneratedAt: new Date().toISOString(),
+                imageRelevanceScore: generated.storyScore,
+                imageQualityScore: generated.visionScore ?? generated.clarityScore ?? 85,
               };
               origin = "openai";
-              qualityScore = 85;
-              clarityScore = 82;
+              qualityScore = generated.visionScore ?? generated.clarityScore ?? 85;
+              clarityScore = generated.clarityScore ?? 82;
             }
           }
           await logImagePipelineAction({
@@ -206,7 +208,11 @@ export async function resolveArticleImage(input: ImagePipelineInput): Promise<Im
             articleId: input.articleId,
             rawNewsId: input.rawNewsId,
             origin: "openai",
-            message: useNeutral ? "Neutral AI image generated" : "OpenAI image generated",
+            message: generated.skippedReason
+              ? `OpenAI skipped: ${generated.skippedReason}`
+              : useNeutral
+                ? "Neutral AI image generated"
+                : `OpenAI image generated (story ${generated.storyScore ?? "n/a"}, vision ${generated.visionScore ?? "n/a"})`,
           });
         } catch (err) {
           await logImagePipelineAction({
@@ -380,7 +386,14 @@ export async function generateAutomationArticleImage(params: {
   categoryNameHi?: string;
   sourceName?: string;
   forceNeutral?: boolean;
-}): Promise<string | null> {
+}): Promise<{
+  url: string | null;
+  prompt: string;
+  storyScore?: number;
+  visionScore?: number;
+  clarityScore?: number;
+  skippedReason?: string;
+}> {
   const analysis = analyzeArticleSubject({
     articleId: params.rawNewsId,
     rawNewsId: params.rawNewsId,
@@ -397,7 +410,7 @@ export async function generateAutomationArticleImage(params: {
     originalImage: "",
   });
 
-  const { url } = await generateOpenAiImage(
+  const generated = await generateOpenAiImage(
     {
       articleId: params.rawNewsId,
       rawNewsId: params.rawNewsId,
@@ -419,5 +432,12 @@ export async function generateAutomationArticleImage(params: {
     Boolean(params.forceNeutral)
   );
 
-  return url;
+  return {
+    url: generated.url,
+    prompt: generated.prompt,
+    storyScore: generated.storyScore,
+    visionScore: generated.visionScore,
+    clarityScore: generated.clarityScore,
+    skippedReason: generated.skippedReason,
+  };
 }

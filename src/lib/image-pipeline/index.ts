@@ -8,4 +8,8 @@ export { getOpenAiImageConfig, mapToGptImageQuality } from "./image-config";
 export { planNewsImageVisual } from "./visual-plan";
 export { buildNewsVisualStory } from "./visual-story";
 export { buildProfessionalNewsImagePrompt } from "./prompt-builder";
+export { analyzeArticleStory, analyzeStoryHeuristic } from "./story-analyzer";
+export { getEntertainmentLayout, ENTERTAINMENT_STYLES } from "./entertainment-styles";
+export { runThumbnailComprehensionTest } from "./thumbnail-test";
+export { validateGeneratedImageWithVision } from "./vision-qa";
 export { applyNewsTextOverlay } from "./text-overlay";

@@ -1,6 +1,6 @@
-import "server-only";
-
 import { ArticleImageAnalysis, ImagePipelineInput } from "./types";
+import type { StoryAnalysisResult } from "./story-analyzer";
+import { getEntertainmentLayout } from "./entertainment-styles";
 
 export type ImageStoryType =
   | "REAL_PUBLIC_FIGURE"
@@ -14,6 +14,7 @@ export type ImageStoryType =
   | "EVENT"
   | "WEATHER"
   | "LOCAL_NEWS"
+  | "ENTERTAINMENT"
   | "GENERIC";
 
 export type VisualImportanceScores = {
@@ -40,6 +41,10 @@ export type NewsVisualStory = {
   storyScore: number;
   understandsWithoutReading: boolean;
   reason: string;
+  entertainmentStyle?: string | null;
+  visualPriority?: string[];
+  platform?: string;
+  movieTitle?: string;
 };
 
 const PERSON_HINT =
@@ -47,6 +52,9 @@ const PERSON_HINT =
 
 const GENERIC_SYMBOL_BAN =
   /\b(scale(?:s)? of justice|gavel|blind justice|generic court(?:room)?|empty courtroom|justice scale)\b/i;
+
+const LEGAL_STORY_RE =
+  /\b(court|settlement|lawsuit|arrest|verdict|tribunal|charges?|fir\b|bail|police\s+case|legal)\b/i;
 
 function uniq(items: string[]): string[] {
   const seen = new Set<string>();
@@ -81,6 +89,7 @@ function scoreStory(story: Omit<NewsVisualStory, "storyScore" | "understandsWith
   score += 5; // thumbnail clarity target
   if (!bansGeneric && hasPerson) score -= 20;
   if (GENERIC_SYMBOL_BAN.test(story.visualStory)) score -= 25;
+  if (story.imageType === "ENTERTAINMENT" && hasPerson && hasEvent) score += 5;
 
   const understandsWithoutReading = hasPerson && hasEvent && score >= 70;
   return {
@@ -92,8 +101,15 @@ function scoreStory(story: Omit<NewsVisualStory, "storyScore" | "understandsWith
   };
 }
 
-function classifyImageType(input: ImagePipelineInput, analysis: ArticleImageAnalysis): ImageStoryType {
+function classifyImageType(
+  input: ImagePipelineInput,
+  analysis: ArticleImageAnalysis,
+  storyAnalysis?: StoryAnalysisResult | null
+): ImageStoryType {
+  if (storyAnalysis?.isEntertainment || storyAnalysis?.entertainmentStyle) return "ENTERTAINMENT";
   const text = `${input.titleEn} ${input.titleHi} ${input.summaryEn} ${input.summaryHi}`.toLowerCase();
+  if (input.categoryId === "manoranjan") return "ENTERTAINMENT";
+  if (/film|movie|cinema|ott|streaming|bollywood|actress|actor|trailer/.test(text)) return "ENTERTAINMENT";
   if (analysis.isRealPersonPrimary || analysis.namedPeople.length > 0 || PERSON_HINT.test(text)) {
     if (/minister|prime minister|president|election|mp\b|mla\b|cm\b|politic/.test(text)) return "POLITICIAN";
     return "REAL_PUBLIC_FIGURE";
@@ -115,43 +131,80 @@ function classifyImageType(input: ImagePipelineInput, analysis: ArticleImageAnal
  */
 export function buildNewsVisualStory(
   input: ImagePipelineInput,
-  analysis: ArticleImageAnalysis
+  analysis: ArticleImageAnalysis,
+  storyAnalysis?: StoryAnalysisResult | null
 ): NewsVisualStory {
   const headline = input.titleEn || input.titleHi;
   const summary = (input.summaryEn || input.summaryHi || "").replace(/\s+/g, " ").slice(0, 320);
-  const imageType = classifyImageType(input, analysis);
+  const text = `${headline} ${summary}`;
+  const imageType = classifyImageType(input, analysis, storyAnalysis);
+  const isEntertainment = imageType === "ENTERTAINMENT";
+  const isLegalContext =
+    imageType === "LEGAL" ||
+    imageType === "CRIME" ||
+    LEGAL_STORY_RE.test(text);
+
   const person =
+    storyAnalysis?.mainSubject ||
     analysis.namedPeople[0] ||
     (analysis.isRealPersonPrimary ? analysis.primarySubject : "") ||
     "";
+
+  const platform = storyAnalysis?.platform || "";
+  const movieTitle = storyAnalysis?.movieTitle || "";
+  const layout = getEntertainmentLayout(storyAnalysis?.entertainmentStyle);
+
   const orgs = uniq([
+    ...(platform ? [platform] : []),
     ...analysis.namedOrganizations,
-    ...(/met(?:ropolitan)? police/i.test(headline + summary) ? ["Metropolitan Police"] : []),
-    ...(/\b\bX\b|twitter/i.test(headline + summary) ? ["X (Twitter)"] : []),
+    ...(/met(?:ropolitan)? police/i.test(text) ? ["Metropolitan Police"] : []),
+    ...(/\bX\b|twitter/i.test(text) ? ["X (Twitter)"] : []),
   ]).slice(0, 4);
 
   const isPersonLed =
     imageType === "REAL_PUBLIC_FIGURE" ||
     imageType === "POLITICIAN" ||
+    imageType === "ENTERTAINMENT" ||
     Boolean(person);
 
-  const importance: VisualImportanceScores = isPersonLed
+  const importance: VisualImportanceScores = isEntertainment
     ? {
         mainPerson: 100,
-        organization: orgs.length ? 90 : 40,
+        organization: platform ? 55 : 35,
         event: 90,
-        objects: 60,
-        background: 40,
-        genericSymbols: 15,
+        objects: 25,
+        background: 20,
+        genericSymbols: 5,
       }
-    : {
-        mainPerson: 20,
-        organization: orgs.length ? 80 : 40,
-        event: 85,
-        objects: 70,
-        background: 55,
-        genericSymbols: 35,
-      };
+    : isPersonLed
+      ? {
+          mainPerson: 100,
+          organization: orgs.length ? 70 : 40,
+          event: 90,
+          objects: isLegalContext ? 55 : 30,
+          background: 40,
+          genericSymbols: 15,
+        }
+      : {
+          mainPerson: 20,
+          organization: orgs.length ? 80 : 40,
+          event: 85,
+          objects: 70,
+          background: 55,
+          genericSymbols: 35,
+        };
+
+  const entertainmentAvoid = [
+    "random paper / contract / legal document",
+    "laptop unless mentioned in article",
+    "random microphone",
+    "courtroom / gavel / scales of justice",
+    "fake awards or trophies",
+    "invented audience crowd",
+    "collage or split-screen",
+    "platform logo larger than the main person",
+    "unreadable or fake Hindi text",
+  ];
 
   const mustAvoid = uniq([
     "generic scales of justice as the main subject",
@@ -163,46 +216,95 @@ export function buildNewsVisualStory(
     "watermarks",
     "collage overload",
     "misspelled logos",
+    ...(isEntertainment || !isLegalContext
+      ? [
+          "random paperwork or contracts",
+          "invented legal documents",
+          "arrest/settlement props unless the article is legal news",
+        ]
+      : []),
+    ...(isEntertainment ? entertainmentAvoid : []),
+    ...(layout?.mustAvoidHints || []),
   ]);
 
   const mustInclude = uniq(
-    isPersonLed
+    isEntertainment
       ? [
-          `Photorealistic editorial portrait of ${person || analysis.primarySubject}`,
-          ...orgs.map((o) => `${o} institutional / brand cue`),
-          "Clear settlement / arrest / legal-event cue without inventing case numbers",
-          "Person occupies about 55-65% of the frame",
+          `Photorealistic editorial portrait of ${person || analysis.primarySubject} occupying ~60-70% of frame`,
+          ...(movieTitle ? [`Movie/series title branding for "${movieTitle}" (secondary, ~20-25%)`] : []),
+          ...(platform
+            ? [`${platform} platform logo natural and SMALLER than the main person (~10-15%)`]
+            : []),
+          "Warm cinematic soft lighting; premium entertainment poster composition",
+          "One clear entertainment story readable at thumbnail size",
+          ...(layout?.mustIncludeHints || []),
         ]
-      : [analysis.primarySubject, analysis.location, ...analysis.visualKeywords.slice(0, 3)].filter(Boolean)
+      : isPersonLed
+        ? [
+            `Photorealistic editorial portrait of ${person || analysis.primarySubject}`,
+            ...orgs.map((o) => `${o} institutional / brand cue (supporting only)`),
+            "Person occupies about 60-70% of the frame",
+            ...(isLegalContext
+              ? ["Subtle legal/event cue only if supported by the article — no invented case numbers"]
+              : []),
+          ]
+        : [analysis.primarySubject, analysis.location, ...analysis.visualKeywords.slice(0, 3)].filter(Boolean)
   );
 
   const eventSummary =
+    storyAnalysis?.understanding.whatHappened ||
     analysis.factualVisualSummary.slice(0, 200) ||
     summary.slice(0, 200) ||
     headline;
 
-  const visualStory = isPersonLed
-    ? `Editorial portrait of ${person || analysis.primarySubject} as the clear main focus (~60% of frame). Supporting cues: ${
-        orgs.join(", ") || "relevant institutions"
-      }. Communicate the event: ${eventSummary}. Supporting legal/settlement paperwork and platform context if relevant. Bright professional newsroom lighting. Background only supports the story.`
-    : `Story-specific editorial scene for: ${headline}. Focus on the concrete event and subjects, not category symbols.`;
+  const visualStory = isEntertainment
+    ? (
+        storyAnalysis?.understanding.bestVisual ||
+        `Premium entertainment thumbnail: large editorial portrait of ${
+          person || analysis.primarySubject
+        } (~60-70% of frame). Supporting: ${
+          movieTitle ? `title "${movieTitle}"` : "film/series branding"
+        }${platform ? `; ${platform} logo smaller than the person` : ""}. Warm cinematic lighting, soft bokeh background. Communicate: ${eventSummary}. No paperwork, no collage, no invented props.`
+      )
+    : isPersonLed
+      ? `Editorial portrait of ${person || analysis.primarySubject} as the clear main focus (~60% of frame). Supporting cues: ${
+          orgs.join(", ") || "relevant context"
+        }. Communicate the event: ${eventSummary}. ${
+          isLegalContext
+            ? "Subtle legal/institutional context only if grounded in the article."
+            : "Do not invent paperwork, court props, or unrelated objects."
+        } Bright professional newsroom lighting. Background only supports the story.`
+      : `Story-specific editorial scene for: ${headline}. Focus on the concrete event and subjects, not category symbols.`;
 
-  const compositionRule = isPersonLed
-    ? "Chest-up or three-quarter portrait dominant left/center; supporting props/org cues on the opposite side; one clear visual story"
-    : "Single clear focal subject; uncluttered 16:9 editorial framing";
+  const compositionRule = isEntertainment
+    ? layout?.composition ||
+      "Lead actor portrait dominant left/center (~60-70%); title branding secondary; platform logo smaller than person; soft cinematic background; no clutter"
+    : isPersonLed
+      ? "Chest-up or three-quarter portrait dominant left/center; supporting org/event cues secondary; one clear visual story"
+      : "Single clear focal subject; uncluttered 16:9 editorial framing";
 
-  const draft = {
+  const draft: Omit<NewsVisualStory, "storyScore" | "understandsWithoutReading" | "reason"> = {
     imageType,
     mainSubject: isPersonLed ? person || analysis.primarySubject || headline : analysis.primarySubject || headline,
-    secondarySubjects: uniq([...orgs, ...analysis.visualKeywords]).slice(0, 6),
+    secondarySubjects: uniq([
+      ...(storyAnalysis?.secondarySubjects || []),
+      ...(movieTitle ? [movieTitle] : []),
+      ...(platform ? [platform] : []),
+      ...orgs,
+      ...analysis.visualKeywords,
+    ]).slice(0, 6),
     organizations: orgs,
     eventSummary,
-    location: analysis.location || (/\buk\b|britain|london|heathrow|england/i.test(headline + summary) ? "United Kingdom" : ""),
+    location: analysis.location || (/\buk\b|britain|london|heathrow|england/i.test(text) ? "United Kingdom" : ""),
     visualStory,
     compositionRule,
     mustInclude,
     mustAvoid,
     importance,
+    entertainmentStyle: storyAnalysis?.entertainmentStyle || null,
+    visualPriority: storyAnalysis?.visualPriority || [],
+    platform,
+    movieTitle,
   };
 
   const scored = scoreStory(draft);
@@ -212,22 +314,26 @@ export function buildNewsVisualStory(
 /** Rewrite / strengthen a prompt when the story score fails the thumbnail-comprehension bar. */
 export function rewritePromptForStoryComprehension(
   basePrompt: string,
-  story: NewsVisualStory
+  story: NewsVisualStory,
+  extraNotes?: string
 ): string {
   return `${basePrompt}
 
 CRITICAL VISUAL STORY OVERRIDE (must obey):
 - Image type: ${story.imageType}
-- Main subject (HIGHEST PRIORITY, ~60% of frame if person): ${story.mainSubject}
-- Organizations: ${story.organizations.join(", ") || "none"}
+- Main subject (HIGHEST PRIORITY, ~60-70% of frame if person): ${story.mainSubject}
+- Visual priority ranking: ${(story.visualPriority || []).join(" > ") || "main subject first"}
+- Organizations / platforms (supporting only): ${story.organizations.join(", ") || "none"}
 - Event: ${story.eventSummary}
 - Visual story: ${story.visualStory}
 - Composition: ${story.compositionRule}
 - Must include: ${story.mustInclude.join("; ")}
 - Must avoid: ${story.mustAvoid.join("; ")}
 - Importance: person ${story.importance.mainPerson}, org ${story.importance.organization}, event ${story.importance.event}, genericSymbols ${story.importance.genericSymbols}
+- Frame balance: main person ~60%, supporting ~25%, background ~15%. Logos/documents/icons must NEVER exceed the main subject size.
 - Someone viewing the thumbnail must answer: WHO / WHAT / WHERE / WHICH ORG / WHY without reading the article.
-- NEVER make scales of justice, gavel, or generic court clipart the primary subject when a named person exists.`;
+- NEVER make scales of justice, gavel, paperwork, or generic court clipart the primary subject when a named person exists.
+${extraNotes ? `- Extra fix notes: ${extraNotes}` : ""}`;
 }
 
 export function isGenericSymbolPrompt(prompt: string): boolean {

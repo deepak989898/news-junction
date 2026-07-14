@@ -4,6 +4,9 @@ import { OPENAI_SHARPNESS_SUFFIX } from "./quality-config";
 import { measureImageQuality, optimizeAndUploadVariants } from "./optimizer";
 import { applyNewsTextOverlay } from "./text-overlay";
 import { planNewsImageVisual } from "./visual-plan";
+import { analyzeArticleStory } from "./story-analyzer";
+import { runThumbnailComprehensionTest } from "./thumbnail-test";
+import { buildVisionRetryPrompt, validateGeneratedImageWithVision } from "./vision-qa";
 import {
   buildNewsVisualStory,
   isGenericSymbolPrompt,
@@ -69,12 +72,7 @@ async function generateWithModelFallback(
   throw lastError || new Error("OpenAI image generation failed");
 }
 
-export async function generateOpenAiImage(
-  input: ImagePipelineInput,
-  analysis: ArticleImageAnalysis,
-  storageId: string,
-  neutral: boolean
-): Promise<{
+export type GenerateOpenAiImageResult = {
   url: string | null;
   prompt: string;
   fileHash?: string;
@@ -82,27 +80,69 @@ export async function generateOpenAiImage(
   modelUsed?: string;
   qualityUsed?: string;
   storyScore?: number;
-}> {
+  visionScore?: number;
+  skippedReason?: string;
+};
+
+/**
+ * Full art-director pipeline:
+ * Article → Story Analyzer → Visual Priority → Layout → Plan → Thumbnail Test
+ * → OpenAI Image → Clarity → Vision QA (1 retry) → Upload
+ */
+export async function generateOpenAiImage(
+  input: ImagePipelineInput,
+  analysis: ArticleImageAnalysis,
+  storageId: string,
+  neutral: boolean
+): Promise<GenerateOpenAiImageResult> {
   const apiKey = process.env.OPENAI_API_KEY;
   const config = getOpenAiImageConfig();
   if (!apiKey || !config.enabled) return { url: null, prompt: "" };
 
-  const story = buildNewsVisualStory(input, analysis);
-  // Never force neutral clipart when a named public figure is the story.
+  // Step 1–2: Story Understanding + Visual Priority
+  const storyAnalysis = await analyzeArticleStory(input, analysis);
+  if (!storyAnalysis.canGenerate) {
+    return {
+      url: null,
+      prompt: "",
+      skippedReason: storyAnalysis.reason || "Story analyzer could not answer who/what/best-visual",
+    };
+  }
+
+  // Steps 3–4 & 11: Visual story + entertainment layout cues
+  const story = buildNewsVisualStory(input, analysis, storyAnalysis);
+
   const forcePersonPortrait =
     story.imageType === "REAL_PUBLIC_FIGURE" ||
     story.imageType === "POLITICIAN" ||
+    story.imageType === "ENTERTAINMENT" ||
     analysis.isRealPersonPrimary ||
-    analysis.namedPeople.length > 0;
+    analysis.namedPeople.length > 0 ||
+    Boolean(storyAnalysis.mainSubject);
   const effectiveNeutral = neutral && !forcePersonPortrait;
 
-  const plan = await planNewsImageVisual(input, {
-    ...analysis,
-    isRealPersonPrimary: forcePersonPortrait || analysis.isRealPersonPrimary,
-    primarySubject: forcePersonPortrait ? story.mainSubject : analysis.primarySubject,
-  });
+  // Step 8: Art-director JSON plan
+  const plan = await planNewsImageVisual(
+    input,
+    {
+      ...analysis,
+      isRealPersonPrimary: forcePersonPortrait || analysis.isRealPersonPrimary,
+      primarySubject: forcePersonPortrait ? story.mainSubject : analysis.primarySubject,
+      namedPeople:
+        analysis.namedPeople.length > 0
+          ? analysis.namedPeople
+          : storyAnalysis.mainSubject
+            ? [storyAnalysis.mainSubject]
+            : analysis.namedPeople,
+      namedOrganizations: uniqOrgs([
+        ...(storyAnalysis.platform ? [storyAnalysis.platform] : []),
+        ...analysis.namedOrganizations,
+      ]),
+    },
+    storyAnalysis
+  );
   if (!plan.safeForGeneration) {
-    return { url: null, prompt: plan.reason || "Visual plan marked unsafe" };
+    return { url: null, prompt: plan.reason || "Visual plan marked unsafe", skippedReason: plan.reason };
   }
 
   let prompt = buildProfessionalNewsImagePrompt({
@@ -111,23 +151,29 @@ export async function generateOpenAiImage(
     plan,
     neutral: effectiveNeutral,
     story,
+    storyAnalysis,
   });
 
   if (story.storyScore < 85 || !story.understandsWithoutReading || isGenericSymbolPrompt(prompt)) {
     prompt = rewritePromptForStoryComprehension(prompt, story);
   }
 
+  // Step 9–10–12 (prompt side): Thumbnail test + score gate
+  const thumb = await runThumbnailComprehensionTest(prompt, story);
+  prompt = thumb.rewrittenPrompt;
+
   let generated = await generateWithModelFallback(apiKey, prompt);
   let rawBuffer = generated.buffer;
   let measured = await measureImageQuality(rawBuffer);
-  let attempts = 1;
+  let imageAttempts = 1;
+  let visionScore: number | undefined;
 
-  if (measured.clarityScore < MIN_ACCEPTABLE_CLARITY && attempts < config.maxAttempts) {
+  if (measured.clarityScore < MIN_ACCEPTABLE_CLARITY && imageAttempts < config.maxAttempts) {
     prompt = `${prompt}\n\n${OPENAI_SHARPNESS_SUFFIX}\nEmphasize bright lighting and a clear facial/portrait focus when a person is the main subject.`;
     try {
       const retry = await generateWithModelFallback(apiKey, prompt);
       const retryMeasured = await measureImageQuality(retry.buffer);
-      attempts += 1;
+      imageAttempts += 1;
       if (retryMeasured.clarityScore >= measured.clarityScore) {
         rawBuffer = retry.buffer;
         measured = retryMeasured;
@@ -135,6 +181,29 @@ export async function generateOpenAiImage(
       }
     } catch {
       // Keep first result if retry fails
+    }
+  }
+
+  // Step 12: Vision QA — regenerate once if below bar
+  const headline = input.titleEn || input.titleHi;
+  let vision = await validateGeneratedImageWithVision(rawBuffer, story, headline);
+  visionScore = vision.scores.total;
+  if (!vision.approved && imageAttempts < 2) {
+    prompt = buildVisionRetryPrompt(prompt, story, vision);
+    try {
+      const retry = await generateWithModelFallback(apiKey, prompt);
+      const retryMeasured = await measureImageQuality(retry.buffer);
+      imageAttempts += 1;
+      const retryVision = await validateGeneratedImageWithVision(retry.buffer, story, headline);
+      if (retryVision.scores.total >= vision.scores.total || retryVision.approved) {
+        rawBuffer = retry.buffer;
+        measured = retryMeasured;
+        generated = retry;
+        vision = retryVision;
+        visionScore = retryVision.scores.total;
+      }
+    } catch {
+      // Keep previous buffer
     }
   }
 
@@ -163,5 +232,18 @@ export async function generateOpenAiImage(
     modelUsed: generated.model,
     qualityUsed: generated.quality,
     storyScore: story.storyScore,
+    visionScore,
   };
+}
+
+function uniqOrgs(items: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of items) {
+    const key = item.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(item.trim());
+  }
+  return out;
 }
