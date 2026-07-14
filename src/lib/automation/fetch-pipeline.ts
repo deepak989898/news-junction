@@ -9,7 +9,7 @@ import {
 } from "./server-db";
 import { fetchRssFeed } from "./rss-fetcher";
 import { fetchGdeltItems } from "./gdelt-fetcher";
-import { checkDuplicate } from "./duplicate-checker";
+import { checkDuplicate, isAlreadyQueuedExternalLink } from "./duplicate-checker";
 import { detectRiskLevel } from "./risk-detector";
 import { processRawNewsItem } from "./process-pipeline";
 
@@ -20,17 +20,19 @@ export async function runFetchNews(options?: {
 }): Promise<{
   fetched: number;
   duplicates: number;
+  skippedQueued: number;
   errors: number;
 }> {
   const settings = await getAutomationSettings();
   if (!settings.automationEnabled) {
-    return { fetched: 0, duplicates: 0, errors: 0 };
+    return { fetched: 0, duplicates: 0, skippedQueued: 0, errors: 0 };
   }
 
   const rssItemLimit = options?.rssItemLimit ?? 8;
 
   let fetched = 0;
   let duplicates = 0;
+  let skippedQueued = 0;
   let errors = 0;
 
   const sources = await getActiveSources();
@@ -55,6 +57,7 @@ export async function runFetchNews(options?: {
       }
 
       for (const item of items) {
+        // Already in our site → true duplicate (do not publish again)
         const dup = await checkDuplicate(
           item.originalLink,
           item.originalTitle,
@@ -78,6 +81,13 @@ export async function runFetchNews(options?: {
           continue;
         }
 
+        // Same external URL already in queue → don't create another duplicate row
+        if (await isAlreadyQueuedExternalLink(item.originalLink)) {
+          skippedQueued++;
+          continue;
+        }
+
+        // External site story that we don't have yet → fetch for rewrite + publish
         await createRawNewsItem({
           sourceId: source.id as string,
           sourceName: source.name as string,
@@ -110,14 +120,20 @@ export async function runFetchNews(options?: {
     }
   }
 
-  // Also fetch GDELT discovery if no dedicated GDELT source exists
   const hasGdeltSource = sources.some((s) => s.type === "GDELT");
   if (!options?.skipGdeltDiscovery && !hasGdeltSource) {
     try {
       const gdeltItems = await fetchGdeltItems(3);
       for (const item of gdeltItems) {
         const dup = await checkDuplicate(item.originalLink, item.originalTitle, settings.duplicateThreshold);
-        if (dup.isDuplicate) { duplicates++; continue; }
+        if (dup.isDuplicate) {
+          duplicates++;
+          continue;
+        }
+        if (await isAlreadyQueuedExternalLink(item.originalLink)) {
+          skippedQueued++;
+          continue;
+        }
 
         await createRawNewsItem({
           sourceId: "gdelt-system",
@@ -138,7 +154,7 @@ export async function runFetchNews(options?: {
   }
 
   await updateAutomationSettings({ lastFetchRun: new Date().toISOString() });
-  return { fetched, duplicates, errors };
+  return { fetched, duplicates, skippedQueued, errors };
 }
 
 export async function runProcessNews(
@@ -213,7 +229,7 @@ export async function runAutoPublishCycle(options?: { force?: boolean; batchSize
   }
 
   const fetchedBacklog = await countRawNewsByStatus("fetched");
-  let fetchResult: { fetched: number; duplicates: number; errors: number; skipped: boolean };
+  let fetchResult: { fetched: number; duplicates: number; skippedQueued: number; errors: number; skipped: boolean };
 
   if (fetchedBacklog === 0) {
     const fetched = await runFetchNews({
@@ -223,7 +239,7 @@ export async function runAutoPublishCycle(options?: { force?: boolean; batchSize
     });
     fetchResult = { ...fetched, skipped: false };
   } else {
-    fetchResult = { fetched: 0, duplicates: 0, errors: 0, skipped: true };
+    fetchResult = { fetched: 0, duplicates: 0, skippedQueued: 0, errors: 0, skipped: true };
   }
 
   const batchSize = options?.batchSize ?? settings.processBatchSizePerRun ?? 1;

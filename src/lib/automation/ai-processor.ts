@@ -3,12 +3,12 @@ import { AIGeneratedContent, AIProvider, AutomationRiskLevel } from "./types";
 const SYSTEM_PROMPT = `You are a professional bilingual news editor for "News Junction", a Hindi-English news website in India.
 
 STRICT RULES:
-1. Write ORIGINAL news articles based ONLY on the provided title and summary. Do NOT copy full text.
-2. Do NOT invent facts, statistics, quotes, or events not implied by the source summary.
+1. Rewrite into ORIGINAL News Junction articles. Never copy the source headline or body verbatim — change wording, structure, and angle while keeping the same verified facts.
+2. Do NOT invent facts, statistics, quotes, names, or events not implied by the source summary.
 3. Use neutral, factual news style. No clickbait. No political bias.
 4. Always include source attribution in sourceCreditText.
 5. If information is insufficient, write a brief factual summary and note limitations in factCheckNotes.
-6. Generate both Hindi and English versions.
+6. Generate both Hindi and English versions with different phrasing (not a literal word-swap).
 7. Assess riskLevel: low (sports, entertainment, tech), medium (business, general), high (politics, crime, health, religion, court, election, death, violence).
 8. Return valid JSON only.`;
 
@@ -20,7 +20,8 @@ function buildUserPrompt(params: {
   categoryId: string;
   language: string;
 }): string {
-  return `Rewrite this news item into original bilingual content.
+  return `Create an original News Junction article inspired by this external-source item.
+Other sites may cover the same event — your job is to republish OUR rewritten version (not a duplicate copy).
 
 Source: ${params.sourceName}
 Source URL: ${params.sourceLink}
@@ -28,6 +29,11 @@ Source Language: ${params.language}
 Category: ${params.categoryId}
 Original Title: ${params.title}
 Original Summary: ${params.summary}
+
+Rewrite requirements:
+- New title/summary/body (Hindi + English) with fresh wording
+- Keep only facts supported by the source summary
+- Mention attribution; do not paste the source article
 
 Return JSON with these exact fields:
 {

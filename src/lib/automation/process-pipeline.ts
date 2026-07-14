@@ -295,6 +295,13 @@ export async function processRawNewsItem(
         geoFields,
       });
 
+      // After publish, generate a fresh OpenAI image (process cron often skips image gen for timeouts).
+      if (settings.generateAiImages !== false) {
+        void regenerateArticleImage(newsId).catch((err) => {
+          console.error("post-publish OpenAI image regenerate failed:", err);
+        });
+      }
+
       await logAutomation({
         type: "publish",
         message: `Auto-published: ${aiOutput.titleEn}`,
@@ -345,7 +352,8 @@ export async function approveAndPublishRawNews(rawNewsId: string): Promise<strin
     rawItem,
     rawItem.aiOutput,
     categoryNameEn,
-    (category as { nameHi?: string })?.nameHi
+    (category as { nameHi?: string })?.nameHi,
+    { preferHostedImage: false, skipOpenAiImage: false }
   );
   const { imageUrl, generated, metadata } = imageResult;
 

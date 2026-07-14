@@ -4,7 +4,7 @@ import { DEFAULT_IMAGE_PIPELINE_SETTINGS } from "@/lib/image-pipeline/defaults";
 export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
   automationEnabled: false,
   aiProvider: "openai",
-  autoPublishLowRisk: false,
+  autoPublishLowRisk: true,
   autoPublishMediumRisk: false,
   highRiskAlwaysApproval: true,
   maxArticlesPerDay: 48,
