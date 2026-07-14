@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "generate:favicon": "node scripts/generate-favicon.mjs",
+    "generate:fallbacks": "node scripts/generate-category-fallbacks.mjs",
     "import:districts": "node scripts/import-india-districts.mjs"
   },
   "dependencies": {

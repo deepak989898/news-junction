@@ -355,8 +355,6 @@ function buildScenes(script: string): VideoScene[] {
 function isLikelyUsableImageUrl(url: string): boolean {
   const value = url.trim();
   if (!value) return false;
-  // Missing /images/fallbacks/* assets cause 404 on production.
-  if (/\/images\/fallbacks\//i.test(value)) return false;
   if (value.startsWith("http://") || value.startsWith("https://")) return true;
   if (value.startsWith("/") && !value.startsWith("//")) return true;
   return false;
