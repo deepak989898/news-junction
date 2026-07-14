@@ -1,11 +1,37 @@
 import { Metadata } from "next";
 import { NewsArticle } from "@/types";
 import { BRAND } from "@/lib/constants";
+import type { ArticleShareMeta } from "@/lib/news/get-article-for-metadata";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://newsjunction.vercel.app";
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://news-junction.vercel.app").replace(
+  /\/$/,
+  ""
+);
 
 export function getSiteUrl(): string {
   return SITE_URL;
+}
+
+/** Absolute article image for Facebook / WhatsApp / X link previews. */
+export function resolveShareImageUrl(article: {
+  imageUrl?: string;
+  imageLargeUrl?: string;
+  imageWebpUrl?: string;
+  imageMediumUrl?: string;
+}): string {
+  const raw =
+    article.imageLargeUrl ||
+    article.imageWebpUrl ||
+    article.imageMediumUrl ||
+    article.imageUrl ||
+    "";
+  const trimmed = String(raw || "").trim();
+  if (!trimmed || trimmed === "/logo.png") {
+    return `${SITE_URL}/logo.png`;
+  }
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  return trimmed.startsWith("/") ? `${SITE_URL}${trimmed}` : `${SITE_URL}/${trimmed}`;
 }
 
 export function buildDefaultMetadata(): Metadata {
@@ -23,13 +49,13 @@ export function buildDefaultMetadata(): Metadata {
       siteName: BRAND.name,
       title: BRAND.name,
       description: `${BRAND.taglineHi} | ${BRAND.taglineEn}`,
-      images: [{ url: "/logo.png", width: 512, height: 512, alt: BRAND.name }],
+      images: [{ url: `${SITE_URL}/logo.png`, width: 512, height: 512, alt: BRAND.name }],
     },
     twitter: {
       card: "summary_large_image",
       title: BRAND.name,
       description: `${BRAND.taglineHi} | ${BRAND.taglineEn}`,
-      images: ["/logo.png"],
+      images: [`${SITE_URL}/logo.png`],
     },
     robots: {
       index: true,
@@ -49,13 +75,34 @@ export function buildDefaultMetadata(): Metadata {
   };
 }
 
-export function buildArticleMetadata(
-  article: NewsArticle,
-  language: "hi" | "en" = "hi"
-): Metadata {
-  const title = language === "hi" ? article.titleHi : article.titleEn;
-  const description = language === "hi" ? article.summaryHi : article.summaryEn;
-  const url = `${SITE_URL}/article/${article.slug}`;
+function buildShareMetadataFromFields(args: {
+  title: string;
+  description: string;
+  url: string;
+  imageUrl: string;
+  imageAlt: string;
+  publishedTime?: string;
+  authors: string[];
+  tags: string[];
+  ogTitle?: string;
+  ogDescription?: string;
+  twitterTitle?: string;
+  twitterDescription?: string;
+}): Metadata {
+  const {
+    title,
+    description,
+    url,
+    imageUrl,
+    imageAlt,
+    publishedTime,
+    authors,
+    tags,
+    ogTitle,
+    ogDescription,
+    twitterTitle,
+    twitterDescription,
+  } = args;
 
   return {
     title,
@@ -63,33 +110,104 @@ export function buildArticleMetadata(
     alternates: { canonical: url },
     openGraph: {
       type: "article",
-      title,
-      description,
+      title: ogTitle || title,
+      description: ogDescription || description,
       url,
-      images: article.imageUrl ? [{ url: article.imageUrl, alt: title }] : [],
-      publishedTime: article.publishedAt?.toDate?.()?.toISOString(),
-      authors: [article.author],
-      tags: article.tags,
+      siteName: BRAND.name,
+      images: [
+        {
+          url: imageUrl,
+          width: 1200,
+          height: 630,
+          alt: imageAlt,
+        },
+      ],
+      publishedTime,
+      authors,
+      tags,
     },
     twitter: {
       card: "summary_large_image",
-      title,
-      description,
-      images: article.imageUrl ? [article.imageUrl] : [],
+      title: twitterTitle || ogTitle || title,
+      description: twitterDescription || ogDescription || description,
+      images: [imageUrl],
     },
   };
+}
+
+export function buildArticleMetadata(
+  article: NewsArticle,
+  language: "hi" | "en" = "hi"
+): Metadata {
+  const title =
+    (language === "hi" ? article.seoTitleHi : article.seoTitleEn) ||
+    (language === "hi" ? article.titleHi : article.titleEn);
+  const description =
+    (language === "hi" ? article.seoDescriptionHi : article.seoDescriptionEn) ||
+    (language === "hi" ? article.summaryHi : article.summaryEn);
+  const url = `${SITE_URL}/article/${article.slug}`;
+  const imageUrl = resolveShareImageUrl(article);
+  const publishedTime = article.publishedAt?.toDate?.()?.toISOString();
+
+  return buildShareMetadataFromFields({
+    title,
+    description,
+    url,
+    imageUrl,
+    imageAlt: title,
+    publishedTime,
+    authors: [article.author],
+    tags: article.tags,
+    ogTitle: article.ogTitle || undefined,
+    ogDescription: article.ogDescription || undefined,
+    twitterTitle: article.twitterTitle || undefined,
+    twitterDescription: article.twitterDescription || undefined,
+  });
+}
+
+/** Metadata from server Firestore fetch (for generateMetadata). */
+export function buildArticleShareMetadata(
+  article: ArticleShareMeta,
+  language: "hi" | "en" = "hi"
+): Metadata {
+  const title =
+    (language === "hi" ? article.seoTitleHi : article.seoTitleEn) ||
+    (language === "hi" ? article.titleHi : article.titleEn) ||
+    "News Junction";
+  const description =
+    (language === "hi" ? article.seoDescriptionHi : article.seoDescriptionEn) ||
+    (language === "hi" ? article.summaryHi : article.summaryEn) ||
+    "";
+  const url = `${SITE_URL}/article/${article.slug}`;
+  const imageUrl = resolveShareImageUrl(article);
+
+  return buildShareMetadataFromFields({
+    title,
+    description,
+    url,
+    imageUrl,
+    imageAlt: title,
+    publishedTime: article.publishedAtIso,
+    authors: [article.author],
+    tags: article.tags,
+    ogTitle: article.ogTitle,
+    ogDescription: article.ogDescription,
+    twitterTitle: article.twitterTitle,
+    twitterDescription: article.twitterDescription,
+  });
 }
 
 export function buildArticleJsonLd(article: NewsArticle, language: "hi" | "en" = "hi") {
   const title = language === "hi" ? article.titleHi : article.titleEn;
   const description = language === "hi" ? article.summaryHi : article.summaryEn;
+  const image = resolveShareImageUrl(article);
 
   return {
     "@context": "https://schema.org",
     "@type": "NewsArticle",
     headline: title,
     description,
-    image: article.imageUrl ? [article.imageUrl] : [],
+    image: image ? [image] : [],
     datePublished: article.publishedAt?.toDate?.()?.toISOString(),
     dateModified: article.updatedAt?.toDate?.()?.toISOString(),
     author: {
