@@ -63,7 +63,7 @@ export default function BreakingTicker() {
       aria-label={t.breakingNews}
     >
       {/* Static label — never scrolls */}
-      <div className="relative z-10 flex shrink-0 items-center bg-[#c41e20] px-3 py-2 text-xs font-bold uppercase tracking-wide text-white shadow-[4px_0_10px_rgba(0,0,0,0.08)] md:px-5 md:text-sm">
+      <div className="relative z-10 flex shrink-0 items-center bg-[#c41e20] px-3 py-2 text-xs font-bold uppercase tracking-wide text-white md:px-5 md:text-sm">
         {t.breakingNews}
       </div>
 
