@@ -462,19 +462,8 @@ export default function ArticleClient() {
                 <p className="font-medium text-[#1a2b4c]">
                   {language === "hi" ? "स्रोत" : "Source"}
                 </p>
-                <p className="mt-1">
-                  {article.sourceUrl ? (
-                    <a
-                      href={article.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[#c41e20] hover:underline"
-                    >
-                      {article.sourceName || article.sourceUrl}
-                    </a>
-                  ) : (
-                    article.sourceName
-                  )}
+                <p className="mt-1 text-[#c41e20]">
+                  {article.sourceName || article.sourceUrl}
                 </p>
                 <p className="mt-1 text-xs text-gray-500">
                   {language === "hi"
