@@ -7,10 +7,11 @@ STRICT RULES:
 2. Do NOT invent facts, statistics, quotes, names, or events not implied by the source summary.
 3. Use neutral, factual news style. No clickbait. No political bias.
 4. Always include source attribution in sourceCreditText.
-5. If information is insufficient, write a brief factual summary and note limitations in factCheckNotes.
+5. If information is insufficient, expand carefully into context and what is known / not known — never invent.
 6. Generate both Hindi and English versions with different phrasing (not a literal word-swap).
 7. Assess riskLevel: low (sports, entertainment, tech), medium (business, general), high (politics, crime, health, religion, court, election, death, violence).
-8. Return valid JSON only.`;
+8. LENGTH: Write substantial articles that keep readers engaged. Summary = short briefing. Body = full report with multiple paragraphs.
+9. Return valid JSON only.`;
 
 function buildUserPrompt(params: {
   title: string;
@@ -34,15 +35,24 @@ Rewrite requirements:
 - New title/summary/body (Hindi + English) with fresh wording
 - Keep only facts supported by the source summary
 - Mention attribution; do not paste the source article
+- SHORT briefing (summary): 3–5 clear sentences (~80–140 words) — enough for a quick reader
+- FULL story (content): 6–9 HTML <p> paragraphs (~450–750 words). Structure:
+  1) Lead / what happened
+  2) Why it matters / context
+  3) Key details and background
+  4) What people / institutions said or did (only if in source)
+  5) Impact / next steps / what to watch
+  6) Closing factual wrap-up with attribution
+- Do NOT write only 2–3 tiny paragraphs. Prefer depth and clarity over brevity.
 
 Return JSON with these exact fields:
 {
   "titleHi": "Hindi headline",
   "titleEn": "English headline",
-  "summaryHi": "Hindi summary (2-3 sentences)",
-  "summaryEn": "English summary (2-3 sentences)",
-  "contentHi": "Hindi article body (2-3 short paragraphs, HTML <p> tags)",
-  "contentEn": "English article body (2-3 short paragraphs, HTML <p> tags)",
+  "summaryHi": "Hindi SHORT briefing (3-5 sentences)",
+  "summaryEn": "English SHORT briefing (3-5 sentences)",
+  "contentHi": "Hindi FULL story body (6-9 paragraphs, HTML <p> tags)",
+  "contentEn": "English FULL story body (6-9 paragraphs, HTML <p> tags)",
   "tags": ["tag1", "tag2"],
   "imageAltHi": "Hindi alt text describing what is VISUALLY shown in the image (not just the headline)",
   "imageAltEn": "English alt text describing what is VISUALLY shown in the image (scene, place, event — so a blind user understands the news topic from the image)",
@@ -111,10 +121,10 @@ async function callOpenAI(prompt: string): Promise<string> {
         { role: "user", content: prompt },
       ],
       temperature: 0.4,
-      max_tokens: 1800,
+      max_tokens: 4000,
       response_format: { type: "json_object" },
     }),
-    signal: AbortSignal.timeout(45000),
+    signal: AbortSignal.timeout(90000),
   });
 
   if (!response.ok) {
@@ -137,9 +147,13 @@ async function callGemini(prompt: string): Promise<string> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: `${SYSTEM_PROMPT}\n\n${prompt}` }] }],
-        generationConfig: { temperature: 0.4, responseMimeType: "application/json" },
+        generationConfig: {
+          temperature: 0.4,
+          maxOutputTokens: 4096,
+          responseMimeType: "application/json",
+        },
       }),
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(90000),
     }
   );
 

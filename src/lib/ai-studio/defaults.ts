@@ -11,7 +11,7 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   monthlyCostLimit: 50,
   requireApprovalForAIChanges: false,
   defaultTone: "neutral",
-  defaultLength: "medium",
+  defaultLength: "long",
 };
 
 export const DEFAULT_PROMPT_TEMPLATES: Omit<AIPromptTemplate, "id" | "createdAt" | "updatedAt">[] = [
@@ -24,13 +24,13 @@ export const DEFAULT_PROMPT_TEMPLATES: Omit<AIPromptTemplate, "id" | "createdAt"
   {
     name: "Summary Rewrite",
     type: "summary_rewrite",
-    prompt: "Rewrite the summary clearly and concisely. Do not add unsupported claims.",
+    prompt: "Rewrite as a SHORT reader briefing: 3-5 clear sentences (~80-140 words). No clickbait. Do not add unsupported claims.",
     isActive: true,
   },
   {
     name: "Content Improve",
     type: "content_improve",
-    prompt: "Improve grammar, clarity, and structure. Keep all facts unchanged. Use neutral news tone.",
+    prompt: "Improve grammar, clarity, and structure. Expand into a fuller news article with 6-9 HTML <p> paragraphs when source facts allow. Keep all facts unchanged. Use neutral news tone. Do not invent.",
     isActive: true,
   },
   {

@@ -18,6 +18,7 @@ import {
 import { NewsArticle } from "@/types";
 import {
   getArticleTitle,
+  getArticleSummary,
   getArticleContent,
   formatRelativeTime,
   toDate,
@@ -33,6 +34,7 @@ import NewsCard from "@/components/news/NewsCard";
 import AdSlotRenderer from "@/components/ads/AdSlotRenderer";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { FacebookIcon, WhatsAppIcon, XIcon } from "@/components/news/SocialShareIcons";
+import ArticleBodySections from "@/components/news/ArticleBodySections";
 
 export default function ArticleClient() {
   const params = useParams();
@@ -226,6 +228,7 @@ export default function ArticleClient() {
   }
 
   const title = getArticleTitle(article, language);
+  const summary = getArticleSummary(article, language);
   const content = getArticleContent(article, language);
   const categoryName =
     language === "hi" ? article.categoryNameHi : article.categoryNameEn;
@@ -402,12 +405,7 @@ export default function ArticleClient() {
               ))}
             </div>
 
-            <div
-              className="article-content mt-6 text-base leading-relaxed text-gray-800"
-              dangerouslySetInnerHTML={{
-                __html: content.replace(/\n/g, "<br />"),
-              }}
-            />
+            <ArticleBodySections summary={summary} content={content} />
 
             <AdSlotRenderer location="inArticle" className="my-6" />
 

@@ -10,8 +10,9 @@ CRITICAL RULES:
 3. Do NOT invent quotes, numbers, dates, names, or events not supported by verified sources.
 4. Neutral journalism. No clickbait. No political bias.
 5. Include source attribution listing all verified sources.
-6. Return valid JSON only.
-7. Assess riskLevel honestly for politics, crime, health, religion, death, etc.`;
+6. LENGTH: Summary = short briefing (3–5 sentences). Body = FULL story with 6–9 HTML <p> paragraphs (~450–750 words). Never invent padding; expand with context, significance, and structured reporting from verified facts.
+7. Return valid JSON only.
+8. Assess riskLevel honestly for politics, crime, health, religion, death, etc.`;
 
 function buildTrendArticlePrompt(
   trend: TrendTopic,
@@ -32,16 +33,18 @@ ${sourceList}
 
 Shared entities/facts: ${context.agreedEntities.join(", ")}
 
+Write for website readers who may stop at the short briefing OR expand into the full story.
+
 Return JSON:
 {
   "titleHi": "Hindi headline",
   "titleEn": "English headline",
-  "summaryHi": "2-3 sentence Hindi summary",
-  "summaryEn": "2-3 sentence English summary",
-  "contentHi": "Hindi article HTML with <p> tags, 3-4 paragraphs",
-  "contentEn": "English article HTML with <p> tags, 3-4 paragraphs",
-  "keyPointsHi": ["point1", "point2"],
-  "keyPointsEn": ["point1", "point2"],
+  "summaryHi": "Hindi SHORT briefing (3-5 sentences, ~80-140 words)",
+  "summaryEn": "English SHORT briefing (3-5 sentences, ~80-140 words)",
+  "contentHi": "Hindi FULL story HTML with <p> tags — 6-9 paragraphs (~450-750 words): lead, context, details, impact, wrap-up + attribution",
+  "contentEn": "English FULL story HTML with <p> tags — 6-9 paragraphs (~450-750 words): lead, context, details, impact, wrap-up + attribution",
+  "keyPointsHi": ["point1", "point2", "point3"],
+  "keyPointsEn": ["point1", "point2", "point3"],
   "tagsHi": ["tag1", "tag2"],
   "tagsEn": ["tag1", "tag2"],
   "tags": ["tag1", "tag2"],
@@ -121,10 +124,10 @@ async function callOpenAI(prompt: string): Promise<string> {
         { role: "user", content: prompt },
       ],
       temperature: 0.3,
-      max_tokens: 2500,
+      max_tokens: 4500,
       response_format: { type: "json_object" },
     }),
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(90000),
   });
 
   if (!response.ok) {
