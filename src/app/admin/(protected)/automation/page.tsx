@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Zap, Clock, CheckCircle, AlertTriangle, Copy, XCircle } from "lucide-react";
+import { Zap, Clock, CheckCircle, AlertTriangle, Copy, XCircle, Loader2 } from "lucide-react";
 import AdminTopbar from "@/components/layout/AdminTopbar";
 import RoleGuard from "@/components/admin/RoleGuard";
 import StatsCard from "@/components/admin/StatsCard";
@@ -18,6 +18,7 @@ import { AutomationSettings, AutomationLog } from "@/lib/automation/types";
 import { triggerAutomation, triggerProcessBatches } from "@/lib/automation/client-api";
 import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
+import { runWithAdminBusy } from "@/lib/admin/busy-store";
 
 export default function AutomationDashboardPage() {
   const { adminUser } = useAuth();
@@ -42,9 +43,14 @@ export default function AutomationDashboardPage() {
   useEffect(() => { load(); }, []);
 
   const toggleAutomation = async (enabled: boolean) => {
-    await updateAutomationSettingsClient({ automationEnabled: enabled });
-    setSettings((p) => p ? { ...p, automationEnabled: enabled } : p);
-    toast.success(enabled ? "Automation enabled" : "Automation disabled");
+    await runWithAdminBusy(
+      enabled ? "Enabling automation…" : "Disabling automation…",
+      async () => {
+        await updateAutomationSettingsClient({ automationEnabled: enabled });
+        setSettings((p) => (p ? { ...p, automationEnabled: enabled } : p));
+        toast.success(enabled ? "Automation enabled" : "Automation disabled");
+      }
+    );
   };
 
   const [processProgress, setProcessProgress] = useState("");
@@ -83,7 +89,7 @@ export default function AutomationDashboardPage() {
     }
   };
 
-  if (loading) return <LoadingSpinner size="lg" />;
+  if (loading) return <LoadingSpinner size="lg" label="Loading automation…" />;
 
   return (
     <RoleGuard>
@@ -118,16 +124,18 @@ export default function AutomationDashboardPage() {
               <button
                 onClick={() => handleTrigger("fetch")}
                 disabled={!!triggering}
-                className="rounded-lg bg-[#1a2b4c] px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[#1a2b4c] px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
               >
-                {triggering === "fetch" ? "Fetching..." : "Run Fetch Now"}
+                {triggering === "fetch" && <Loader2 size={14} className="animate-spin" />}
+                {triggering === "fetch" ? "Fetching…" : "Run Fetch Now"}
               </button>
               <button
                 onClick={() => handleTrigger("process")}
                 disabled={!!triggering}
-                className="rounded-lg bg-[#1a2b4c] px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[#1a2b4c] px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
               >
-                {triggering === "process" ? "Processing..." : "Run Process Now (up to 5)"}
+                {triggering === "process" && <Loader2 size={14} className="animate-spin" />}
+                {triggering === "process" ? "Processing…" : "Run Process Now (up to 5)"}
               </button>
             </>
           )}

@@ -15,6 +15,7 @@ import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import toast from "react-hot-toast";
 import { Eye, X, Sparkles, Loader2 } from "lucide-react";
 import Image from "next/image";
+import { runWithAdminBusy } from "@/lib/admin/busy-store";
 
 interface NewsFormProps {
   initialData?: NewsFormData;
@@ -123,7 +124,7 @@ export default function NewsForm({
     }
     setSaving(true);
     try {
-      await onSubmit(formData);
+      await runWithAdminBusy("Saving article… please wait", () => onSubmit(formData));
       toast.success("Article saved successfully");
     } catch {
       toast.error("Failed to save article");

@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getAuthToken } from "@/lib/automation/client-api";
 import type { MediaLibraryItem, MediaLibrarySource } from "@/lib/media-library/service";
 import toast from "react-hot-toast";
+import { runWithAdminBusy } from "@/lib/admin/busy-store";
 
 type Filter = "all" | MediaLibrarySource;
 
@@ -62,15 +63,17 @@ export default function MediaPage() {
     if (!file || !user) return;
     setUploading(true);
     try {
-      const { url } = await uploadMediaFile(file);
-      await createMediaItem({
-        url,
-        filename: file.name,
-        altHi: "",
-        altEn: "",
-        uploadedBy: user.email || user.uid,
-        size: file.size,
-        contentType: file.type,
+      await runWithAdminBusy("Uploading image… please wait", async () => {
+        const { url } = await uploadMediaFile(file);
+        await createMediaItem({
+          url,
+          filename: file.name,
+          altHi: "",
+          altEn: "",
+          uploadedBy: user.email || user.uid,
+          size: file.size,
+          contentType: file.type,
+        });
       });
       toast.success("Image uploaded");
       setLoading(true);

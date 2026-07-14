@@ -252,18 +252,18 @@ export default function EditorialManagerPage() {
         <div className="rounded-xl bg-white p-5 shadow-sm lg:col-span-2">
           <h3 className="mb-3 font-semibold text-[#1a2b4c]">Review Pipeline</h3>
           <div className="flex flex-wrap gap-2">
-            <button className="rounded bg-[#c41e20] px-4 py-2 text-sm font-bold text-white" disabled={running} onClick={() => runFull(false)}>
+            <button className="rounded bg-[#c41e20] px-4 py-2 text-sm font-bold text-white disabled:opacity-50" disabled={running} onClick={() => runFull(false)}>
               <ShieldCheck className="mr-1 inline h-4 w-4" />{running ? "Reviewing..." : "Run Full Review"}
             </button>
-            <button className="rounded border px-3 py-2 text-sm" onClick={() => runFull(true)}><Play className="mr-1 inline h-4 w-4" />Queue Review</button>
-            <button className="rounded border px-3 py-2 text-sm" onClick={processQueue}><RefreshCw className="mr-1 inline h-4 w-4" />Process Queue</button>
-            <button className="rounded border px-3 py-2 text-sm" onClick={() => runPartial("headline")}>Headline</button>
-            <button className="rounded border px-3 py-2 text-sm" onClick={() => runPartial("summary")}>Summary</button>
-            <button className="rounded border px-3 py-2 text-sm" onClick={() => runPartial("language")}>Language</button>
-            <button className="rounded border px-3 py-2 text-sm" onClick={() => runPartial("seo")}>SEO</button>
-            <button className="rounded border px-3 py-2 text-sm" onClick={() => runPartial("entities")}>Entities</button>
-            <button className="rounded border px-3 py-2 text-sm" onClick={() => runPartial("image")}>Image</button>
-            <button className="rounded border px-3 py-2 text-sm" onClick={() => runPartial("duplicate")}>Duplicate</button>
+            <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" disabled={running} onClick={() => runFull(true)}><Play className="mr-1 inline h-4 w-4" />Queue Review</button>
+            <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" disabled={running} onClick={processQueue}><RefreshCw className="mr-1 inline h-4 w-4" />Process Queue</button>
+            <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" disabled={running} onClick={() => runPartial("headline")}>Headline</button>
+            <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" disabled={running} onClick={() => runPartial("summary")}>Summary</button>
+            <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" disabled={running} onClick={() => runPartial("language")}>Language</button>
+            <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" disabled={running} onClick={() => runPartial("seo")}>SEO</button>
+            <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" disabled={running} onClick={() => runPartial("entities")}>Entities</button>
+            <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" disabled={running} onClick={() => runPartial("image")}>Image</button>
+            <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" disabled={running} onClick={() => runPartial("duplicate")}>Duplicate</button>
           </div>
 
           {scores && (

@@ -76,13 +76,16 @@ export default function CategoriesPage() {
 
     setSaving(true);
     try {
-      if (editing) {
-        await updateCategory(editing.id, { ...form, slug });
-        toast.success("Category updated");
-      } else {
-        await createCategory({ ...form, slug });
-        toast.success("Category created");
-      }
+      const { runWithAdminBusy } = await import("@/lib/admin/busy-store");
+      await runWithAdminBusy(editing ? "Updating category…" : "Creating category…", async () => {
+        if (editing) {
+          await updateCategory(editing.id, { ...form, slug });
+          toast.success("Category updated");
+        } else {
+          await createCategory({ ...form, slug });
+          toast.success("Category created");
+        }
+      });
       setShowForm(false);
       await load();
     } catch {

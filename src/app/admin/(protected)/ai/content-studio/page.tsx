@@ -154,21 +154,24 @@ export default function AIContentStudioPage() {
     setAiOutput("");
     setPendingChangeId(undefined);
     try {
-      const result = await runContentAction({
-        articleId: selectedId,
-        actionType,
-        language,
-        customInstruction: customInstruction || undefined,
+      const { runWithAdminBusy } = await import("@/lib/admin/busy-store");
+      await runWithAdminBusy("AI generating content… please wait", async () => {
+        const result = await runContentAction({
+          articleId: selectedId,
+          actionType,
+          language,
+          customInstruction: customInstruction || undefined,
+        });
+        setAiOutput(result.output);
+        setAiField(result.field || getTargetField(actionType, language));
+        setPendingChangeId(result.pendingChangeId);
+        if (result.pendingChangeId) {
+          toast.success("Change submitted for approval");
+        } else {
+          toast.success("AI output ready — review before applying");
+        }
+        await loadMeta();
       });
-      setAiOutput(result.output);
-      setAiField(result.field || getTargetField(actionType, language));
-      setPendingChangeId(result.pendingChangeId);
-      if (result.pendingChangeId) {
-        toast.success("Change submitted for approval");
-      } else {
-        toast.success("AI output ready — review before applying");
-      }
-      await loadMeta();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Generation failed");
     } finally {

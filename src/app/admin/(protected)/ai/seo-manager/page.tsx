@@ -29,7 +29,7 @@ type Tool = "audit" | "keywords" | "meta" | "slug" | "internal" | "faq";
 export default function AiSeoManagerPage() {
   const { adminUser } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [running, setRunning] = useState<Tool | null>(null);
+  const [running, setRunning] = useState<string | null>(null);
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");
@@ -243,27 +243,34 @@ export default function AiSeoManagerPage() {
         <div className="rounded-xl bg-white p-5 shadow-sm lg:col-span-2">
           <h3 className="mb-3 font-semibold text-[#1a2b4c]">SEO Tools</h3>
           <div className="grid gap-2 md:grid-cols-3">
-            <button className="rounded border px-3 py-2 text-sm" onClick={() => runTool("audit")} disabled={running === "audit"}><ListChecks className="mr-1 inline h-4 w-4" />Run SEO Audit</button>
-            <button className="rounded border px-3 py-2 text-sm" onClick={() => runTool("keywords")} disabled={running === "keywords"}><Sparkles className="mr-1 inline h-4 w-4" />Generate Keywords</button>
-            <button className="rounded border px-3 py-2 text-sm" onClick={() => runTool("meta")} disabled={running === "meta"}><Wand2 className="mr-1 inline h-4 w-4" />Generate Meta</button>
-            <button className="rounded border px-3 py-2 text-sm" onClick={() => runTool("slug")} disabled={running === "slug"}>Optimize Slug</button>
-            <button className="rounded border px-3 py-2 text-sm" onClick={() => runTool("internal")} disabled={running === "internal"}><Link2 className="mr-1 inline h-4 w-4" />Internal Links</button>
-            <button className="rounded border px-3 py-2 text-sm" onClick={() => runTool("faq")} disabled={running === "faq"}>Generate FAQ</button>
+            <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" onClick={() => runTool("audit")} disabled={!!running}><ListChecks className="mr-1 inline h-4 w-4" />{running === "audit" ? "Running…" : "Run SEO Audit"}</button>
+            <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" onClick={() => runTool("keywords")} disabled={!!running}><Sparkles className="mr-1 inline h-4 w-4" />{running === "keywords" ? "Generating…" : "Generate Keywords"}</button>
+            <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" onClick={() => runTool("meta")} disabled={!!running}><Wand2 className="mr-1 inline h-4 w-4" />{running === "meta" ? "Generating…" : "Generate Meta"}</button>
+            <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" onClick={() => runTool("slug")} disabled={!!running}>{running === "slug" ? "Optimizing…" : "Optimize Slug"}</button>
+            <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" onClick={() => runTool("internal")} disabled={!!running}><Link2 className="mr-1 inline h-4 w-4" />{running === "internal" ? "Generating…" : "Internal Links"}</button>
+            <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" onClick={() => runTool("faq")} disabled={!!running}>{running === "faq" ? "Generating…" : "Generate FAQ"}</button>
           </div>
-          <button className="mt-3 rounded bg-[#1a2b4c] px-4 py-2 text-sm font-bold text-white" onClick={runContentGap}>Run Content Gap Finder</button>
+          <button className="mt-3 rounded bg-[#1a2b4c] px-4 py-2 text-sm font-bold text-white disabled:opacity-50" disabled={!!running} onClick={runContentGap}>Run Content Gap Finder</button>
           <button
-            className="mt-3 ml-2 rounded border border-[#c41e20] px-4 py-2 text-sm font-bold text-[#c41e20]"
+            className="mt-3 ml-2 rounded border border-[#c41e20] px-4 py-2 text-sm font-bold text-[#c41e20] disabled:opacity-50"
+            disabled={!!running}
             onClick={async () => {
+              setRunning("backfill");
               try {
+                const { runWithAdminBusy } = await import("@/lib/admin/busy-store");
                 const { backfillArticleEnrichmentApi } = await import("@/lib/article-enrichment/client-api");
-                const res = (await backfillArticleEnrichmentApi(40)) as { processed?: number };
+                const res = (await runWithAdminBusy("Backfilling FAQ + links…", () =>
+                  backfillArticleEnrichmentApi(40)
+                )) as { processed?: number };
                 toast.success(`Backfilled FAQ/links on ${res.processed ?? 0} articles`);
               } catch (e) {
                 toast.error(e instanceof Error ? e.message : "Backfill failed");
+              } finally {
+                setRunning(null);
               }
             }}
           >
-            Backfill FAQ + Internal Links
+            {running === "backfill" ? "Backfilling…" : "Backfill FAQ + Internal Links"}
           </button>
         </div>
       </div>

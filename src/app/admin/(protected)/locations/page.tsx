@@ -98,25 +98,28 @@ export default function AdminLocationsPage() {
     setBusy(true);
     const log: string[] = [];
     try {
-      const phases: Array<"states" | "districts" | "cities"> = ["states", "districts", "cities"];
-      for (const phase of phases) {
-        let offset = 0;
-        let done = false;
-        while (!done) {
-          setActionMsg(`Seeding ${phase}… (${offset} done)`);
-          const data = await apiPost({
-            action: "seedChunk",
-            phase,
-            offset,
-            limit: 150,
-          });
-          log.push(JSON.stringify(data));
-          setActionMsg(log.join("\n"));
-          done = Boolean(data.done);
-          offset = Number(data.nextOffset || 0);
-          if (phase === "states") break;
+      const { runWithAdminBusy } = await import("@/lib/admin/busy-store");
+      await runWithAdminBusy("Seeding locations… please wait", async () => {
+        const phases: Array<"states" | "districts" | "cities"> = ["states", "districts", "cities"];
+        for (const phase of phases) {
+          let offset = 0;
+          let done = false;
+          while (!done) {
+            setActionMsg(`Seeding ${phase}… (${offset} done)`);
+            const data = await apiPost({
+              action: "seedChunk",
+              phase,
+              offset,
+              limit: 150,
+            });
+            log.push(JSON.stringify(data));
+            setActionMsg(log.join("\n"));
+            done = Boolean(data.done);
+            offset = Number(data.nextOffset || 0);
+            if (phase === "states") break;
+          }
         }
-      }
+      });
       toast.success("Firestore locations seeded successfully");
       await load();
     } catch (e) {

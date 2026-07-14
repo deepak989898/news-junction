@@ -64,22 +64,29 @@ export async function bulkApproveRawNews(
   rawNewsIds: string[],
   onProgress?: (done: number, total: number) => void
 ) {
-  let success = 0;
-  let failed = 0;
-  const errors: string[] = [];
+  const { runWithAdminBusy } = await import("@/lib/admin/busy-store");
+  return runWithAdminBusy(
+    `Approving ${rawNewsIds.length} articles… please wait`,
+    async () => {
+      let success = 0;
+      let failed = 0;
+      const errors: string[] = [];
 
-  for (let i = 0; i < rawNewsIds.length; i++) {
-    try {
-      await approveRawNews(rawNewsIds[i]);
-      success++;
-    } catch (error) {
-      failed++;
-      errors.push(error instanceof Error ? error.message : `Failed: ${rawNewsIds[i]}`);
-    }
-    onProgress?.(i + 1, rawNewsIds.length);
-  }
+      for (let i = 0; i < rawNewsIds.length; i++) {
+        try {
+          await approveRawNews(rawNewsIds[i]);
+          success++;
+        } catch (error) {
+          failed++;
+          errors.push(error instanceof Error ? error.message : `Failed: ${rawNewsIds[i]}`);
+        }
+        onProgress?.(i + 1, rawNewsIds.length);
+      }
 
-  return { success, failed, errors };
+      return { success, failed, errors };
+    },
+    "write"
+  );
 }
 
 export async function triggerAutomation(action: "fetch" | "process", batchSize = 1) {
@@ -102,37 +109,44 @@ export async function regenerateArticleImageApi(
 }
 
 export async function triggerProcessBatches(rounds = 3, batchSize = 1) {
-  const totals = {
-    processed: 0,
-    published: 0,
-    pending: 0,
-    failed: 0,
-    duplicates: 0,
-    rounds: 0,
-    timedOut: false,
-    errors: [] as string[],
-  };
+  const { runWithAdminBusy } = await import("@/lib/admin/busy-store");
+  return runWithAdminBusy(
+    "Processing articles with AI… please wait",
+    async () => {
+      const totals = {
+        processed: 0,
+        published: 0,
+        pending: 0,
+        failed: 0,
+        duplicates: 0,
+        rounds: 0,
+        timedOut: false,
+        errors: [] as string[],
+      };
 
-  for (let i = 0; i < rounds; i++) {
-    try {
-      const result = await triggerAutomation("process", batchSize);
-      totals.rounds++;
-      totals.processed += result.processed || 0;
-      totals.published += result.published || 0;
-      totals.pending += result.pending || 0;
-      totals.failed += result.failed || 0;
-      totals.duplicates += result.duplicates || 0;
-      if (!result.processed) break;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      totals.errors.push(message);
-      if (/timeout|FUNCTION_INVOCATION_TIMEOUT|504|524/i.test(message)) {
-        totals.timedOut = true;
-        break;
+      for (let i = 0; i < rounds; i++) {
+        try {
+          const result = await triggerAutomation("process", batchSize);
+          totals.rounds++;
+          totals.processed += result.processed || 0;
+          totals.published += result.published || 0;
+          totals.pending += result.pending || 0;
+          totals.failed += result.failed || 0;
+          totals.duplicates += result.duplicates || 0;
+          if (!result.processed) break;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          totals.errors.push(message);
+          if (/timeout|FUNCTION_INVOCATION_TIMEOUT|504|524/i.test(message)) {
+            totals.timedOut = true;
+            break;
+          }
+          totals.failed += 1;
+        }
       }
-      totals.failed += 1;
-    }
-  }
 
-  return totals;
+      return totals;
+    },
+    "write"
+  );
 }

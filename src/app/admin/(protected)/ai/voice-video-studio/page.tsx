@@ -66,6 +66,18 @@ export default function VoiceVideoStudioPage() {
   const [selectedDigestIds, setSelectedDigestIds] = useState<string[]>([]);
   const [settingsDraft, setSettingsDraft] = useState<Record<string, unknown>>({});
   const [renderingId, setRenderingId] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+
+  const withBusy = async (key: string, label: string, fn: () => Promise<void>) => {
+    if (busyAction) return;
+    setBusyAction(key);
+    const { runWithAdminBusy } = await import("@/lib/admin/busy-store");
+    try {
+      await runWithAdminBusy(label, fn);
+    } finally {
+      setBusyAction(null);
+    }
+  };
 
   const refresh = async () => {
     const [news, data] = await Promise.all([getAllNewsForAdmin(), getVoiceVideoStudioApi()]);
@@ -103,41 +115,47 @@ export default function VoiceVideoStudioPage() {
 
   const runScript = async () => {
     if (!selectedArticleId) return toast.error("Select an article first");
-    const result = (await generateVoiceScriptApi({
-      articleId: selectedArticleId,
-      action,
-      language,
-    })) as Record<string, unknown>;
-    setScript(String(result.script || ""));
-    if (action.includes("caption")) setCaption(String(result.script || ""));
-    if (action === "hashtags") setHashtags(String(result.script || "").replace(/#/g, ""));
-    toast.success("Script generated");
-    await refresh();
+    await withBusy("script", "Generating voice script… please wait", async () => {
+      const result = (await generateVoiceScriptApi({
+        articleId: selectedArticleId,
+        action,
+        language,
+      })) as Record<string, unknown>;
+      setScript(String(result.script || ""));
+      if (action.includes("caption")) setCaption(String(result.script || ""));
+      if (action === "hashtags") setHashtags(String(result.script || "").replace(/#/g, ""));
+      toast.success("Script generated");
+      await refresh();
+    });
   };
 
   const runAudio = async () => {
     if (!selectedArticleId || !script.trim()) return toast.error("Generate or edit script first");
-    const res = (await generateAudioApi({
-      articleId: selectedArticleId,
-      language,
-      script,
-    })) as Record<string, unknown>;
-    setAudioId(String(res.id || ""));
-    toast.success("Audio generated");
-    await refresh();
+    await withBusy("audio", "Generating audio… please wait", async () => {
+      const res = (await generateAudioApi({
+        articleId: selectedArticleId,
+        language,
+        script,
+      })) as Record<string, unknown>;
+      setAudioId(String(res.id || ""));
+      toast.success("Audio generated");
+      await refresh();
+    });
   };
 
   const runSubtitle = async (format: "srt" | "vtt") => {
     if (!selectedArticleId || !script.trim()) return toast.error("Generate script first");
-    const res = (await generateSubtitlesApi({
-      articleId: selectedArticleId,
-      language,
-      script,
-      format,
-    })) as Record<string, unknown>;
-    setSubtitleUrl(String(res.subtitleUrl || ""));
-    toast.success(`${format.toUpperCase()} subtitle generated`);
-    await refresh();
+    await withBusy(`sub-${format}`, `Generating ${format.toUpperCase()}… please wait`, async () => {
+      const res = (await generateSubtitlesApi({
+        articleId: selectedArticleId,
+        language,
+        script,
+        format,
+      })) as Record<string, unknown>;
+      setSubtitleUrl(String(res.subtitleUrl || ""));
+      toast.success(`${format.toUpperCase()} subtitle generated`);
+      await refresh();
+    });
   };
 
   const runVideoPackage = async () => {
@@ -153,31 +171,36 @@ export default function VoiceVideoStudioPage() {
       toast.error("Generate audio first, then create video package");
       return;
     }
-    try {
-      await generateVideoPackageApi({
-        articleId: selectedArticleId,
-        language,
-        platform,
-        script,
-        audioAssetId: linkedAudioId,
-        subtitleUrl: subtitleUrl || undefined,
-        caption,
-        hashtags: hashtags.split(",").map((x) => x.trim()).filter(Boolean),
-      });
-      toast.success("Reel MP4 generated — preview below");
-      await refresh();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Video package failed");
-      await refresh();
-    }
+    await withBusy("video", "Generating video package… please wait", async () => {
+      try {
+        await generateVideoPackageApi({
+          articleId: selectedArticleId,
+          language,
+          platform,
+          script,
+          audioAssetId: linkedAudioId,
+          subtitleUrl: subtitleUrl || undefined,
+          caption,
+          hashtags: hashtags.split(",").map((x) => x.trim()).filter(Boolean),
+        });
+        toast.success("Reel MP4 generated — preview below");
+        await refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Video package failed");
+        await refresh();
+      }
+    });
   };
 
   const rerunReelRender = async (packageId: string) => {
     setRenderingId(packageId);
+    const { runWithAdminBusy } = await import("@/lib/admin/busy-store");
     try {
-      await renderVideoPackageApi({ packageId });
-      toast.success("Reel MP4 rendered");
-      await refresh();
+      await runWithAdminBusy("Rendering reel MP4… please wait", async () => {
+        await renderVideoPackageApi({ packageId });
+        toast.success("Reel MP4 rendered");
+        await refresh();
+      });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Re-render failed");
       await refresh();
@@ -188,28 +211,34 @@ export default function VoiceVideoStudioPage() {
 
   const runDigest = async () => {
     if (!selectedDigestIds.length) return toast.error("Select articles for digest");
-    await generateDigestApi({
-      digestType,
-      articleIds: selectedDigestIds,
+    await withBusy("digest", "Generating digest… please wait", async () => {
+      await generateDigestApi({
+        digestType,
+        articleIds: selectedDigestIds,
+      });
+      toast.success("Digest generated");
+      await refresh();
     });
-    toast.success("Digest generated");
-    await refresh();
   };
 
   const reviewItem = async (type: "audio" | "video_package" | "digest", id: string, actionName: "approve" | "reject" | "publish" | "save_draft") => {
-    await approveAudioVideoApi({ type, id, action: actionName });
-    toast.success(`${actionName} successful`);
-    await refresh();
+    await withBusy(`review-${id}-${actionName}`, `${actionName.replace("_", " ")}… please wait`, async () => {
+      await approveAudioVideoApi({ type, id, action: actionName });
+      toast.success(`${actionName} done`);
+      await refresh();
+    });
   };
 
   const saveTtsSettings = async () => {
     if (adminUser?.role !== "super_admin") return toast.error("Only super admin can change TTS settings");
-    await approveAudioVideoApi({
-      operation: "update_tts_settings",
-      patch: settingsDraft,
+    await withBusy("tts", "Saving TTS settings…", async () => {
+      await approveAudioVideoApi({
+        operation: "update_tts_settings",
+        patch: settingsDraft,
+      });
+      toast.success("TTS settings updated");
+      await refresh();
     });
-    toast.success("TTS settings updated");
-    await refresh();
   };
 
   if (loading) return <LoadingSpinner size="lg" />;
@@ -284,11 +313,11 @@ export default function VoiceVideoStudioPage() {
             </label>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            <button className="rounded border px-3 py-2 text-sm" onClick={runScript}><Mic className="mr-1 inline h-4 w-4" />Generate Script</button>
-            <button className="rounded border px-3 py-2 text-sm" onClick={runAudio}><FileAudio className="mr-1 inline h-4 w-4" />Generate Audio</button>
-            <button className="rounded border px-3 py-2 text-sm" onClick={() => runSubtitle("srt")}><Captions className="mr-1 inline h-4 w-4" />Generate SRT</button>
-            <button className="rounded border px-3 py-2 text-sm" onClick={() => runSubtitle("vtt")}><Captions className="mr-1 inline h-4 w-4" />Generate VTT</button>
-            <button className="rounded bg-[#c41e20] px-3 py-2 text-sm font-bold text-white" onClick={runVideoPackage}><Clapperboard className="mr-1 inline h-4 w-4" />Generate Video Package</button>
+            <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" disabled={!!busyAction} onClick={runScript}><Mic className="mr-1 inline h-4 w-4" />{busyAction === "script" ? "Generating…" : "Generate Script"}</button>
+            <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" disabled={!!busyAction} onClick={runAudio}><FileAudio className="mr-1 inline h-4 w-4" />{busyAction === "audio" ? "Generating…" : "Generate Audio"}</button>
+            <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" disabled={!!busyAction} onClick={() => runSubtitle("srt")}><Captions className="mr-1 inline h-4 w-4" />{busyAction === "sub-srt" ? "Generating…" : "Generate SRT"}</button>
+            <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" disabled={!!busyAction} onClick={() => runSubtitle("vtt")}><Captions className="mr-1 inline h-4 w-4" />{busyAction === "sub-vtt" ? "Generating…" : "Generate VTT"}</button>
+            <button className="rounded bg-[#c41e20] px-3 py-2 text-sm font-bold text-white disabled:opacity-50" disabled={!!busyAction} onClick={runVideoPackage}><Clapperboard className="mr-1 inline h-4 w-4" />{busyAction === "video" ? "Generating…" : "Generate Video Package"}</button>
           </div>
           <textarea className="mt-3 w-full rounded border px-3 py-2 text-sm" rows={7} value={script} onChange={(e) => setScript(e.target.value)} placeholder="Script editor..." />
           <input className="mt-2 w-full rounded border px-3 py-2 text-sm" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Social caption" />
@@ -564,7 +593,7 @@ export default function VoiceVideoStudioPage() {
           <select className="rounded border px-2 py-1 text-sm" value={digestType} onChange={(e) => setDigestType(e.target.value as (typeof DIGEST_TYPES)[number])}>
             {DIGEST_TYPES.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
-          <button className="rounded bg-[#1a2b4c] px-4 py-1.5 text-sm font-bold text-white" onClick={runDigest}>Generate Digest</button>
+          <button className="rounded bg-[#1a2b4c] px-4 py-1.5 text-sm font-bold text-white disabled:opacity-50" disabled={!!busyAction} onClick={runDigest}>{busyAction === "digest" ? "Generating…" : "Generate Digest"}</button>
         </div>
         <div className="max-h-44 overflow-y-auto rounded border p-2 text-sm">
           {articles.slice(0, 40).map((a) => (

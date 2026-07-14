@@ -5,7 +5,7 @@ import AdminTopbar from "@/components/layout/AdminTopbar";
 import RoleGuard from "@/components/admin/RoleGuard";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import toast from "react-hot-toast";
-import { RefreshCw, Play, Check, X, Search } from "lucide-react";
+import { RefreshCw, Play, Check, X, Search, Loader2 } from "lucide-react";
 import Link from "next/link";
 
 interface TrendRow {
@@ -86,27 +86,39 @@ export default function GoogleTrendsAdminPage() {
   const runAction = async (action: string, trendId?: string) => {
     setBusy(action + (trendId || ""));
     try {
-      const token = await getToken();
-      const res = await fetch("/api/admin/google-trends", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ action, trendId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Action failed");
-      if (action === "fetch") {
-        const msg =
-          data.message ||
-          `Saved ${data.fetched ?? 0} · skipped ${data.skipped ?? 0} · duplicates ${data.duplicates ?? 0} · RSS ${data.total ?? 0}`;
-        if ((data.fetched ?? 0) > 0) toast.success(msg);
-        else toast.error(msg || "Fetch finished but saved 0 trends");
-      } else {
-        toast.success(`${action} completed`);
-      }
-      await load();
+      const { runWithAdminBusy } = await import("@/lib/admin/busy-store");
+      await runWithAdminBusy(
+        action === "fetch"
+          ? "Fetching Google Trends…"
+          : action === "research"
+            ? "Researching sources…"
+            : action === "generate"
+              ? "Generating articles…"
+              : `${action}… please wait`,
+        async () => {
+          const token = await getToken();
+          const res = await fetch("/api/admin/google-trends", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ action, trendId }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Action failed");
+          if (action === "fetch") {
+            const msg =
+              data.message ||
+              `Saved ${data.fetched ?? 0} · skipped ${data.skipped ?? 0} · duplicates ${data.duplicates ?? 0} · RSS ${data.total ?? 0}`;
+            if ((data.fetched ?? 0) > 0) toast.success(msg);
+            else toast.error(msg || "Fetch finished but saved 0 trends");
+          } else {
+            toast.success(`${action} completed`);
+          }
+          await load();
+        }
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Action failed");
     } finally {
@@ -162,21 +174,25 @@ export default function GoogleTrendsAdminPage() {
                 <button
                   onClick={toggleEnabled}
                   disabled={!!busy}
-                  className={`rounded-lg px-4 py-2 text-sm font-medium text-white ${settings?.enabled ? "bg-green-600" : "bg-gray-500"}`}
+                  className={`inline-flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-medium text-white ${settings?.enabled ? "bg-green-600" : "bg-gray-500"}`}
                 >
+                  {busy === "toggle" && <Loader2 size={14} className="animate-spin" />}
                   {settings?.enabled ? "Enabled" : "Disabled"}
                 </button>
                 <button onClick={() => runAction("fetch")} disabled={!!busy} className="inline-flex items-center gap-1 rounded-lg bg-[#1a2b4c] px-3 py-2 text-sm text-white">
-                  <Play size={14} /> Fetch Trends
+                  {busy === "fetch" ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+                  {busy === "fetch" ? "Fetching…" : "Fetch Trends"}
                 </button>
                 <button onClick={() => runAction("research")} disabled={!!busy} className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
-                  <Search size={14} /> Research Sources
+                  {busy === "research" ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                  {busy === "research" ? "Researching…" : "Research Sources"}
                 </button>
                 <button onClick={() => runAction("generate")} disabled={!!busy} className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
-                  Generate Articles
+                  {busy === "generate" ? <Loader2 size={14} className="animate-spin" /> : null}
+                  {busy === "generate" ? "Generating…" : "Generate Articles"}
                 </button>
                 <button onClick={load} disabled={!!busy} className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
-                  <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+                  <RefreshCw size={14} className={loading || busy ? "animate-spin" : ""} />
                 </button>
               </div>
             </div>
