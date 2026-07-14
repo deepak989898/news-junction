@@ -5,7 +5,7 @@ import AdminTopbar from "@/components/layout/AdminTopbar";
 import RoleGuard from "@/components/admin/RoleGuard";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import toast from "react-hot-toast";
-import { RefreshCw, Play, Check, X, Search, Loader2, Trash2, Eye, FilePlus2 } from "lucide-react";
+import { RefreshCw, Play, Check, X, Search, Loader2, Trash2, Eye, FilePlus2, Settings2, Zap, ChevronDown, ChevronUp } from "lucide-react";
 import Link from "next/link";
 
 interface TrendRow {
@@ -34,10 +34,20 @@ interface Settings {
   country: string;
   officialApiConfigured: boolean;
   maximumTopicsPerRun: number;
+  maximumArticlesPerDay: number;
+  maximumArticlesPerCategoryPerDay: number;
   minimumVerifiedSources: number;
   minimumSearchVolume?: number;
+  activeOnly: boolean;
+  autoResearch: boolean;
+  autoGenerate: boolean;
   autoPublishLowRisk: boolean;
+  autoPublishMediumRisk: boolean;
+  highRiskAlwaysApproval: boolean;
   lastFetchRun: string | null;
+  lastResearchRun?: string | null;
+  lastProcessRun?: string | null;
+  lastPublishRun?: string | null;
   lastFetchSummary?: {
     fetched: number;
     skipped: number;
@@ -47,6 +57,23 @@ interface Settings {
     message: string;
   } | null;
 }
+
+type SettingsPatch = Partial<
+  Pick<
+    Settings,
+    | "enabled"
+    | "activeOnly"
+    | "autoResearch"
+    | "autoGenerate"
+    | "autoPublishLowRisk"
+    | "autoPublishMediumRisk"
+    | "highRiskAlwaysApproval"
+    | "maximumTopicsPerRun"
+    | "maximumArticlesPerDay"
+    | "maximumArticlesPerCategoryPerDay"
+    | "minimumVerifiedSources"
+  >
+>;
 
 const PAGE_SIZE = 25;
 
@@ -68,6 +95,87 @@ function formatBatchLabel(key: string): string {
   return d.toLocaleString();
 }
 
+function ToggleRow({
+  label,
+  hint,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label className={`flex items-start justify-between gap-3 rounded-lg border p-2.5 ${disabled ? "opacity-60" : "cursor-pointer hover:bg-gray-50"}`}>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-[#1a2b4c]">{label}</span>
+        {hint && <span className="block text-xs text-gray-500">{hint}</span>}
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => !disabled && onChange(!checked)}
+        className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors ${checked ? "bg-green-600" : "bg-gray-300"} disabled:cursor-not-allowed`}
+      >
+        <span
+          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${checked ? "translate-x-4" : "translate-x-0.5"}`}
+        />
+      </button>
+    </label>
+  );
+}
+
+function NumberRow({
+  label,
+  value,
+  min,
+  max,
+  disabled,
+  onSave,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  disabled?: boolean;
+  onSave: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState<string>(String(value ?? ""));
+  useEffect(() => {
+    setDraft(String(value ?? ""));
+  }, [value]);
+
+  const commit = () => {
+    const n = Math.max(min, Math.min(max, Number(draft) || min));
+    setDraft(String(n));
+    if (n !== value) onSave(n);
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-sm text-gray-700">{label}</span>
+      <input
+        type="number"
+        min={min}
+        max={max}
+        value={draft}
+        disabled={disabled}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+        className="w-20 rounded-lg border px-2 py-1 text-sm disabled:opacity-60"
+      />
+    </div>
+  );
+}
+
 export default function GoogleTrendsAdminPage() {
   const [loading, setLoading] = useState(true);
   const [trends, setTrends] = useState<TrendRow[]>([]);
@@ -75,6 +183,8 @@ export default function GoogleTrendsAdminPage() {
   const [logs, setLogs] = useState<Array<{ id?: string; message?: string; status?: string; type?: string; createdAt?: string | null }>>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [showSettings, setShowSettings] = useState(false);
+  const [autoStep, setAutoStep] = useState<string>("");
 
   const getToken = useCallback(async () => {
     const { getAuth } = await import("firebase/auth");
@@ -269,28 +379,102 @@ export default function GoogleTrendsAdminPage() {
     }
   };
 
+  const saveSettings = useCallback(
+    async (patch: SettingsPatch, opts?: { silent?: boolean; busyKey?: string }) => {
+      setBusy(opts?.busyKey || "settings");
+      try {
+        const token = await getToken();
+        const res = await fetch("/api/admin/google-trends", {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ settings: patch }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to update settings");
+        }
+        setSettings((prev) => (prev ? { ...prev, ...patch } : prev));
+        if (!opts?.silent) toast.success("Settings saved");
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed to save settings");
+        await load();
+      } finally {
+        setBusy(null);
+      }
+    },
+    [getToken, load]
+  );
+
   const toggleEnabled = async () => {
     if (!settings) return;
-    setBusy("toggle");
+    await saveSettings(
+      { enabled: !settings.enabled },
+      { silent: true, busyKey: "toggle" }
+    );
+    toast.success(settings.enabled ? "Automation disabled" : "Automation enabled");
+  };
+
+  const runFullAutomation = async () => {
+    if (!settings?.enabled) {
+      toast.error("Turn on automation (Enabled) first.");
+      return;
+    }
+    setBusy("run-auto");
+    let generated = 0;
+    let failed = 0;
     try {
-      const token = await getToken();
-      const res = await fetch("/api/admin/google-trends", {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ settings: { enabled: !settings.enabled } }),
+      const { runWithAdminBusy } = await import("@/lib/admin/busy-store");
+      await runWithAdminBusy("Running full Google Trends automation…", async () => {
+        const token = await getToken();
+        const call = async (body: Record<string, unknown>) => {
+          const res = await fetch("/api/admin/google-trends", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Step failed");
+          return data;
+        };
+
+        setAutoStep("Fetching latest trends…");
+        await call({ action: "fetch" });
+
+        setAutoStep("Researching & verifying sources…");
+        await call({ action: "research" });
+
+        // Reload to know which trends are verified now
+        const listRes = await fetch("/api/admin/google-trends", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const listData = await listRes.json();
+        const verified: TrendRow[] = (listData.trends || []).filter(
+          (t: TrendRow) => t.status === "verified"
+        );
+
+        for (let i = 0; i < verified.length; i++) {
+          setAutoStep(`Generating article ${i + 1}/${verified.length} (image + publish)…`);
+          try {
+            await call({ action: "generate", trendId: verified[i].id });
+            generated += 1;
+          } catch {
+            failed += 1;
+          }
+        }
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to update settings");
-      }
-      toast.success(settings.enabled ? "Google Trends disabled" : "Google Trends enabled");
+      toast.success(
+        `Automation run complete · ${generated} article(s) generated${failed ? ` · ${failed} failed` : ""}`
+      );
+      setVisibleCount(PAGE_SIZE);
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to toggle");
+      toast.error(e instanceof Error ? e.message : "Automation run failed");
+      await load();
     } finally {
+      setAutoStep("");
       setBusy(null);
     }
   };
@@ -421,17 +605,37 @@ export default function GoogleTrendsAdminPage() {
                   {" · "}Country: {settings?.country || "IN"}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  Workflow: Fetch → delete unwanted → Research Sources → Generate (per row or all one-by-one) → Approve/Reject.
+                  Auto mode (Enabled): scheduled crons Fetch → Research → Generate (image) → Publish per your settings.
+                  Manual: Fetch → Research → Generate → Approve/Reject.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={toggleEnabled}
                   disabled={!!busy}
+                  title={settings?.enabled ? "Automation is ON — click to turn off" : "Automation is OFF — click to turn on"}
                   className={`inline-flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-medium text-white ${settings?.enabled ? "bg-green-600" : "bg-gray-500"}`}
                 >
                   {busy === "toggle" && <Loader2 size={14} className="animate-spin" />}
-                  {settings?.enabled ? "Enabled" : "Disabled"}
+                  {settings?.enabled ? "Automation ON" : "Automation OFF"}
+                </button>
+                <button
+                  onClick={runFullAutomation}
+                  disabled={!!busy || !settings?.enabled}
+                  title="Run the full pipeline now: Fetch → Research → Generate (image) → Auto-publish per settings"
+                  className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-[#c41e20] to-[#e85d04] px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  {busy === "run-auto" ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+                  {busy === "run-auto" ? "Running…" : "Run Automation Now"}
+                </button>
+                <button
+                  onClick={() => setShowSettings((s) => !s)}
+                  disabled={!!busy}
+                  className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm disabled:opacity-50"
+                >
+                  <Settings2 size={14} />
+                  Settings
+                  {showSettings ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
                 <button
                   onClick={runFetch}
@@ -483,6 +687,12 @@ export default function GoogleTrendsAdminPage() {
                 </p>
               </div>
             </div>
+            {autoStep ? (
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800">
+                <Loader2 size={14} className="animate-spin" />
+                {autoStep}
+              </div>
+            ) : null}
             {settings?.lastFetchSummary?.message ? (
               <div
                 className={`mt-3 rounded-lg px-3 py-2 text-sm ${
@@ -498,6 +708,126 @@ export default function GoogleTrendsAdminPage() {
               </div>
             ) : null}
           </div>
+
+          {showSettings && settings && (
+            <div className="rounded-xl bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-center gap-2">
+                <Settings2 size={16} className="text-[#1a2b4c]" />
+                <h3 className="text-sm font-semibold text-[#1a2b4c]">Automation Settings</h3>
+              </div>
+
+              <div className="grid gap-6 md:grid-cols-2">
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    What runs automatically
+                  </p>
+                  <div className="space-y-2">
+                    <ToggleRow
+                      label="Enable automation"
+                      hint="Master switch. When on, scheduled crons run the pipeline."
+                      checked={settings.enabled}
+                      disabled={!!busy}
+                      onChange={(v) => saveSettings({ enabled: v }, { silent: true })}
+                    />
+                    <ToggleRow
+                      label="Auto-research sources"
+                      hint="Automatically verify sources for fetched trends."
+                      checked={settings.autoResearch}
+                      disabled={!!busy || !settings.enabled}
+                      onChange={(v) => saveSettings({ autoResearch: v }, { silent: true })}
+                    />
+                    <ToggleRow
+                      label="Auto-generate articles + images"
+                      hint="Automatically write articles and generate images for verified trends."
+                      checked={settings.autoGenerate}
+                      disabled={!!busy || !settings.enabled}
+                      onChange={(v) => saveSettings({ autoGenerate: v }, { silent: true })}
+                    />
+                    <ToggleRow
+                      label="Auto-publish low-risk"
+                      hint="Publish low-risk articles automatically (sports, entertainment, tech)."
+                      checked={settings.autoPublishLowRisk}
+                      disabled={!!busy || !settings.enabled}
+                      onChange={(v) => saveSettings({ autoPublishLowRisk: v }, { silent: true })}
+                    />
+                    <ToggleRow
+                      label="Auto-publish medium-risk"
+                      hint="Publish medium-risk articles automatically (business, general)."
+                      checked={settings.autoPublishMediumRisk}
+                      disabled={!!busy || !settings.enabled}
+                      onChange={(v) => saveSettings({ autoPublishMediumRisk: v }, { silent: true })}
+                    />
+                    <ToggleRow
+                      label="High-risk always needs approval"
+                      hint="Politics, crime, health, death etc. always wait for manual approval (recommended)."
+                      checked={settings.highRiskAlwaysApproval}
+                      disabled={!!busy || !settings.enabled}
+                      onChange={(v) => saveSettings({ highRiskAlwaysApproval: v }, { silent: true })}
+                    />
+                    <ToggleRow
+                      label="Active trends only"
+                      hint="Skip trends that have already ended."
+                      checked={settings.activeOnly}
+                      disabled={!!busy || !settings.enabled}
+                      onChange={(v) => saveSettings({ activeOnly: v }, { silent: true })}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Limits
+                  </p>
+                  <div className="space-y-3">
+                    <NumberRow
+                      label="Max topics per run"
+                      value={settings.maximumTopicsPerRun}
+                      min={1}
+                      max={50}
+                      disabled={!!busy || !settings.enabled}
+                      onSave={(v) => saveSettings({ maximumTopicsPerRun: v })}
+                    />
+                    <NumberRow
+                      label="Max articles per day"
+                      value={settings.maximumArticlesPerDay}
+                      min={1}
+                      max={100}
+                      disabled={!!busy || !settings.enabled}
+                      onSave={(v) => saveSettings({ maximumArticlesPerDay: v })}
+                    />
+                    <NumberRow
+                      label="Max articles per category / day"
+                      value={settings.maximumArticlesPerCategoryPerDay}
+                      min={1}
+                      max={50}
+                      disabled={!!busy || !settings.enabled}
+                      onSave={(v) => saveSettings({ maximumArticlesPerCategoryPerDay: v })}
+                    />
+                    <NumberRow
+                      label="Minimum verified sources"
+                      value={settings.minimumVerifiedSources}
+                      min={1}
+                      max={5}
+                      disabled={!!busy || !settings.enabled}
+                      onSave={(v) => saveSettings({ minimumVerifiedSources: v })}
+                    />
+                  </div>
+
+                  <div className="mt-4 rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
+                    <p className="font-semibold text-gray-700">Automatic schedule (daily)</p>
+                    <p className="mt-1">Fetch → Research → Generate → Publish run on server crons every day.</p>
+                    <div className="mt-2 grid grid-cols-2 gap-1">
+                      <span>Last fetch: {settings.lastFetchRun ? new Date(settings.lastFetchRun).toLocaleString() : "Never"}</span>
+                      <span>Last research: {settings.lastResearchRun ? new Date(settings.lastResearchRun).toLocaleString() : "Never"}</span>
+                      <span>Last generate: {settings.lastProcessRun ? new Date(settings.lastProcessRun).toLocaleString() : "Never"}</span>
+                      <span>Last publish: {settings.lastPublishRun ? new Date(settings.lastPublishRun).toLocaleString() : "Never"}</span>
+                    </div>
+                    <p className="mt-2">Use <strong>Run Automation Now</strong> to trigger the whole cycle immediately.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {loading ? (
             <LoadingSpinner size="lg" />

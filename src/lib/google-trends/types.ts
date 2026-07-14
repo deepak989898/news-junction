@@ -37,7 +37,12 @@ export interface GoogleTrendsSettings {
   categoryMappings: GoogleTrendsCategoryMapping[];
   requireSourceVerification: boolean;
   minimumVerifiedSources: number;
+  /** When enabled, the scheduled crons automatically research fetched trends. */
+  autoResearch: boolean;
+  /** When enabled, the scheduled crons automatically generate articles + images for verified trends. */
+  autoGenerate: boolean;
   autoPublishLowRisk: boolean;
+  autoPublishMediumRisk: boolean;
   highRiskAlwaysApproval: boolean;
   sourceResearchTimeoutMs: number;
   aiRetryLimit: number;
@@ -46,6 +51,14 @@ export interface GoogleTrendsSettings {
   lastResearchRun: string | null;
   lastProcessRun: string | null;
   lastPublishRun: string | null;
+  lastCycleRun: string | null;
+  lastCycleSummary?: {
+    fetched: number;
+    verified: number;
+    generated: number;
+    published: number;
+    at: string;
+  } | null;
   /** Last fetch counters shown in admin UI */
   lastFetchSummary?: {
     fetched: number;

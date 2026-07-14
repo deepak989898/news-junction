@@ -78,7 +78,11 @@ async function processOneVerifiedTrend(
   }
 
   const finalRisk = aiOutput.riskLevel === "high" ? "high" : trend.riskLevel;
-  const canAutoPublish = !trend.isTestRecord && finalRisk === "low" && settings.autoPublishLowRisk;
+  const canAutoPublish =
+    !trend.isTestRecord &&
+    finalRisk !== "high" &&
+    ((finalRisk === "low" && settings.autoPublishLowRisk) ||
+      (finalRisk === "medium" && settings.autoPublishMediumRisk));
 
   await updateTrendTopic(trend.id, {
     status: canAutoPublish ? "processing" : "pendingApproval",

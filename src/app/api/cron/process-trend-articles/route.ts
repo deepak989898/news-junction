@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyCronRequest } from "@/lib/automation/cron-auth";
 import { runProcessTrendArticles } from "@/lib/google-trends/process-pipeline";
+import { getGoogleTrendsSettings } from "@/lib/google-trends/server-db";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -10,7 +11,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
-    const result = await runProcessTrendArticles(2);
+    const settings = await getGoogleTrendsSettings();
+    if (!settings.enabled) {
+      return NextResponse.json({ success: true, skipped: "Google Trends automation disabled" });
+    }
+    if (settings.autoGenerate === false) {
+      return NextResponse.json({ success: true, skipped: "Auto-generate turned off in settings" });
+    }
+    const result = await runProcessTrendArticles(Math.max(1, Math.min(settings.maximumTopicsPerRun || 3, 3)));
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
     return NextResponse.json(
