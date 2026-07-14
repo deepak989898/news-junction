@@ -66,14 +66,33 @@ export function selectVerifiedSources(
   minimumVerified: number
 ): Array<Omit<TrendSourceCandidate, "id" | "createdAt"> & { selected: boolean }> {
   const trusted = candidates
-    .filter((c) => c.matchScore >= 0.35 && c.trustLevel !== "low")
+    .filter((c) => c.matchScore >= 0.22 && c.trustLevel !== "low")
     .sort((a, b) => b.matchScore - a.matchScore);
 
   const official = trusted.filter((c) => c.sourceType === "Official");
   if (official.length >= 1 && trusted.length >= 1) {
-    const selected = [official[0], ...trusted.filter((c) => c.sourceUrl !== official[0].sourceUrl)].slice(0, Math.max(minimumVerified, 2));
+    const selected = [official[0], ...trusted.filter((c) => c.sourceUrl !== official[0].sourceUrl)].slice(
+      0,
+      Math.max(minimumVerified, 2)
+    );
     return selected.map((c) => ({ ...c, selected: true }));
   }
 
-  return trusted.slice(0, minimumVerified).map((c) => ({ ...c, selected: true }));
+  // Prefer distinct publishers when picking the minimum set
+  const picked: typeof trusted = [];
+  const hosts = new Set<string>();
+  for (const c of trusted) {
+    let host = c.sourceName.toLowerCase();
+    try {
+      host = new URL(c.sourceUrl).hostname.replace(/^www\./, "");
+    } catch {
+      /* keep */
+    }
+    if (hosts.has(host) && picked.length >= minimumVerified) continue;
+    hosts.add(host);
+    picked.push(c);
+    if (picked.length >= Math.max(minimumVerified, 2)) break;
+  }
+
+  return picked.slice(0, Math.max(minimumVerified, picked.length)).map((c) => ({ ...c, selected: true }));
 }

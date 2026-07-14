@@ -72,6 +72,7 @@ function mapTrendTopic(id: string, data: FirebaseFirestore.DocumentData): TrendT
     title: data.title || "",
     normalizedTitle: data.normalizedTitle || "",
     relatedQueries: data.relatedQueries || [],
+    relatedNews: Array.isArray(data.relatedNews) ? data.relatedNews : [],
     searchVolume: Number(data.searchVolume || 0),
     growthPercentage: Number(data.growthPercentage || 0),
     trendStatus: data.trendStatus || "unknown",

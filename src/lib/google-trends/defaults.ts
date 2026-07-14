@@ -27,7 +27,7 @@ export const DEFAULT_GOOGLE_TRENDS_SETTINGS: GoogleTrendsSettings = {
   minimumVerifiedSources: 2,
   autoPublishLowRisk: false,
   highRiskAlwaysApproval: true,
-  sourceResearchTimeoutMs: 25000,
+  sourceResearchTimeoutMs: 45000,
   aiRetryLimit: 1,
   trendCooldownHours: 48,
   lastFetchRun: null,

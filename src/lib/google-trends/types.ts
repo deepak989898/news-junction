@@ -65,6 +65,8 @@ export interface TrendTopic {
   title: string;
   normalizedTitle: string;
   relatedQueries: string[];
+  /** News articles linked from Google Trends RSS for this topic (verification seeds). */
+  relatedNews?: Array<{ title: string; url: string; snippet: string }>;
   searchVolume: number;
   growthPercentage: number;
   trendStatus: "active" | "ended" | "unknown";

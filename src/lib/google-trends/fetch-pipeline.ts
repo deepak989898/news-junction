@@ -102,6 +102,7 @@ export async function runFetchGoogleTrends(options?: { isTest?: boolean }) {
         title,
         normalizedTitle: item.normalizedTitle,
         relatedQueries: item.relatedQueries,
+        relatedNews: item.relatedNews || [],
         searchVolume: item.searchVolume,
         growthPercentage: 0,
         trendStatus: item.trendStatus,
