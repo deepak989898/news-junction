@@ -48,29 +48,52 @@ const REGISTERED_MODULES: Array<Pick<AiModuleRecord, "name" | "version" | "depen
   { name: "AI Operations Center", version: "1.0.0", dependencies: ["Automation Engine"] },
 ];
 
-async function countModuleErrors(moduleName: string): Promise<number> {
-  const snap = await getAdminDb()
-    .collection("workflowAuditLogs")
-    .where("module", "==", "orchestrator")
-    .where("message", ">=", moduleName)
-    .where("message", "<=", `${moduleName}\uf8ff`)
-    .limit(100)
-    .get();
-  return snap.docs.filter((d) => asString(d.data().actionType).includes("error")).length;
+async function safeQueryDocs(
+  collectionName: string,
+  opts?: { orderByField?: string; limit?: number }
+) {
+  const db = getAdminDb();
+  const limit = opts?.limit || 120;
+  const orderByField = opts?.orderByField;
+  try {
+    if (orderByField) {
+      return (await db.collection(collectionName).orderBy(orderByField, "desc").limit(limit).get()).docs;
+    }
+    return (await db.collection(collectionName).limit(limit).get()).docs;
+  } catch {
+    try {
+      return (await db.collection(collectionName).limit(limit).get()).docs;
+    } catch {
+      return [];
+    }
+  }
 }
 
-async function latestExecutionForModule(moduleName: string): Promise<string> {
-  const snap = await getAdminDb()
-    .collection("workflowExecutions")
-    .where("workflowName", ">=", "")
-    .orderBy("startedAt", "desc")
-    .limit(80)
-    .get();
-  const doc = snap.docs.find((d) => {
-    const steps = (d.data().steps || []) as Array<Record<string, unknown>>;
-    return steps.some((s) => asString(s.module) === moduleName || asString(s.name).toLowerCase().includes(moduleName.toLowerCase()));
-  });
-  return doc ? asString(doc.data().startedAt) : "";
+function startedAtValue(data: Record<string, unknown>): number {
+  const raw = data.startedAt || data.createdAt || data.updatedAt || "";
+  const t = new Date(String(raw)).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+async function loadWorkflowHistoryDocs(limit = 120) {
+  // Support both current and legacy collection names (Firebase index error referenced workflow_history).
+  const [primary, legacy] = await Promise.all([
+    safeQueryDocs("workflowExecutions", { orderByField: "startedAt", limit }),
+    safeQueryDocs("workflow_history", { orderByField: "startedAt", limit }),
+  ]);
+
+  const merged = new Map<string, { id: string; data: Record<string, unknown> }>();
+  for (const d of [...primary, ...legacy]) {
+    const data = d.data() as Record<string, unknown>;
+    // Normalize legacy field names
+    if (!data.workflowId && data.workflowDefinition) data.workflowId = data.workflowDefinition;
+    if (!data.workflowName && data.name) data.workflowName = data.name;
+    merged.set(d.id, { id: d.id, data });
+  }
+
+  return [...merged.values()]
+    .sort((a, b) => startedAtValue(b.data) - startedAtValue(a.data))
+    .slice(0, limit);
 }
 
 export async function ensureModuleRegistry() {
@@ -102,14 +125,34 @@ export async function ensureModuleRegistry() {
 
 export async function getModules() {
   await ensureModuleRegistry();
-  const snap = await getAdminDb().collection("aiModules").orderBy("name", "asc").get();
-  const items: AiModuleRecord[] = [];
-  for (const d of snap.docs) {
+  let snap;
+  try {
+    snap = await getAdminDb().collection("aiModules").orderBy("name", "asc").get();
+  } catch {
+    snap = await getAdminDb().collection("aiModules").limit(100).get();
+  }
+
+  const historyDocs = await loadWorkflowHistoryDocs(80);
+  const auditDocs = await safeQueryDocs("workflowAuditLogs", { orderByField: "createdAt", limit: 200 });
+
+  const items: AiModuleRecord[] = snap.docs.map((d) => {
     const data = d.data() as Record<string, unknown>;
     const name = asString(data.name);
-    const err = await countModuleErrors(name);
-    const lastExec = await latestExecutionForModule(name);
-    items.push({
+    const needle = name.toLowerCase();
+    const err = auditDocs.filter((a) => {
+      const row = a.data() as Record<string, unknown>;
+      const msg = asString(row.message).toLowerCase();
+      const action = asString(row.actionType).toLowerCase();
+      return (msg.includes(needle) || asString(row.module).toLowerCase().includes(needle)) && action.includes("error");
+    }).length;
+    const hit = historyDocs.find(({ data: h }) => {
+      const steps = (h.steps || []) as Array<Record<string, unknown>>;
+      return steps.some(
+        (s) =>
+          asString(s.module).toLowerCase() === needle || asString(s.name).toLowerCase().includes(needle)
+      );
+    });
+    return {
       id: d.id,
       name,
       version: asString(data.version || "1.0.0"),
@@ -118,11 +161,11 @@ export async function getModules() {
       dependencies: Array.isArray(data.dependencies) ? data.dependencies.map((x) => String(x)) : [],
       lastHeartbeat: asString(data.lastHeartbeat || nowIso()),
       health: (asString(data.health || "unknown").toLowerCase() as AiModuleRecord["health"]) || "unknown",
-      lastExecution: lastExec || asString(data.lastExecution || ""),
+      lastExecution: hit ? asString(hit.data.startedAt) : asString(data.lastExecution || ""),
       queueStatus: asString(data.queueStatus || "unknown"),
       errorCount: err || toNum(data.errorCount),
-    });
-  }
+    };
+  });
   return { items };
 }
 
@@ -183,12 +226,12 @@ export async function ensureWorkflowDefaults(actorUid?: string) {
 export async function getWorkflows() {
   await ensureWorkflowDefaults();
   const [definitions, templates] = await Promise.all([
-    getAdminDb().collection("workflowDefinitions").orderBy("updatedAt", "desc").limit(120).get(),
-    getAdminDb().collection("workflowTemplates").orderBy("updatedAt", "desc").limit(120).get(),
+    safeQueryDocs("workflowDefinitions", { orderByField: "updatedAt", limit: 120 }),
+    safeQueryDocs("workflowTemplates", { orderByField: "updatedAt", limit: 120 }),
   ]);
   return {
-    definitions: definitions.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) })),
-    templates: templates.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) })),
+    definitions: definitions.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) })),
+    templates: templates.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) })),
   };
 }
 
@@ -366,12 +409,14 @@ export async function getJobs(params?: {
   workflowExecutionId?: string;
   q?: string;
 }) {
-  let query = getAdminDb().collection("jobExecutions").orderBy("createdAt", "desc").limit(250);
-  if (params?.status) query = query.where("status", "==", params.status) as typeof query;
-  if (params?.priority) query = query.where("priority", "==", params.priority) as typeof query;
-  if (params?.workflowExecutionId) query = query.where("workflowExecutionId", "==", params.workflowExecutionId) as typeof query;
-  const snap = await query.get();
-  let items: Record<string, unknown>[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) }));
+  const docs = await safeQueryDocs("jobExecutions", { orderByField: "createdAt", limit: 250 });
+  let items: Record<string, unknown>[] = docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) }));
+
+  if (params?.status) items = items.filter((x) => normalizeStatus(x.status) === params.status);
+  if (params?.priority) items = items.filter((x) => asString(x.priority) === params.priority);
+  if (params?.workflowExecutionId) {
+    items = items.filter((x) => asString(x.workflowExecutionId) === params.workflowExecutionId);
+  }
   if (params?.q) {
     const q = params.q.toLowerCase();
     items = items.filter((x) =>
@@ -421,25 +466,40 @@ export async function updateJob(
 
 export async function getHistory(params?: { status?: string; workflowId?: string; q?: string; limit?: number }) {
   const limit = Math.min(300, Math.max(1, params?.limit || 120));
-  let query = getAdminDb().collection("workflowExecutions").orderBy("startedAt", "desc").limit(limit);
-  if (params?.status) query = query.where("status", "==", params.status) as typeof query;
-  if (params?.workflowId) query = query.where("workflowId", "==", params.workflowId) as typeof query;
-  const snap = await query.get();
-  let items: Record<string, unknown>[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) }));
+  let items: Record<string, unknown>[] = (await loadWorkflowHistoryDocs(limit)).map(({ id, data }) => ({
+    id,
+    ...data,
+  }));
+
+  if (params?.status) {
+    items = items.filter((x) => asString(x.status) === params.status);
+  }
+  if (params?.workflowId) {
+    items = items.filter(
+      (x) =>
+        asString(x.workflowId) === params.workflowId ||
+        asString(x.workflowDefinition) === params.workflowId
+    );
+  }
   if (params?.q) {
     const q = params.q.toLowerCase();
-    items = items.filter((x) => `${asString(x.workflowName)} ${asString(x.trigger)} ${asString(x.id)}`.toLowerCase().includes(q));
+    items = items.filter((x) =>
+      `${asString(x.workflowName)} ${asString(x.trigger)} ${asString(x.id)}`.toLowerCase().includes(q)
+    );
   }
   return { items };
 }
 
 export async function getOrchestratorHealth() {
-  const [settings, modules, jobs, history, events] = await Promise.all([
-    getOrchestratorSettings(),
-    getModules(),
-    getJobs(),
-    getHistory({ limit: 200 }),
-    getAdminDb().collection("eventLogs").orderBy("createdAt", "desc").limit(300).get(),
+  const [settings, modules, jobs, history, eventDocs] = await Promise.all([
+    getOrchestratorSettings().catch(() => ({ ...DEFAULT_ORCHESTRATOR_SETTINGS })),
+    getModules().catch(() => ({ items: [] as AiModuleRecord[] })),
+    getJobs().catch(() => ({
+      counters: { queued: 0, running: 0, completed: 0, failed: 0, retrying: 0, cancelled: 0 },
+      items: [] as Record<string, unknown>[],
+    })),
+    getHistory({ limit: 200 }).catch(() => ({ items: [] as Record<string, unknown>[] })),
+    safeQueryDocs("eventLogs", { orderByField: "createdAt", limit: 300 }),
   ]);
   const execItems = history.items;
   const completed = execItems.filter((x) => asString(x.status) === "completed").length;
@@ -468,7 +528,7 @@ export async function getOrchestratorHealth() {
       averageProcessingTime: Number(avgDuration.toFixed(2)),
       jobCounters: jobs.counters,
       moduleDown,
-      eventsInWindow: events.size,
+      eventsInWindow: eventDocs.length,
     },
     mostCommonFailures: [...failureMap.entries()]
       .sort((a, b) => b[1] - a[1])

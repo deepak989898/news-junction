@@ -47,7 +47,7 @@ export default function OrchestratorPage() {
   const [historySearch, setHistorySearch] = useState("");
 
   const load = async () => {
-    const [wf, mo, jo, hi, he, se] = await Promise.all([
+    const results = await Promise.allSettled([
       getOrchestratorWorkflowsApi(),
       getOrchestratorModulesApi(),
       getOrchestratorJobsApi({ q: jobSearch || undefined }),
@@ -55,12 +55,25 @@ export default function OrchestratorPage() {
       getOrchestratorHealthApi(),
       getOrchestratorSettingsApi(),
     ]);
-    setWorkflows(wf as Dict);
-    setModules(mo as Dict);
-    setJobs(jo as Dict);
-    setHistory(hi as Dict);
-    setHealth(he as Dict);
-    setSettings(se as Dict);
+
+    const labels = ["workflows", "modules", "jobs", "history", "health", "settings"] as const;
+    const errors: string[] = [];
+    results.forEach((r, i) => {
+      if (r.status === "rejected") {
+        errors.push(`${labels[i]}: ${r.reason instanceof Error ? r.reason.message : "failed"}`);
+        return;
+      }
+      const value = r.value as Dict;
+      if (i === 0) setWorkflows(value);
+      if (i === 1) setModules(value);
+      if (i === 2) setJobs(value);
+      if (i === 3) setHistory(value);
+      if (i === 4) setHealth(value);
+      if (i === 5) setSettings(value);
+    });
+    if (errors.length) {
+      toast.error(errors[0].slice(0, 180));
+    }
   };
 
   useEffect(() => {
