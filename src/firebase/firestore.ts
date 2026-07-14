@@ -787,6 +787,7 @@ export async function getAllMedia() {
 export async function createMediaItem(data: Omit<MediaItem, "id" | "createdAt">) {
   const ref = await addDoc(collection(getDb(), COLLECTIONS.media), {
     ...data,
+    source: (data as { source?: string }).source || "upload",
     createdAt: serverTimestamp(),
   });
   return ref.id;

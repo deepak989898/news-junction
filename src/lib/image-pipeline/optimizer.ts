@@ -192,6 +192,14 @@ export async function optimizeAndUploadVariants(
     }),
   ]);
 
+  // Keep Media Library in sync with generated pipeline images
+  void registerPipelineImageInLibrary({
+    url: largeUrl,
+    articleId: articleStorageId,
+    filename: `${articleStorageId}-${ts}-large.webp`,
+    origin: "image-pipeline",
+  });
+
   return {
     variants: {
       large: largeUrl,
@@ -203,6 +211,32 @@ export async function optimizeAndUploadVariants(
     qualityScore: measured.qualityScore,
     clarityScore: measured.clarityScore,
   };
+}
+
+/** Register pipeline image into Media Library (call after optimizeAndUploadVariants). */
+export async function registerPipelineImageInLibrary(args: {
+  url: string;
+  articleId: string;
+  filename?: string;
+  altHi?: string;
+  altEn?: string;
+  origin?: string;
+}) {
+  try {
+    const { upsertMediaLibraryEntry } = await import("@/lib/media-library/service");
+    await upsertMediaLibraryEntry({
+      url: args.url,
+      filename: args.filename || `article-${args.articleId}`,
+      altHi: args.altHi,
+      altEn: args.altEn,
+      uploadedBy: args.origin || "image-pipeline",
+      source: "article_pipeline",
+      articleId: args.articleId,
+      contentType: "image/webp",
+    });
+  } catch {
+    /* non-fatal */
+  }
 }
 
 /** Backward-compatible single upload used by legacy callers */

@@ -369,6 +369,22 @@ export async function generateMediaAsset(args: {
       updatedAt: nowIso(),
     };
     await getAdminDb().collection("mediaAssets").doc(imageId).set(asset);
+    try {
+      const { upsertMediaLibraryEntry } = await import("@/lib/media-library/service");
+      await upsertMediaLibraryEntry({
+        url: imageUrl,
+        filename: imageId,
+        altHi: args.imageType,
+        altEn: args.imageType,
+        uploadedBy: args.createdBy,
+        size: optimized.optimizedBuffer.length,
+        contentType,
+        source: "ai_media",
+        articleId: args.articleId,
+      });
+    } catch {
+      /* non-fatal */
+    }
     assets.push(asset);
   }
 
