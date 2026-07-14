@@ -6,5 +6,6 @@ export { getImagePipelineSettings } from "./settings";
 export { DEFAULT_IMAGE_PIPELINE_SETTINGS } from "./defaults";
 export { getOpenAiImageConfig, mapToGptImageQuality } from "./image-config";
 export { planNewsImageVisual } from "./visual-plan";
+export { buildNewsVisualStory } from "./visual-story";
 export { buildProfessionalNewsImagePrompt } from "./prompt-builder";
 export { applyNewsTextOverlay } from "./text-overlay";

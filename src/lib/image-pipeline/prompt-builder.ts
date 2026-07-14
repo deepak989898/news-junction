@@ -1,5 +1,7 @@
 import { ArticleImageAnalysis, ImagePipelineInput } from "./types";
 import type { NewsVisualPlan } from "./visual-plan";
+import type { NewsVisualStory } from "./visual-story";
+import { rewritePromptForStoryComprehension } from "./visual-story";
 
 export const QUALITY_DIRECTIVES = `Technical quality requirements:
 - Bright, well-lit editorial photography — NOT dark, NOT underexposed, NOT moody night-cinema look
@@ -82,28 +84,33 @@ export function buildProfessionalNewsImagePrompt(args: {
   analysis: ArticleImageAnalysis;
   plan: NewsVisualPlan;
   neutral: boolean;
+  story?: NewsVisualStory;
 }): string {
-  const { input, analysis, plan, neutral } = args;
+  const { input, analysis, plan, neutral, story } = args;
   const headline = input.titleEn || input.titleHi;
   const summary = (input.summaryEn || input.summaryHi || analysis.factualVisualSummary)
     .replace(/\s+/g, " ")
     .slice(0, 360);
+  const personLed =
+    !neutral &&
+    (Boolean(story && (story.imageType === "REAL_PUBLIC_FIGURE" || story.imageType === "POLITICIAN")) ||
+      analysis.isRealPersonPrimary ||
+      analysis.namedPeople.length > 0);
   const mainSubject = neutral
     ? "neutral symbolic scene related to the topic — NOT any real person's face or likeness"
-    : plan.mainSubject || analysis.primarySubject;
+    : story?.mainSubject || plan.mainSubject || analysis.primarySubject;
 
-  const personBlock =
-    !neutral && analysis.isRealPersonPrimary
-      ? `Real-person editorial rules:
-- Generate a photorealistic, believable Indian/global news portrait or event image of the primary person when they are the story focus
-- Face must be fully visible in frame (no cut-off forehead/chin), natural proportions, anatomically correct
-- Aim for high likeness / recognition quality for a public-figure news thumbnail (serious editorial, not cartoon)
-- Neutral journalistic expression; do not invent criminal, humiliating, or fabricated event poses
-- Keep lighting bright and clear for face detail
-- Prefer chest-up or three-quarter framing for portraits`
-      : "";
+  const personBlock = personLed
+    ? `Real-person / public-figure editorial rules:
+- Main focus: photorealistic editorial portrait of ${mainSubject}
+- Person occupies about 55-65% of the frame; face fully visible, high likeness for a news thumbnail
+- Supporting elements only: ${story?.organizations.join(", ") || analysis.namedOrganizations.join(", ") || "relevant institutions"}, settlement/legal document cues, subtle platform context if relevant
+- NEVER make scales of justice, gavel, empty courtroom, or generic legal clipart the primary subject
+- Neutral journalistic expression; do not invent criminal or humiliating poses
+- Bright clear lighting for face detail; chest-up or three-quarter framing`
+    : "";
 
-  return `Create a premium editorial featured image for a trusted Indian digital news website (News Junction).
+  let prompt = `Create a premium editorial news illustration for a trusted digital news website (News Junction), similar in clarity to BBC/Reuters/AP thumbnails.
 
 Article headline:
 ${headline}
@@ -111,29 +118,35 @@ ${headline}
 Article summary:
 ${summary}
 
+Image type:
+${story?.imageType || analysis.subjectType}
+
 News category:
 ${input.categoryNameEn} (${input.categoryId})
 
 Location:
-${plan.locationContext || analysis.location || "India"}
+${story?.location || plan.locationContext || analysis.location || "story location"}
 
-Main visual subject:
+Main visual subject (HIGHEST PRIORITY):
 ${mainSubject}
 
-Supporting visual elements:
-${(plan.secondarySubjects.length ? plan.secondarySubjects : analysis.visualKeywords).join("; ") || "editorial supporting context"}
+Visual story:
+${story?.visualStory || plan.visualEvent}
 
-Organizations mentioned:
-${analysis.namedOrganizations.join(", ") || "none highlighted"}
+Supporting visual elements:
+${(story?.secondarySubjects.length ? story.secondarySubjects : plan.secondarySubjects).join("; ") || "editorial supporting context"}
+
+Organizations:
+${(story?.organizations.length ? story.organizations : analysis.namedOrganizations).join(", ") || "none highlighted"}
+
+Event:
+${story?.eventSummary || plan.visualEvent}
 
 Required composition:
-${plan.composition}
-
-Visual event:
-${plan.visualEvent}
+${story?.compositionRule || plan.composition}
 
 Camera / lighting / mood:
-${plan.cameraAngle}; ${plan.lighting}; ${plan.mood}
+${plan.cameraAngle}; bright professional newsroom lighting; ${plan.mood}
 
 Color palette:
 ${plan.colorPalette}
@@ -142,37 +155,40 @@ Editorial style:
 ${plan.editorialStyle}
 
 Must include:
-${plan.mustInclude.join("; ") || mainSubject}
+${(story?.mustInclude.length ? story.mustInclude : plan.mustInclude).join("; ") || mainSubject}
 
 Must avoid:
-${plan.mustAvoid.join("; ")}
+${(story?.mustAvoid.length ? story.mustAvoid : plan.mustAvoid).join("; ")}
 
 Style requirements:
 - Premium digital newsroom editorial quality
 - Bright, clear, high-visibility lighting suitable for a news website card
-- Immediately understandable at thumbnail size
-- One clear visual focal point
+- Immediately understandable at thumbnail size within 2-3 seconds
+- One clear visual focal point and one clear visual story
 - Strong subject-background separation
 - Realistic lighting and natural proportions
 - Clean, modern, uncluttered composition
-- High detail without visual noise
-- Relevant Indian context where appropriate
-- Landscape featured-image composition (about 16:9)
-- Professional color balance
-- Suitable for desktop cards, mobile cards, social sharing and Google Discover
-- Leave clean lower-third visual space for an optional later HTML/SVG headline overlay
-- Do NOT render Hindi/Devanagari text in the picture (glyphs often break)
+- Do NOT render Hindi/Devanagari text in the picture
+- Leave clean lower-third space for optional later overlay
 
 ${QUALITY_DIRECTIVES}
 
 ${personBlock}
 
-${categoryRules(input.categoryId)}
+${categoryRules(personLed ? "desh" : input.categoryId)}
 
 ${accuracyBlock()}
 
-The image must make a reader instantly understand the news topic of this headline:
+The image must visually answer WHO / WHAT happened / WHERE / WHICH organization / WHY it is news — without requiring the reader to open the article.
+
+The visual must immediately communicate this headline:
 ${headline}.`;
+
+  if (story && (story.storyScore < 85 || !story.understandsWithoutReading || personLed)) {
+    prompt = rewritePromptForStoryComprehension(prompt, story);
+  }
+
+  return prompt;
 }
 
 /** @deprecated Prefer buildProfessionalNewsImagePrompt — kept for callers. */

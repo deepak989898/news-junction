@@ -4,6 +4,11 @@ import { OPENAI_SHARPNESS_SUFFIX } from "./quality-config";
 import { measureImageQuality, optimizeAndUploadVariants } from "./optimizer";
 import { applyNewsTextOverlay } from "./text-overlay";
 import { planNewsImageVisual } from "./visual-plan";
+import {
+  buildNewsVisualStory,
+  isGenericSymbolPrompt,
+  rewritePromptForStoryComprehension,
+} from "./visual-story";
 import { ArticleImageAnalysis, ImagePipelineInput } from "./types";
 
 const MIN_ACCEPTABLE_CLARITY = 68;
@@ -58,10 +63,6 @@ async function generateWithModelFallback(
       return { buffer, model, quality: config.quality, size: config.size };
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      // Try next model on unsupported/parameter/billing-style failures.
-      if (!/failed \(\w/.test(lastError.message) && !/400|404|429/.test(lastError.message)) {
-        // continue
-      }
     }
   }
 
@@ -80,31 +81,49 @@ export async function generateOpenAiImage(
   clarityScore?: number;
   modelUsed?: string;
   qualityUsed?: string;
+  storyScore?: number;
 }> {
   const apiKey = process.env.OPENAI_API_KEY;
   const config = getOpenAiImageConfig();
   if (!apiKey || !config.enabled) return { url: null, prompt: "" };
 
-  const plan = await planNewsImageVisual(input, analysis);
+  const story = buildNewsVisualStory(input, analysis);
+  // Never force neutral clipart when a named public figure is the story.
+  const forcePersonPortrait =
+    story.imageType === "REAL_PUBLIC_FIGURE" ||
+    story.imageType === "POLITICIAN" ||
+    analysis.isRealPersonPrimary ||
+    analysis.namedPeople.length > 0;
+  const effectiveNeutral = neutral && !forcePersonPortrait;
+
+  const plan = await planNewsImageVisual(input, {
+    ...analysis,
+    isRealPersonPrimary: forcePersonPortrait || analysis.isRealPersonPrimary,
+    primarySubject: forcePersonPortrait ? story.mainSubject : analysis.primarySubject,
+  });
   if (!plan.safeForGeneration) {
     return { url: null, prompt: plan.reason || "Visual plan marked unsafe" };
   }
 
-  const basePrompt = buildProfessionalNewsImagePrompt({
+  let prompt = buildProfessionalNewsImagePrompt({
     input,
     analysis,
     plan,
-    neutral: neutral,
+    neutral: effectiveNeutral,
+    story,
   });
 
-  let prompt = basePrompt;
+  if (story.storyScore < 85 || !story.understandsWithoutReading || isGenericSymbolPrompt(prompt)) {
+    prompt = rewritePromptForStoryComprehension(prompt, story);
+  }
+
   let generated = await generateWithModelFallback(apiKey, prompt);
   let rawBuffer = generated.buffer;
   let measured = await measureImageQuality(rawBuffer);
   let attempts = 1;
 
   if (measured.clarityScore < MIN_ACCEPTABLE_CLARITY && attempts < config.maxAttempts) {
-    prompt = `${basePrompt}\n\n${OPENAI_SHARPNESS_SUFFIX}`;
+    prompt = `${prompt}\n\n${OPENAI_SHARPNESS_SUFFIX}\nEmphasize bright lighting and a clear facial/portrait focus when a person is the main subject.`;
     try {
       const retry = await generateWithModelFallback(apiKey, prompt);
       const retryMeasured = await measureImageQuality(retry.buffer);
@@ -131,7 +150,7 @@ export async function generateOpenAiImage(
         live,
       });
     } catch {
-      // Non-fatal — keep plain generated image
+      // Non-fatal
     }
   }
 
@@ -143,5 +162,6 @@ export async function generateOpenAiImage(
     clarityScore: Math.max(uploaded.clarityScore, measured.clarityScore),
     modelUsed: generated.model,
     qualityUsed: generated.quality,
+    storyScore: story.storyScore,
   };
 }

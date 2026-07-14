@@ -74,21 +74,17 @@ function detectSubjectType(
   combined: string,
   categoryId: string
 ): SubjectType {
-  if (namedPeople.length > 0 && REAL_PERSON_INDICATORS.some((r) => r.test(combined))) {
-    return "real_person";
-  }
-  if (
-    namedPeople.length > 0 &&
-    (categoryId === "khel" ||
-      categoryId === "manoranjan" ||
-      /cricket|football|ipl|bcci|player|captain|actor|actress|minister|mp|mla|ceo|singer|director/i.test(combined))
-  ) {
+  // Named person in headline/summary → person-led visual story (never generic court symbols first)
+  if (namedPeople.length > 0) {
     return "real_person";
   }
   if (PERSON_ROLE_KEYWORDS.some((k) => combined.includes(k.toLowerCase()))) {
-    if (namedPeople.length > 0 || /\b(?:said|announced|appointed|selected|died|arrested)\b/i.test(combined)) {
+    if (/\b(?:said|announced|appointed|selected|died|arrested|receives|settlement)\b/i.test(combined)) {
       return "real_person";
     }
+  }
+  if (REAL_PERSON_INDICATORS.some((r) => r.test(combined))) {
+    return "real_person";
   }
   if (/court|verdict|judge|न्यायालय/i.test(combined)) return "court";
   if (/parliament|ministry|government|policy|संसद/i.test(combined)) return "government";
@@ -182,7 +178,7 @@ export async function enrichAnalysisWithAi(
           {
             role: "system",
             content:
-              "Analyze news article for image selection. Return JSON with primarySubject, subjectType, namedPeople[], namedOrganizations[], location, visualKeywords[], riskLevel, isRealPersonPrimary (boolean). Never suggest generating real person faces.",
+              "Analyze news article for image selection. Return JSON with primarySubject, subjectType, namedPeople[], namedOrganizations[], location, visualKeywords[], riskLevel, isRealPersonPrimary (boolean). If a named public figure is the story focus, set isRealPersonPrimary true and primarySubject to that person. Prefer person-led visuals over generic legal symbols.",
           },
           {
             role: "user",

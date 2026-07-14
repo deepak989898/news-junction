@@ -27,21 +27,30 @@ function asStringArray(value: unknown): string[] {
 
 function fallbackPlan(input: ImagePipelineInput, analysis: ArticleImageAnalysis): NewsVisualPlan {
   const headline = input.titleEn || input.titleHi;
+  const personLed = analysis.isRealPersonPrimary || analysis.namedPeople.length > 0;
+  const person = analysis.namedPeople[0] || analysis.primarySubject;
   return {
-    mainSubject: analysis.isRealPersonPrimary
-      ? "symbolic editorial scene communicating the topic without facial likeness"
+    mainSubject: personLed
+      ? `Editorial portrait of ${person} as the dominant visual focus (~60% of frame)`
       : analysis.primarySubject || headline,
     secondarySubjects: analysis.visualKeywords.slice(0, 4),
-    locationContext: analysis.location || "India news context",
+    locationContext: analysis.location || "story location context",
     visualEvent: analysis.factualVisualSummary.slice(0, 180),
-    composition: "single clear focal subject, center-weighted, uncluttered 16:9 editorial framing",
+    composition: personLed
+      ? "person-dominant portrait left/center, supporting org/event cues on the side, uncluttered 16:9"
+      : "single clear focal subject, center-weighted, uncluttered 16:9 editorial framing",
     cameraAngle: "eye-level documentary",
-    lighting: "natural cinematic news lighting with strong subject separation",
+    lighting: "bright professional newsroom / daylight editorial lighting",
     mood: "serious, credible, premium newsroom",
-    colorPalette: "deep navy, controlled red accents, clean neutrals",
-    editorialStyle: "premium Indian digital news featured image, Reuters/AP quality",
-    mustInclude: [analysis.primarySubject, analysis.location].filter(Boolean).slice(0, 4),
+    colorPalette: "clean neutrals with controlled navy/red accents",
+    editorialStyle: "premium BBC/Reuters/AP style editorial illustration-photo hybrid",
+    mustInclude: personLed
+      ? [`Recognizable likeness of ${person}`, ...analysis.namedOrganizations.slice(0, 2)]
+      : [analysis.primarySubject, analysis.location].filter(Boolean).slice(0, 4),
     mustAvoid: [
+      "generic scales of justice as main subject",
+      "gavel close-up as main subject",
+      "category-only legal clipart",
       "unreadable text",
       "fake numbers",
       "watermarks",
@@ -52,7 +61,7 @@ function fallbackPlan(input: ImagePipelineInput, analysis: ArticleImageAnalysis)
     ],
     overlayTextRecommended: false,
     safeForGeneration: true,
-    reason: "heuristic plan",
+    reason: personLed ? "person-led heuristic plan" : "heuristic plan",
   };
 }
 
@@ -87,9 +96,10 @@ Return ONLY valid JSON for a featured image plan.
 Rules:
 - Stay factual to the provided article context.
 - Prefer one clear visual subject.
-- Never invent market numbers, scores, quotes, or event details.
-- For real people, prefer symbolic/editorial scenes over fabricated likenesses when risk is high.
-- Prefer Indian context when relevant.`;
+- If a named public figure exists, they MUST be mainSubject and occupy ~60% of the frame.
+- NEVER use scales of justice, gavel, or generic court clipart as the main subject when a person is named.
+- Never invent market numbers, scores, quotes, or case details.
+- Prefer Indian or story-accurate location context when relevant.`;
 
   const user = `Create a visual plan JSON with keys:
 mainSubject, secondarySubjects, locationContext, visualEvent, composition, cameraAngle, lighting, mood, colorPalette, editorialStyle, mustInclude, mustAvoid, overlayTextRecommended, safeForGeneration, reason.
@@ -104,7 +114,9 @@ Organizations: ${analysis.namedOrganizations.join(", ") || "none"}
 Location: ${analysis.location || "none"}
 Risk: ${analysis.riskLevel}
 Real-person primary: ${analysis.isRealPersonPrimary}
-Factual visual summary: ${analysis.factualVisualSummary}`;
+Factual visual summary: ${analysis.factualVisualSummary}
+
+If people are named, mainSubject MUST be that person (editorial portrait), not a legal symbol.`;
 
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {

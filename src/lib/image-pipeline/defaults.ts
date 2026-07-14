@@ -48,16 +48,18 @@ export const PERSON_ROLE_KEYWORDS = [
 ];
 
 export const REAL_PERSON_INDICATORS = [
-  /\b(?:actor|actress|celebrity|minister|cricketer|sportsperson|politician|leader|star|ceo|doctor|journalist)\b/i,
+  /\b(?:actor|actress|celebrity|minister|cricketer|sportsperson|politician|leader|star|ceo|doctor|journalist|writer|comedian|author)\b/i,
+  /\b(?:receives|arrested|settlement|sues|appointed|resigns|wins)\b/i,
   /\b(?:अभिनेता|अभिनेत्री|मंत्री|खिलाड़ी|नेता|सेलिब्रिटी)\b/,
 ];
 
 export const ORGANIZATION_PATTERNS = [
   /\b(?:BJP|Congress|AAP|RSS|BCCI|ICC|FIFA|NASA|ISRO|Supreme Court|Parliament|UN|WHO|IMF|World Bank)\b/gi,
+  /\b(?:Metropolitan Police|Met Police|\bMet\b|Scotland Yard|Heathrow|Twitter|\bX\b)\b/gi,
   /\b(?:सुप्रीम कोर्ट|संसद|भाजप|कांग्रेस)\b/g,
 ];
 
 export const LOCATION_PATTERNS = [
-  /\b(?:Delhi|Mumbai|Kolkata|Chennai|Bengaluru|Hyderabad|Jaipur|Lucknow|India|USA|China|Russia|Ukraine|Gaza|Israel|Pakistan|Nepal|Bangladesh)\b/gi,
+  /\b(?:Delhi|Mumbai|Kolkata|Chennai|Bengaluru|Hyderabad|Jaipur|Lucknow|India|USA|China|Russia|Ukraine|Gaza|Israel|Pakistan|Nepal|Bangladesh|London|Heathrow|Britain|UK|United Kingdom|England)\b/gi,
   /\b(?:दिल्ली|मुंबई|भारत|अमेरिका|चीन|पाकिस्तान)\b/g,
 ];

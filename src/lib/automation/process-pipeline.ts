@@ -497,8 +497,14 @@ export async function regenerateArticleImage(
 
   await db.collection("news").doc(newsId).update({
     imageUrl: generated,
+    imageLargeUrl: generated,
+    imageMediumUrl: generated,
+    imageWebpUrl: generated,
     imageOrigin: "openai",
+    imageProvider: "openai",
     imageStatus: "approved",
+    imageLicence: "OpenAI editorial generation",
+    imagePrompt: `Person-first editorial generation for: ${titleEn || titleHi}`,
     imageGeneratedAt: new Date().toISOString(),
     updatedAt: FieldValue.serverTimestamp(),
   });
