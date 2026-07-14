@@ -16,6 +16,15 @@
 
 - `CRON_SECRET`
 - `OPENAI_API_KEY`
+- `OPENAI_IMAGE_ENABLED` (default true)
+- `OPENAI_IMAGE_MODEL` (default `gpt-image-1`)
+- `OPENAI_IMAGE_FALLBACK_MODEL` (default `gpt-image-1`)
+- `OPENAI_IMAGE_QUALITY` (`low` | `medium` | `high`, default `high`)
+- `OPENAI_IMAGE_SIZE` (default `1536x1024`)
+- `OPENAI_IMAGE_MAX_ATTEMPTS` (default `2`)
+- `OPENAI_IMAGE_AUTO_GENERATION` (default true)
+- `OPENAI_PLANNER_MODEL` (default `gpt-4o-mini` — visual plan JSON)
+- `NEWS_IMAGE_TEXT_OVERLAY_ENABLED` (default true — branded headline overlay via Sharp; set `false` to disable)
 - `GEMINI_API_KEY` (required for Google Gemini image generation; also used for Gemini text)
 - `IMAGEN_API_KEY` (deprecated alias — use `GEMINI_API_KEY` instead)
 - `ELEVENLABS_API_KEY` (optional provider)

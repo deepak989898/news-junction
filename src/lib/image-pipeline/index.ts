@@ -4,3 +4,7 @@ export { analyzeArticleSubject, enrichAnalysisWithAi } from "./analysis";
 export { auditPublishedArticleImages, classifyArticleImage } from "./audit";
 export { getImagePipelineSettings } from "./settings";
 export { DEFAULT_IMAGE_PIPELINE_SETTINGS } from "./defaults";
+export { getOpenAiImageConfig, mapToGptImageQuality } from "./image-config";
+export { planNewsImageVisual } from "./visual-plan";
+export { buildProfessionalNewsImagePrompt } from "./prompt-builder";
+export { applyNewsTextOverlay } from "./text-overlay";

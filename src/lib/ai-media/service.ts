@@ -3,6 +3,7 @@ import { getAdminDb, getAdminStorage } from "@/lib/firebase-admin";
 import { getArticleById, getAISettings } from "@/lib/ai-studio/server-db";
 import { estimateTokensFromText } from "@/lib/ai-studio/ai-client";
 import { DEFAULT_AI_MEDIA_SETTINGS, AI_MEDIA_SETTINGS_DOC_ID, BANNED_PROMPT_TERMS, IMAGE_STYLE_GUIDE, MEDIA_BRAND_KIT_DOC_ID } from "./defaults";
+import { getOpenAiImageConfig, mapToGptImageQuality } from "@/lib/image-pipeline/image-config";
 import {
   AiMediaLog,
   AiMediaSettings,
@@ -134,15 +135,22 @@ export async function buildMediaPrompt(args: {
   const keywords = Array.isArray(article?.tags) ? (article?.tags as string[]).slice(0, 8).join(", ") : "";
   const category = args.categoryName || asString(article?.categoryNameEn || article?.categoryNameHi);
   const styleGuide = IMAGE_STYLE_GUIDE[args.style] || IMAGE_STYLE_GUIDE.editorial;
-  const base = `Create a ${args.imageType.replace(/_/g, " ")} for News Junction.
+  const base = `Create a premium editorial ${args.imageType.replace(/_/g, " ")} for News Junction, a trusted Indian digital news website.
 Style: ${styleGuide}.
 Category: ${category}.
-Headline context: ${title}.
-Summary context: ${summary}.
+Headline: ${title}.
+Summary: ${summary}.
 SEO keywords: ${keywords}.
 Brand style: ${brand.brandStyle || "clean factual news branding"}.
 Primary colors: ${(brand.primaryColors || []).join(", ")}.
-Rules: no logos of third-party brands, no copyrighted characters, no fake documents, no misinformation, no graphic violence.`;
+Requirements:
+- One clear focal subject, immediately understandable at thumbnail size
+- Strong subject-background separation, professional newsroom composition
+- Landscape framing suitable for featured images and social cards
+- Do not invent numbers, quotes, Sensex/Nifty values, scores, or fake LIVE labels
+- No unreadable text inside the image, no watermarks, no third-party logos, no copyrighted characters
+- No fake documents, no graphic violence, no misleading likenesses
+- Leave clean lower-third space for optional later text overlay`;
   return sanitizePrompt(`${base}\n${args.customPrompt || ""}`);
 }
 
@@ -175,9 +183,12 @@ async function generateWithProvider(args: {
     };
   }
 
+  // Default / openai-images
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY not configured");
-
+  const config = getOpenAiImageConfig();
+  const mappedQuality = mapToGptImageQuality(quality);
+  const model = config.model || "gpt-image-1";
   const response = await fetch("https://api.openai.com/v1/images/generations", {
     method: "POST",
     headers: {
@@ -185,10 +196,10 @@ async function generateWithProvider(args: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-image-1",
+      model,
       prompt,
       size,
-      quality,
+      quality: mappedQuality,
     }),
     signal: AbortSignal.timeout(120000),
   });

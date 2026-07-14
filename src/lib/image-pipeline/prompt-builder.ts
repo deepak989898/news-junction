@@ -1,99 +1,217 @@
 import { ArticleImageAnalysis, ImagePipelineInput } from "./types";
+import type { NewsVisualPlan } from "./visual-plan";
 
 export const QUALITY_DIRECTIVES = `Technical quality requirements:
 - Ultra-sharp focus on the main subject, crisp edges, no motion blur, no soft focus
-- Professional Reuters/AP/BBC photojournalism quality with proper exposure and rich natural colors
+- Professional Reuters/AP/BBC/NDTV editorial quality with proper exposure and rich natural colors
 - High clarity and contrast — NOT faded, NOT washed out, NOT hazy, NOT low-resolution looking
-- Single unified photograph only — absolutely NO split-screen, NO diptych, NO side-by-side panels, NO before/after layout, NO collage, NO multiple frames
-- ONE coherent scene filling the entire 16:9 frame edge to edge`;
+- Single unified photograph/scene only — absolutely NO split-screen, NO diptych, NO side-by-side panels, NO before/after layout, NO collage, NO multiple frames
+- ONE coherent scene filling the entire landscape frame edge to edge
+- Strong subject-background separation, immediately readable at thumbnail size`;
 
-const CATEGORY_STYLE: Record<string, string> = {
-  khel: "sports stadium, equipment, or team atmosphere without identifiable athletes",
-  technology: "modern technology, devices, innovation lab, or digital infrastructure",
-  vyapar: "business district, markets, or corporate editorial scene",
-  swasthya: "healthcare facility, medical research, or public health setting",
-  manoranjan: "cinema, stage, film production, or cultural event scene without celebrity faces",
-  duniya: "international landmark or global location matching the story region",
-  rajya: "Indian state landmark, regional civic scene, or government building exterior",
-  desh: "Indian national civic context, parliament exterior, or major city skyline",
-  video: "broadcast news studio or media production environment",
-  court: "court building exterior, scales of justice, legal documents — no judge faces",
-  rajniti: "parliament or ministry building exterior, podium, policy documents — no politician faces",
-  mausam: "weather map, storm clouds, flood scene, or seasonal landscape",
-  shiksha: "school campus, classroom, or university building",
-  vigyan: "laboratory, research facility, or scientific equipment",
+const CATEGORY_RULES: Record<string, string> = {
+  vyapar: `BUSINESS / MARKETS visual rules:
+- Indian financial-market atmosphere: trading floor glow, Bombay Stock Exchange / Dalal Street / financial-district skyline when relevant
+- Restrained bullish or bearish chart silhouette WITHOUT any readable index values, prices, or percentages
+- Optional rupee symbol as a subtle motif only when relevant
+- Professional trading screens as atmosphere only — never invent Sensex/Nifty numbers
+- Business leaders only when central; otherwise keep symbolic market visuals`,
+  khel: `SPORTS visual rules:
+- Relevant sport equipment, stadium atmosphere, match action silhouettes
+- Team-color mood without inventing jersey numbers, scores, trophies, or players not in the article`,
+  technology: `TECHNOLOGY visual rules:
+- Credible devices, data-centre glow, clean UI silhouettes, cybersecurity / AI concepts
+- Do not fabricate fake product screenshots that look like real apps or OS UIs`,
+  swasthya: `HEALTH visual rules:
+- Clinic / hospital / lab atmosphere, medical equipment, public-health context
+- Responsible, calm editorial tone — no graphic medical imagery`,
+  manoranjan: `ENTERTAINMENT visual rules:
+- Cinema, stage, premiere lighting, film-set atmosphere
+- Avoid false celebrity likenesses or invented award scenes`,
+  duniya: `WORLD visual rules:
+- Region-accurate landmarks or diplomatic/civic atmosphere matching the story location`,
+  rajya: `STATE / LOCAL visual rules:
+- Regional civic infrastructure, administration, roads, public facilities, or accurate local atmosphere`,
+  desh: `NATIONAL visual rules:
+- Indian civic context, parliament exterior, major city skyline, policy/event atmosphere — neutral and credible`,
+  video: `MEDIA visual rules:
+- Broadcast studio, camera lighting, newsroom production atmosphere`,
+  court: `COURT / LEGAL visual rules:
+- Court building exterior, scales of justice, legal documents, gavel as symbolic support
+- Do not invent a judicial decision or courtroom verdict scene`,
+  rajniti: `POLITICS visual rules:
+- Parliament/assembly exterior, podium, voting context, institutional architecture
+- Neutral balanced tone — do not portray any politician as criminal, defeated, or triumphant unless article context clearly supports it`,
+  mausam: `WEATHER / DISASTER visual rules:
+- Location-appropriate weather, clouds, rain, flood, heat, cyclone atmosphere
+- Do not exaggerate severity beyond the article`,
+  shiksha: `EDUCATION visual rules:
+- Campus, classroom, books, university architecture — optimistic and clear`,
+  vigyan: `SCIENCE visual rules:
+- Laboratory, research equipment, space/tech exploration atmosphere without fake data overlays`,
 };
 
-export function buildNeutralIllustrationPrompt(
-  input: ImagePipelineInput,
-  analysis: ArticleImageAnalysis
-): string {
-  const style = CATEGORY_STYLE[input.categoryId] || "editorial news photography";
+function categoryRules(categoryId: string): string {
+  return CATEGORY_RULES[categoryId] || `Category visual rules: premium editorial scene matching ${categoryId} news.`;
+}
+
+function accuracyBlock(): string {
+  return `Accuracy requirements:
+- Represent only facts supported by the article context
+- Do NOT invent numbers, dates, quotes, statistics, Sensex/Nifty values, stock prices, or match scores
+- Do NOT fabricate a specific press-event photograph
+- Do NOT imply the image is an authentic wire photo from the event
+- Do NOT add unrelated people, buildings, flags, or logos
+- Do NOT create misleading facial expressions or actions
+- Do NOT portray allegations as proven facts
+
+Avoid:
+- Unreadable text, misspelled words, fake quotes, fake LIVE/BREAKING stamps
+- Fake stock-market values or random charts with digits
+- Duplicate objects, extra fingers, distorted faces, deformed buildings
+- Watermarks, website logos, collage overload, clickbait unrelated composition
+- Pasting the full article headline as image text`;
+}
+
+export function buildProfessionalNewsImagePrompt(args: {
+  input: ImagePipelineInput;
+  analysis: ArticleImageAnalysis;
+  plan: NewsVisualPlan;
+  neutral: boolean;
+}): string {
+  const { input, analysis, plan, neutral } = args;
   const headline = input.titleEn || input.titleHi;
+  const summary = (input.summaryEn || input.summaryHi || analysis.factualVisualSummary)
+    .replace(/\s+/g, " ")
+    .slice(0, 360);
+  const mainSubject = neutral
+    ? "neutral symbolic scene related to the topic — NOT any real person's face or likeness"
+    : plan.mainSubject || analysis.primarySubject;
 
-  return `Create a high-quality editorial news featured image about:
-${analysis.factualVisualSummary}.
+  return `Create a premium editorial featured image for a trusted Indian digital news website (News Junction).
 
-Main visible subject:
-${analysis.isRealPersonPrimary ? "neutral symbolic scene related to the topic — NOT any real person's face or likeness" : analysis.primarySubject}.
+Article headline:
+${headline}
 
-Required context:
-${analysis.location ? `Location: ${analysis.location}. ` : ""}${analysis.visualKeywords.join("; ")}.
+Article summary:
+${summary}
 
-Style:
-realistic editorial photography with tack-sharp detail, strong contrast, and natural vibrant colors — suitable for ${input.categoryNameEn} news.
+News category:
+${input.categoryNameEn} (${input.categoryId})
+
+Location:
+${plan.locationContext || analysis.location || "India"}
+
+Main visual subject:
+${mainSubject}
+
+Supporting visual elements:
+${(plan.secondarySubjects.length ? plan.secondarySubjects : analysis.visualKeywords).join("; ") || "editorial supporting context"}
+
+Organizations mentioned:
+${analysis.namedOrganizations.join(", ") || "none highlighted"}
+
+Required composition:
+${plan.composition}
+
+Visual event:
+${plan.visualEvent}
+
+Camera / lighting / mood:
+${plan.cameraAngle}; ${plan.lighting}; ${plan.mood}
+
+Color palette:
+${plan.colorPalette}
+
+Editorial style:
+${plan.editorialStyle}
+
+Must include:
+${plan.mustInclude.join("; ") || mainSubject}
+
+Must avoid:
+${plan.mustAvoid.join("; ")}
+
+Style requirements:
+- Premium digital newsroom editorial quality
+- Immediately understandable at thumbnail size
+- One clear visual focal point
+- Strong subject-background separation
+- Realistic lighting and natural proportions
+- Clean, modern, uncluttered composition
+- High detail without visual noise
+- Relevant Indian context where appropriate
+- Landscape featured-image composition (about 16:9)
+- Professional color balance
+- Suitable for desktop cards, mobile cards, social sharing and Google Discover
+- Leave clean lower-third visual space for an optional later HTML/SVG headline overlay
 
 ${QUALITY_DIRECTIVES}
 
-Composition:
-clear central subject, uncluttered background, strong visual hierarchy, suitable for a news website thumbnail and large article hero image.
+${categoryRules(input.categoryId)}
 
-Do not include:
-unverified people, fake celebrity likeness, misleading event recreation, logos, watermarks, random text, distorted anatomy, blurred faces, extra fingers, unreadable writing or unrelated objects.
+${accuracyBlock()}
 
-Aspect ratio:
-16:9 landscape.
-
-Category guidance:
-${style}.
-
-The visual must immediately communicate the meaning of this headline:
+The image must make a reader instantly understand the news topic of this headline:
 ${headline}.`;
 }
 
+/** @deprecated Prefer buildProfessionalNewsImagePrompt — kept for callers. */
+export function buildNeutralIllustrationPrompt(
+  input: ImagePipelineInput,
+  analysis: ArticleImageAnalysis,
+  plan?: NewsVisualPlan
+): string {
+  return buildProfessionalNewsImagePrompt({
+    input,
+    analysis,
+    plan: plan || {
+      mainSubject: analysis.primarySubject,
+      secondarySubjects: analysis.visualKeywords,
+      locationContext: analysis.location,
+      visualEvent: analysis.factualVisualSummary,
+      composition: "clear central subject, uncluttered background",
+      cameraAngle: "eye-level",
+      lighting: "natural news lighting",
+      mood: "serious editorial",
+      colorPalette: "navy and neutrals",
+      editorialStyle: "premium newsroom",
+      mustInclude: [analysis.primarySubject],
+      mustAvoid: ["fake text", "watermarks"],
+      overlayTextRecommended: false,
+      safeForGeneration: true,
+      reason: "legacy",
+    },
+    neutral: true,
+  });
+}
+
+/** @deprecated Prefer buildProfessionalNewsImagePrompt — kept for callers. */
 export function buildOpenAiImagePrompt(
   input: ImagePipelineInput,
-  analysis: ArticleImageAnalysis
+  analysis: ArticleImageAnalysis,
+  plan?: NewsVisualPlan
 ): string {
-  const style = CATEGORY_STYLE[input.categoryId] || "editorial news photography";
-  const headline = input.titleEn || input.titleHi;
-
-  return `Create a high-quality editorial news featured image about:
-${analysis.factualVisualSummary}.
-
-Main visible subject:
-${analysis.primarySubject}.
-
-Required context:
-${analysis.location ? `Location: ${analysis.location}. ` : ""}${analysis.visualKeywords.join("; ")}.
-
-Style:
-photorealistic editorial news photography with tack-sharp detail, strong contrast, and natural vibrant colors.
-
-${QUALITY_DIRECTIVES}
-
-Composition:
-clear central subject, uncluttered background, strong visual hierarchy, suitable for a news website thumbnail and large article hero image, center-weighted focal point.
-
-Do not include:
-unverified people, fake celebrity likeness, misleading event recreation, logos, watermarks, random text, distorted anatomy, blurred faces, extra fingers, unreadable writing or unrelated objects.
-
-Aspect ratio:
-16:9 landscape.
-
-Category style:
-${style}.
-
-The visual must immediately communicate the meaning of this headline:
-${headline}.`;
+  return buildProfessionalNewsImagePrompt({
+    input,
+    analysis,
+    plan: plan || {
+      mainSubject: analysis.primarySubject,
+      secondarySubjects: analysis.visualKeywords,
+      locationContext: analysis.location,
+      visualEvent: analysis.factualVisualSummary,
+      composition: "clear central subject, center-weighted focal point",
+      cameraAngle: "eye-level",
+      lighting: "natural news lighting",
+      mood: "serious editorial",
+      colorPalette: "navy and neutrals",
+      editorialStyle: "premium newsroom",
+      mustInclude: [analysis.primarySubject],
+      mustAvoid: ["fake text", "watermarks"],
+      overlayTextRecommended: false,
+      safeForGeneration: true,
+      reason: "legacy",
+    },
+    neutral: false,
+  });
 }

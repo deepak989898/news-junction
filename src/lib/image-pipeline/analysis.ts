@@ -104,11 +104,13 @@ function detectSubjectType(
 
 function buildFactualVisualSummary(input: ImagePipelineInput, analysis: Partial<ArticleImageAnalysis>): string {
   const headline = input.titleEn || input.titleHi;
-  const summary = (input.summaryEn || input.summaryHi).replace(/\s+/g, " ").slice(0, 280);
+  const summary = (input.summaryEn || input.summaryHi).replace(/\s+/g, " ").slice(0, 420);
   const parts = [
     headline,
     analysis.location ? `Location: ${analysis.location}` : "",
+    analysis.namedPeople?.length ? `People: ${analysis.namedPeople.slice(0, 3).join(", ")}` : "",
     analysis.namedOrganizations?.length ? `Organizations: ${analysis.namedOrganizations.join(", ")}` : "",
+    analysis.subjectType ? `Subject type: ${analysis.subjectType}` : "",
     summary,
   ].filter(Boolean);
   return parts.join(". ");
@@ -204,7 +206,7 @@ export async function enrichAnalysisWithAi(
     if (!content) return base;
 
     const parsed = JSON.parse(content) as Partial<ArticleImageAnalysis>;
-    return {
+    const enriched: ArticleImageAnalysis = {
       ...base,
       primarySubject: parsed.primarySubject || base.primarySubject,
       subjectType: (parsed.subjectType as SubjectType) || base.subjectType,
@@ -215,6 +217,8 @@ export async function enrichAnalysisWithAi(
       riskLevel: parsed.riskLevel || base.riskLevel,
       isRealPersonPrimary: parsed.isRealPersonPrimary ?? base.isRealPersonPrimary,
     };
+    enriched.factualVisualSummary = buildFactualVisualSummary(input, enriched);
+    return enriched;
   } catch {
     return base;
   }
