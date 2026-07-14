@@ -12,4 +12,5 @@ export { analyzeArticleStory, analyzeStoryHeuristic } from "./story-analyzer";
 export { getEntertainmentLayout, ENTERTAINMENT_STYLES } from "./entertainment-styles";
 export { runThumbnailComprehensionTest } from "./thumbnail-test";
 export { validateGeneratedImageWithVision } from "./vision-qa";
+export { IMAGE_TEXT_HARD_RULES, toLatinImageText, isLatinSafeImageText } from "./image-text-rules";
 export { applyNewsTextOverlay } from "./text-overlay";

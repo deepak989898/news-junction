@@ -34,7 +34,9 @@ const SHARED_AVOID = [
   "invented audience crowd",
   "collage / split-screen / diptych",
   "oversized streaming logo dominating the frame",
-  "Hindi/Devanagari glyphs in the image",
+  "Hindi / Devanagari / Tamil / Telugu / any Indic script lettering",
+  "tofu boxes □□□ / empty rectangles / mojibake / red garbled subtitle bars",
+  "native-script movie title — use English transliteration only",
 ];
 
 export const ENTERTAINMENT_STYLES: Record<EntertainmentStyle, EntertainmentLayout> = {
@@ -47,15 +49,16 @@ export const ENTERTAINMENT_STYLES: Record<EntertainmentStyle, EntertainmentLayou
     mood: "glamorous, premium, entertainment editorial",
     colorPalette: "warm golds, soft amber, deep cinematic neutrals",
     editorialStyle: "Variety / Deadline / Hollywood Reporter entertainment thumbnail",
-    mustIncludeHints: ["lead actor portrait ~60-70%", "movie title branding", "one clear entertainment story"],
+    mustIncludeHints: ["lead actor portrait ~60-70%", "movie title branding in English letters only", "one clear entertainment story"],
     mustAvoidHints: SHARED_AVOID,
     frameBalance: FRAME_BALANCE,
     promptTemplate: `Create a premium editorial entertainment news thumbnail.
 Primary subject: {{Actor}}
 Supporting subject: {{Movie}}
-Visual focus: Actor portrait, Movie branding
+Visual focus: Actor portrait, Movie branding in English/Latin letters only
 Professional entertainment lighting, premium movie poster composition, warm cinematic colors
 No fake movie scenes, no random paperwork, no fake awards, no fake audience, no generic background
+CRITICAL: Never render Hindi/Tamil/Telugu/Devanagari or tofu □□□ boxes. English transliteration only for titles.
 One clear entertainment story.`,
   },
   ott_release: {
@@ -69,7 +72,7 @@ One clear entertainment story.`,
     editorialStyle: "IMDb News / BBC Entertainment OTT release thumbnail",
     mustIncludeHints: [
       "lead actor portrait dominant",
-      "movie/series title as secondary branding",
+      "movie/series title as secondary branding in ENGLISH transliteration only",
       "platform logo natural but SMALLER than the actor",
       "streaming release cue",
     ],
@@ -79,9 +82,10 @@ One clear entertainment story.`,
 Primary subject: {{Actor}}
 Supporting subject: {{Movie}}
 Streaming platform: {{Platform}}
-Visual focus: Actor portrait, Movie branding, Platform logo (smaller than actor)
+Visual focus: Actor portrait, Movie branding in English letters only, Platform logo (smaller than actor)
 Professional entertainment lighting, premium movie poster composition, warm cinematic colors
 No fake movie scenes, no random paperwork, no fake awards, no fake audience, no generic background
+CRITICAL: Title text must be English/Latin only (example spelling: Maa Inti Bangaaram). Never Telugu, Tamil, Hindi, or Devanagari. Never tofu boxes or garbled subtitle bars.
 One clear entertainment story: title starts streaming on {{Platform}}.`,
   },
   celebrity_interview: {

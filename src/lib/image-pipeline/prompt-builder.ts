@@ -3,6 +3,7 @@ import type { NewsVisualPlan } from "./visual-plan";
 import type { NewsVisualStory } from "./visual-story";
 import { rewritePromptForStoryComprehension } from "./visual-story";
 import type { StoryAnalysisResult } from "./story-analyzer";
+import { IMAGE_TEXT_HARD_RULES, toLatinImageText } from "./image-text-rules";
 
 export const QUALITY_DIRECTIVES = `Technical quality requirements:
 - Bright, well-lit editorial photography — clear faces, readable at thumbnail size
@@ -13,10 +14,10 @@ export const QUALITY_DIRECTIVES = `Technical quality requirements:
 - Single unified photograph/scene only — absolutely NO split-screen, NO diptych, NO side-by-side panels, NO before/after layout, NO collage, NO multiple frames
 - ONE coherent scene filling the entire landscape frame edge to edge
 - Strong subject-background separation, immediately readable at thumbnail size
-- Absolutely NO Hindi/Devanagari letters, NO tofu/box characters, NO unreadable glyphs inside the image
-- Prefer little or no in-image text; if English labels appear they must be short, sharp, and spelled correctly
 - Frame balance: main person ~60-70%, supporting branding ~20-25%, background ~10-15%
-- Logos, documents, and icons must NEVER be larger than the main subject`;
+- Logos, documents, and icons must NEVER be larger than the main subject
+
+${IMAGE_TEXT_HARD_RULES}`;
 
 const CATEGORY_RULES: Record<string, string> = {
   vyapar: `BUSINESS / MARKETS visual rules:
@@ -39,8 +40,10 @@ const CATEGORY_RULES: Record<string, string> = {
 - Warm cinematic lighting, soft bokeh background
 - Lead talent portrait dominant; title and platform branding secondary
 - Platform logos natural and SMALLER than the main person
+- Movie/series title lettering ONLY in English transliteration (Latin alphabet) — never Telugu/Tamil/Hindi script
 - Avoid false celebrity likenesses or invented award scenes
-- Never invent paperwork, contracts, laptops, microphones, courtrooms, or crowds`,
+- Never invent paperwork, contracts, laptops, microphones, courtrooms, or crowds
+- Never render tofu/box glyphs or red garbled subtitle bars`,
   duniya: `WORLD visual rules:
 - Region-accurate landmarks or diplomatic/civic atmosphere matching the story location`,
   rajya: `STATE / LOCAL visual rules:
@@ -82,6 +85,7 @@ ${isEntertainment ? "- Do NOT invent fake movie scenes, fake awards, or fake aud
 
 Avoid:
 - Unreadable text, misspelled words, fake quotes, fake LIVE/BREAKING stamps
+- Hindi/Tamil/Telugu/any Indic script lettering, tofu □□□ boxes, mojibake, red garbled text bars
 - Fake stock-market values or random charts with digits
 - Duplicate objects, extra fingers, distorted faces, deformed buildings
 - Watermarks, website logos, collage overload, clickbait unrelated composition
@@ -98,10 +102,16 @@ export function buildProfessionalNewsImagePrompt(args: {
   storyAnalysis?: StoryAnalysisResult | null;
 }): string {
   const { input, analysis, plan, neutral, story, storyAnalysis } = args;
-  const headline = input.titleEn || input.titleHi;
-  const summary = (input.summaryEn || input.summaryHi || analysis.factualVisualSummary)
-    .replace(/\s+/g, " ")
-    .slice(0, 360);
+  const headline = toLatinImageText(input.titleEn || "", "") || toLatinImageText(input.titleHi || "", "news story");
+  const summary = toLatinImageText(
+    (input.summaryEn || input.summaryHi || analysis.factualVisualSummary).replace(/\s+/g, " ").slice(0, 360),
+    ""
+  );
+  const latinMovieTitle = toLatinImageText(
+    story?.movieTitle || storyAnalysis?.movieTitle || plan.secondarySubject || "",
+    ""
+  );
+  const latinPlatform = toLatinImageText(story?.platform || storyAnalysis?.platform || "", "");
   const isEntertainment =
     story?.imageType === "ENTERTAINMENT" ||
     Boolean(storyAnalysis?.isEntertainment) ||
@@ -114,7 +124,7 @@ export function buildProfessionalNewsImagePrompt(args: {
       analysis.namedPeople.length > 0);
   const mainSubject = neutral
     ? "neutral symbolic scene related to the topic — NOT any real person's face or likeness"
-    : story?.mainSubject || plan.mainSubject || analysis.primarySubject;
+    : toLatinImageText(story?.mainSubject || plan.mainSubject || analysis.primarySubject || "", "main subject");
 
   const isLegal =
     story?.imageType === "LEGAL" ||
@@ -126,11 +136,13 @@ export function buildProfessionalNewsImagePrompt(args: {
       ? `Entertainment / celebrity editorial rules:
 - Main focus: photorealistic editorial portrait of ${mainSubject}
 - Person occupies about 60-70% of the frame; face fully visible, high likeness for a news thumbnail
-- Supporting elements only: ${story?.movieTitle || plan.secondarySubject || "title branding"}, ${
-          story?.platform || storyAnalysis?.platform || "streaming platform if relevant"
+- Supporting elements only: ${latinMovieTitle || "English movie title branding"}, ${
+          latinPlatform || "streaming platform if relevant"
         } logo SMALLER than the person
+- Title text MUST be English transliteration only (e.g. "Maa Inti Bangaaram") — absolutely NO Telugu/Tamil/Hindi script
 - NEVER invent paperwork, contracts, laptops, microphones, courtrooms, awards, or crowds
 - NEVER let platform logos dominate the frame
+- NEVER draw tofu boxes, empty rectangles, or red garbled subtitle bars
 - Warm cinematic soft lighting; premium entertainment poster composition
 - Chest-up or three-quarter framing`
       : `Real-person / public-figure editorial rules:
@@ -142,7 +154,8 @@ export function buildProfessionalNewsImagePrompt(args: {
 - NEVER invent paperwork, settlement documents, or court props unless this is legal news
 - NEVER make scales of justice, gavel, empty courtroom, or generic legal clipart the primary subject
 - Neutral journalistic expression; do not invent criminal or humiliating poses
-- Bright clear lighting for face detail; chest-up or three-quarter framing`
+- Bright clear lighting for face detail; chest-up or three-quarter framing
+- No non-English script text in the image`
     : "";
 
   const categoryIdForRules = isEntertainment
@@ -164,17 +177,20 @@ export function buildProfessionalNewsImagePrompt(args: {
 
   const entertainmentBlock =
     isEntertainment && plan.entertainmentTemplate
-      ? `\nEntertainment prompt template:\n${plan.entertainmentTemplate}\n`
+      ? `\nEntertainment prompt template:\n${plan.entertainmentTemplate}\n\n${IMAGE_TEXT_HARD_RULES}\n`
       : isEntertainment
         ? `\nEntertainment prompt template:
 Create a premium editorial entertainment news thumbnail.
 Primary subject: ${mainSubject}
-Supporting subject: ${story?.movieTitle || plan.secondarySubject || "title"}
-Streaming platform: ${story?.platform || storyAnalysis?.platform || "platform if relevant"}
-Visual focus: Actor portrait, Movie branding, Platform logo (smaller than actor)
+Supporting subject: ${latinMovieTitle || "English title"}
+Streaming platform: ${latinPlatform || "platform if relevant"}
+Visual focus: Actor portrait, English movie title lettering, Platform logo (smaller than actor)
 Professional entertainment lighting, premium movie poster composition, warm cinematic colors
 No fake movie scenes, no random paperwork, no fake awards, no fake audience, no generic background
-One clear entertainment story.\n`
+No Hindi/Tamil/Telugu/Devanagari lettering — English transliteration only for titles
+One clear entertainment story.
+
+${IMAGE_TEXT_HARD_RULES}\n`
         : "";
 
   let prompt = `Create a premium editorial news illustration for a trusted digital news website (News Junction), similar in clarity to BBC/Reuters/AP${
@@ -249,7 +265,6 @@ Style requirements:
 - Strong subject-background separation
 - Realistic lighting and natural proportions
 - Clean, modern, uncluttered composition
-- Do NOT render Hindi/Devanagari text in the picture
 - Leave clean lower-third space for optional later overlay
 ${entertainmentBlock}
 ${QUALITY_DIRECTIVES}
@@ -259,6 +274,8 @@ ${personBlock}
 ${categoryRules(resolvedCategory)}
 
 ${accuracyBlock(isEntertainment)}
+
+${IMAGE_TEXT_HARD_RULES}
 
 The image must visually answer WHO / WHAT happened / WHERE / WHICH organization / WHY it is news — without requiring the reader to open the article.
 

@@ -78,13 +78,16 @@ export async function validateGeneratedImageWithVision(
             content: `You are a news image quality validator for editorial thumbnails.
 Score the image (max): storyClarity 30, mainSubjectVisibility 25, thumbnailReadability 15, composition 15, lighting 10, backgroundRelevance 5.
 Minimum total to approve: 90.
-FAIL if:
-- Platform logo / document / icon is larger than the main person
-- Random paperwork/contract appears when not about legal news
+FAIL HARD (approved=false) if ANY of these appear:
+- Hindi, Devanagari, Tamil, Telugu, Kannada, Malayalam, Bengali, or any non-Latin script lettering
+- Tofu boxes / empty rectangles / □□□ glyphs / mojibake / red or garbled unreadablesubtitle bars
+- Platform logo / document / icon larger than the main person
+- Random paperwork/contract when not legal news
 - Collage / split-screen / cluttered keyword collage
 - Main subject occupies clearly under ~50% of frame when a person should lead
 - Cannot tell who/what at thumbnail size
-Return JSON: approved, storyClarity, mainSubjectVisibility, thumbnailReadability, composition, lighting, backgroundRelevance, total, failureReasons (array), rewriteNotes.`,
+If movie title text exists, it must be readable English/Latin (e.g. "Maa Inti Bangaaram"), not native Indian script.
+Return JSON: approved, storyClarity, mainSubjectVisibility, thumbnailReadability, composition, lighting, backgroundRelevance, total, failureReasons (array), rewriteNotes, hasTofuOrBadScript (boolean).`,
           },
           {
             role: "user",
@@ -157,13 +160,28 @@ Must avoid: ${story.mustAvoid.slice(0, 8).join("; ")}`,
     const failureReasons = Array.isArray(parsed.failureReasons)
       ? parsed.failureReasons.map((x) => String(x)).slice(0, 8)
       : [];
-    const approved = parsed.approved === true || (scores.total >= MIN_SCORE && failureReasons.length === 0);
+    if (parsed.hasTofuOrBadScript === true) {
+      failureReasons.push("tofu_or_non_latin_script");
+    }
+    const textIssues = failureReasons.some((r) =>
+      /tofu|glyph|hindi|tamil|telugu|devanagari|script|garbled|mojibake|unreadable|□/i.test(r)
+    );
+    const approved =
+      parsed.approved === true &&
+      !textIssues &&
+      parsed.hasTofuOrBadScript !== true &&
+      (scores.total >= MIN_SCORE || failureReasons.length === 0);
 
     return {
       approved,
       scores,
       failureReasons,
-      rewriteNotes: String(parsed.rewriteNotes || failureReasons.join("; ")).slice(0, 400),
+      rewriteNotes: String(
+        parsed.rewriteNotes ||
+          (textIssues
+            ? "Remove all non-English scripts and tofu boxes. Use English transliteration only for titles, or omit title lettering."
+            : failureReasons.join("; "))
+      ).slice(0, 400),
     };
   } catch {
     return {
@@ -188,9 +206,15 @@ export function buildVisionRetryPrompt(
   story: NewsVisualStory,
   qa: VisionQaResult
 ): string {
+  const textFail = qa.failureReasons.some((r) =>
+    /tofu|glyph|hindi|tamil|telugu|devanagari|script|garbled|mojibake|unreadable/i.test(r)
+  );
+  const textFix = textFail
+    ? "CRITICAL TEXT FIX: Remove ALL Hindi/Tamil/Telugu/Devanagari/Indic lettering and ALL tofu/box glyphs. Keep title ONLY as clean English/Latin letters (e.g. Maa Inti Bangaaram). If unsure, omit native-script title entirely and keep portrait + English title + small logo."
+    : "";
   return rewritePromptForStoryComprehension(
     prompt,
     story,
-    `VISION QA FAILED (score ${qa.scores.total}/100). Fix: ${qa.rewriteNotes || qa.failureReasons.join("; ")}. Ensure actor/person occupies 60-70% of frame; shrink logos; remove invented paperwork; no collage.`
+    `VISION QA FAILED (score ${qa.scores.total}/100). Fix: ${qa.rewriteNotes || qa.failureReasons.join("; ")}. Ensure actor/person occupies 60-70% of frame; shrink logos; remove invented paperwork; no collage. ${textFix}`
   );
 }

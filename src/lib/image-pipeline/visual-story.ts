@@ -203,7 +203,9 @@ export function buildNewsVisualStory(
     "invented audience crowd",
     "collage or split-screen",
     "platform logo larger than the main person",
-    "unreadable or fake Hindi text",
+    "Hindi / Tamil / Telugu / Devanagari / any Indic script in the image",
+    "tofu boxes □□□ / empty rectangles / mojibake / red garbled text bars",
+    "native-script movie title — English transliteration only",
   ];
 
   const mustAvoid = uniq([
@@ -211,7 +213,8 @@ export function buildNewsVisualStory(
     "isolated gavel close-up",
     "empty courtroom with no story context",
     "category-only legal clipart",
-    "unreadable or fake Hindi text",
+    "Hindi / Tamil / Telugu / Devanagari / any non-Latin script lettering",
+    "tofu / box glyphs / unreadable text bars",
     "fake quotes",
     "watermarks",
     "collage overload",

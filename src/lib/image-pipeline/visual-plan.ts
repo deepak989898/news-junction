@@ -179,7 +179,8 @@ Rules:
 - NEVER use scales of justice, gavel, paperwork, or generic court clipart as the main subject when a person is named — unless the article is explicitly legal news.
 - For entertainment / OTT / movie stories: premium poster layout, warm cinematic lighting, platform logo smaller than actor, no invented objects.
 - Never invent market numbers, scores, quotes, or case details.
-- Prefer Indian or story-accurate location context when relevant.`;
+- Prefer Indian or story-accurate location context when relevant.
+- In-image text: English/Latin only. Never Hindi/Tamil/Telugu/Devanagari. Never tofu boxes.`;
 
   const user = `Create a visual plan JSON with keys:
 mainSubject, secondarySubject, secondarySubjects, locationContext, visualEvent, visualStory, objects, background, composition, cameraAngle, lighting, mood, colorPalette, editorialStyle, mustInclude, mustAvoid, avoid, visualPriority, frameBalance, imageType, overlayTextRecommended, safeForGeneration, reason.
