@@ -6,7 +6,7 @@ import AdminTopbar from "@/components/layout/AdminTopbar";
 import RoleGuard from "@/components/admin/RoleGuard";
 import ConfirmModal from "@/components/admin/ConfirmModal";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
-import { createMediaItem, deleteMediaItem } from "@/firebase/firestore";
+import { createMediaItem } from "@/firebase/firestore";
 import { uploadMediaFile } from "@/firebase/storage";
 import { canDeleteMedia } from "@/lib/permissions";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,7 +30,7 @@ export default function MediaPage() {
   const [uploading, setUploading] = useState(false);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<MediaLibraryItem | null>(null);
   const [zoomIndex, setZoomIndex] = useState<number | null>(null);
   const [zoomScale, setZoomScale] = useState(1);
 
@@ -88,12 +88,32 @@ export default function MediaPage() {
   };
 
   const handleDelete = async () => {
-    if (!deleteId) return;
-    const rawId = deleteId.startsWith("upload:") ? deleteId.slice("upload:".length) : deleteId;
-    await deleteMediaItem(rawId);
-    toast.success("Media deleted");
-    setDeleteId(null);
-    await load();
+    if (!deleteTarget) return;
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("Not authenticated");
+      const res = await fetch("/api/admin/media/delete", {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          itemId: deleteTarget.id,
+          url: deleteTarget.url,
+          thumbnailUrl: deleteTarget.thumbnailUrl,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Delete failed");
+      toast.success(String(data.message || "Media deleted"));
+      if (zoomIndex !== null) setZoomIndex(null);
+      setDeleteTarget(null);
+      setLoading(true);
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
+    }
   };
 
   const filtered = useMemo(() => {
@@ -225,9 +245,9 @@ export default function MediaPage() {
                   >
                     <ZoomIn size={14} />
                   </button>
-                  {item.deletable && canDeleteMedia(adminUser?.role) && (
+                  {canDeleteMedia(adminUser?.role) && (
                     <button
-                      onClick={() => setDeleteId(item.id)}
+                      onClick={() => setDeleteTarget(item)}
                       className="rounded p-1.5 text-red-600 hover:bg-red-50"
                       title="Delete"
                     >
@@ -269,6 +289,16 @@ export default function MediaPage() {
               <button className="rounded p-2 hover:bg-white/10" onClick={() => setZoomIndex(null)} title="Close">
                 <X size={20} />
               </button>
+              {canDeleteMedia(adminUser?.role) && (
+                <button
+                  className="rounded border border-red-400/60 px-2 py-1 text-sm text-red-200 hover:bg-red-900/40"
+                  onClick={() => setDeleteTarget(zoomItem)}
+                  title="Delete image"
+                >
+                  <Trash2 className="mr-1 inline h-4 w-4" />
+                  Delete
+                </button>
+              )}
             </div>
           </div>
           <div
@@ -308,11 +338,15 @@ export default function MediaPage() {
       )}
 
       <ConfirmModal
-        open={!!deleteId}
+        open={!!deleteTarget}
         title="Delete Media"
-        message="Delete this media file?"
+        message={
+          deleteTarget?.source === "article_pipeline"
+            ? `Delete "${deleteTarget.filename}"? The article will use a category fallback image instead.`
+            : `Delete "${deleteTarget?.filename || "this image"}" from the media library?`
+        }
         onConfirm={handleDelete}
-        onCancel={() => setDeleteId(null)}
+        onCancel={() => setDeleteTarget(null)}
       />
     </RoleGuard>
   );

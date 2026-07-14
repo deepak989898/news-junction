@@ -1,4 +1,7 @@
 import { getAdminDb } from "@/lib/firebase-admin";
+import { getAdminStorage } from "@/lib/firebase-admin";
+import { getImagePipelineSettings } from "@/lib/image-pipeline/settings";
+import { getCategoryFallbackUrl } from "@/lib/image-pipeline/fallbacks";
 
 export type MediaLibrarySource = "upload" | "ai_media" | "article_pipeline";
 
@@ -54,7 +57,124 @@ function isLikelyFallback(url: string) {
   return url.includes("/images/fallbacks/") || url.includes("/logo") || url.endsWith("/logo.png");
 }
 
-/** Persist so Media Library + MediaPicker stay in sync going forward. */
+function storagePathFromUrl(url: string): string | null {
+  if (!url) return null;
+  try {
+    if (url.includes("firebasestorage.googleapis.com")) {
+      const u = new URL(url);
+      const match = u.pathname.match(/\/o\/(.+)$/);
+      if (match?.[1]) return decodeURIComponent(match[1]);
+    }
+    if (url.includes("storage.googleapis.com")) {
+      const u = new URL(url);
+      const parts = u.pathname.split("/").filter(Boolean);
+      if (parts.length >= 2) return parts.slice(1).join("/");
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+async function deleteStorageByUrl(url: string) {
+  const path = storagePathFromUrl(url);
+  if (!path) return;
+  try {
+    const bucket = getAdminStorage().bucket();
+    await bucket.file(path).delete({ ignoreNotFound: true });
+  } catch {
+    /* external or already removed */
+  }
+}
+
+async function getHiddenMediaUrls(): Promise<Set<string>> {
+  const snap = await getAdminDb().collection("mediaLibraryHidden").limit(500).get();
+  return new Set(snap.docs.map((d) => asString(d.data().url)).filter(Boolean));
+}
+
+async function markMediaHidden(url: string, deletedBy: string) {
+  const id = Buffer.from(url).toString("base64url").slice(0, 120);
+  await getAdminDb()
+    .collection("mediaLibraryHidden")
+    .doc(id)
+    .set({ url, deletedAt: new Date().toISOString(), deletedBy });
+}
+
+function parseMediaItemId(itemId: string): { prefix: string; docId: string } {
+  const idx = itemId.indexOf(":");
+  if (idx === -1) return { prefix: "upload", docId: itemId };
+  return { prefix: itemId.slice(0, idx), docId: itemId.slice(idx + 1) };
+}
+
+export async function deleteMediaLibraryItem(args: {
+  itemId: string;
+  url: string;
+  thumbnailUrl?: string;
+  deletedBy: string;
+}): Promise<{ success: boolean; message: string }> {
+  const { itemId, url, thumbnailUrl, deletedBy } = args;
+  if (!url) throw new Error("URL required");
+
+  const { prefix, docId } = parseMediaItemId(itemId);
+  const db = getAdminDb();
+
+  await Promise.all([deleteStorageByUrl(url), thumbnailUrl ? deleteStorageByUrl(thumbnailUrl) : Promise.resolve()]);
+
+  if (prefix === "upload") {
+    await db.collection("media").doc(docId).delete().catch(() => null);
+  } else if (prefix === "ai") {
+    await db.collection("mediaAssets").doc(docId).delete().catch(() => null);
+  } else if (prefix === "news") {
+    const articleRef = db.collection("news").doc(docId);
+    const articleSnap = await articleRef.get();
+    if (articleSnap.exists) {
+      const data = articleSnap.data() || {};
+      const imageFields = [
+        "imageUrl",
+        "imageLargeUrl",
+        "imageMediumUrl",
+        "imageThumbnailUrl",
+        "imageWebpUrl",
+        "imageOriginalUrl",
+      ] as const;
+      const touchesArticle = imageFields.some((f) => asString(data[f]) === url);
+      if (touchesArticle) {
+        const settings = await getImagePipelineSettings();
+        const fallback = getCategoryFallbackUrl(asString(data.categoryId), settings);
+        const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+        let primaryReplaced = false;
+        imageFields.forEach((f) => {
+          if (asString(data[f]) === url) {
+            if (f === "imageUrl") {
+              patch.imageUrl = fallback;
+              primaryReplaced = true;
+            } else {
+              patch[f] = null;
+            }
+          }
+        });
+        if (primaryReplaced) {
+          patch.imageOrigin = "fallback";
+          patch.imageStatus = "fallback";
+        }
+        await articleRef.update(patch);
+      }
+    }
+  }
+
+  const byUrl = await db.collection("media").where("url", "==", url).limit(5).get();
+  await Promise.all(byUrl.docs.map((d) => d.ref.delete()));
+
+  await markMediaHidden(url, deletedBy);
+
+  return {
+    success: true,
+    message:
+      prefix === "news"
+        ? "Image removed from library and article reset to category fallback"
+        : "Image deleted from library",
+  };
+}
 export async function upsertMediaLibraryEntry(entry: {
   url: string;
   filename?: string;
@@ -96,6 +216,7 @@ export async function upsertMediaLibraryEntry(entry: {
 export async function getAggregatedMediaLibrary(limit = 300): Promise<MediaLibraryItem[]> {
   const db = getAdminDb();
   const byUrl = new Map<string, MediaLibraryItem>();
+  const hidden = await getHiddenMediaUrls();
 
   const [mediaSnap, assetsSnap, newsSnap] = await Promise.all([
     db.collection("media").orderBy("createdAt", "desc").limit(limit).get().catch(async () => db.collection("media").limit(limit).get()),
@@ -106,7 +227,7 @@ export async function getAggregatedMediaLibrary(limit = 300): Promise<MediaLibra
   mediaSnap.docs.forEach((d) => {
     const data = d.data();
     const url = asString(data.url);
-    if (!url) return;
+    if (!url || hidden.has(url)) return;
     byUrl.set(url, {
       id: `upload:${d.id}`,
       url,
@@ -119,14 +240,14 @@ export async function getAggregatedMediaLibrary(limit = 300): Promise<MediaLibra
       source: (asString(data.source) as MediaLibrarySource) || "upload",
       articleId: data.articleId ? asString(data.articleId) : undefined,
       createdAt: createdAtIso(data.createdAt),
-      deletable: !asString(data.source) || asString(data.source) === "upload",
+      deletable: true,
     });
   });
 
   assetsSnap.docs.forEach((d) => {
     const data = d.data();
     const url = asString(data.imageUrl);
-    if (!url || byUrl.has(url)) return;
+    if (!url || byUrl.has(url) || hidden.has(url)) return;
     byUrl.set(url, {
       id: `ai:${d.id}`,
       url,
@@ -140,7 +261,7 @@ export async function getAggregatedMediaLibrary(limit = 300): Promise<MediaLibra
       source: "ai_media",
       articleId: data.articleId ? asString(data.articleId) : undefined,
       createdAt: createdAtIso(data.createdAt),
-      deletable: false,
+      deletable: true,
     });
   });
 
@@ -150,9 +271,8 @@ export async function getAggregatedMediaLibrary(limit = 300): Promise<MediaLibra
       asString(data.imageUrl),
       asString(data.imageLargeUrl),
       asString(data.imageMediumUrl),
-    ].filter((u) => u && isHostedAsset(u) && !isLikelyFallback(u));
+    ].filter((u) => u && isHostedAsset(u) && !isLikelyFallback(u) && !hidden.has(u));
 
-    // Prefer one unique primary image per article
     const url = candidates[0];
     if (!url || byUrl.has(url)) return;
 
@@ -169,7 +289,7 @@ export async function getAggregatedMediaLibrary(limit = 300): Promise<MediaLibra
       source: "article_pipeline",
       articleId: d.id,
       createdAt: createdAtIso(data.publishedAt || data.updatedAt || data.createdAt),
-      deletable: false,
+      deletable: true,
     });
   });
 
