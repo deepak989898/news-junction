@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminTopbar from "@/components/layout/AdminTopbar";
 import RoleGuard from "@/components/admin/RoleGuard";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import toast from "react-hot-toast";
-import { RefreshCw, Play, Check, X, Search, Loader2 } from "lucide-react";
+import { RefreshCw, Play, Check, X, Search, Loader2, Trash2, Eye, FilePlus2 } from "lucide-react";
 import Link from "next/link";
 
 interface TrendRow {
@@ -23,6 +23,9 @@ interface TrendRow {
   verificationNotes?: string;
   errorMessage?: string;
   isTestRecord?: boolean;
+  fetchBatchId?: string | null;
+  fetchedAt?: string | null;
+  createdAt?: string | null;
 }
 
 interface Settings {
@@ -45,12 +48,33 @@ interface Settings {
   } | null;
 }
 
+const PAGE_SIZE = 25;
+
+function batchKey(t: TrendRow): string {
+  if (t.fetchBatchId) return t.fetchBatchId;
+  const raw = t.fetchedAt || t.createdAt || "";
+  if (!raw) return "unknown";
+  // Group legacy rows without fetchBatchId into ~10-minute buckets
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw;
+  d.setMinutes(Math.floor(d.getMinutes() / 10) * 10, 0, 0);
+  return d.toISOString();
+}
+
+function formatBatchLabel(key: string): string {
+  if (key === "unknown") return "Earlier trends";
+  const d = new Date(key);
+  if (Number.isNaN(d.getTime())) return key;
+  return d.toLocaleString();
+}
+
 export default function GoogleTrendsAdminPage() {
   const [loading, setLoading] = useState(true);
   const [trends, setTrends] = useState<TrendRow[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [logs, setLogs] = useState<Array<{ id?: string; message?: string; status?: string; type?: string; createdAt?: string | null }>>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const getToken = useCallback(async () => {
     const { getAuth } = await import("firebase/auth");
@@ -83,18 +107,24 @@ export default function GoogleTrendsAdminPage() {
     load();
   }, [load]);
 
-  const runAction = async (action: string, trendId?: string) => {
-    setBusy(action + (trendId || ""));
+  const postAction = async (
+    action: string,
+    opts?: { trendId?: string; reason?: string; deleteArticle?: boolean },
+    busyKey?: string
+  ) => {
+    setBusy(busyKey || action + (opts?.trendId || ""));
     try {
       const { runWithAdminBusy } = await import("@/lib/admin/busy-store");
-      await runWithAdminBusy(
+      return await runWithAdminBusy(
         action === "fetch"
           ? "Fetching Google Trends…"
           : action === "research"
             ? "Researching sources…"
             : action === "generate"
-              ? "Generating articles…"
-              : `${action}… please wait`,
+              ? "Generating article…"
+              : action === "delete"
+                ? "Deleting…"
+                : `${action}… please wait`,
         async () => {
           const token = await getToken();
           const res = await fetch("/api/admin/google-trends", {
@@ -103,26 +133,139 @@ export default function GoogleTrendsAdminPage() {
               Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ action, trendId }),
+            body: JSON.stringify({ action, ...opts }),
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Action failed");
-          if (action === "fetch") {
-            const msg =
-              data.message ||
-              `Saved ${data.fetched ?? 0} · skipped ${data.skipped ?? 0} · duplicates ${data.duplicates ?? 0} · RSS ${data.total ?? 0}`;
-            if ((data.fetched ?? 0) > 0) toast.success(msg);
-            else toast.error(msg || "Fetch finished but saved 0 trends");
-          } else {
-            toast.success(`${action} completed`);
-          }
-          await load();
+          return data;
         }
       );
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Action failed");
     } finally {
       setBusy(null);
+    }
+  };
+
+  const runFetch = async () => {
+    try {
+      const data = await postAction("fetch");
+      const msg =
+        data.message ||
+        `Saved ${data.fetched ?? 0} · skipped ${data.skipped ?? 0} · duplicates ${data.duplicates ?? 0} · RSS ${data.total ?? 0}`;
+      if ((data.fetched ?? 0) > 0) toast.success(msg);
+      else toast.error(msg || "Fetch finished but saved 0 trends");
+      setVisibleCount(PAGE_SIZE);
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Fetch failed");
+    }
+  };
+
+  const runResearch = async (trendId?: string) => {
+    try {
+      const data = await postAction("research", trendId ? { trendId } : undefined, trendId ? `research-${trendId}` : "research");
+      toast.success(
+        trendId
+          ? data.verified
+            ? "Sources verified — ready to generate"
+            : "Research done (insufficient sources)"
+          : `Research done: ${data.verified ?? 0} verified · ${data.insufficient ?? 0} insufficient`
+      );
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Research failed");
+    }
+  };
+
+  const runGenerateOne = async (trendId: string) => {
+    try {
+      const data = await postAction("generate", { trendId }, `generate-${trendId}`);
+      toast.success(data.message || "Article generated");
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Generate failed");
+      await load();
+    }
+  };
+
+  const runGenerateAll = async () => {
+    const verified = trends.filter((t) => t.status === "verified");
+    if (verified.length === 0) {
+      toast.error("No verified trends to generate. Click Research Sources first.");
+      return;
+    }
+    setBusy("generate-all");
+    let ok = 0;
+    let failed = 0;
+    try {
+      const { runWithAdminBusy } = await import("@/lib/admin/busy-store");
+      await runWithAdminBusy(`Generating ${verified.length} articles one by one…`, async () => {
+        for (let i = 0; i < verified.length; i++) {
+          const t = verified[i];
+          try {
+            const token = await getToken();
+            const res = await fetch("/api/admin/google-trends", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ action: "generate", trendId: t.id }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Generate failed");
+            ok += 1;
+          } catch {
+            failed += 1;
+          }
+        }
+      });
+      toast.success(`Generated ${ok} article(s)${failed ? ` · ${failed} failed` : ""}`);
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Generate all failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const runApprove = async (trendId: string) => {
+    try {
+      await postAction("approve", { trendId }, `approve-${trendId}`);
+      toast.success("Approved & published");
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Approve failed");
+    }
+  };
+
+  const runReject = async (trendId: string) => {
+    try {
+      await postAction("reject", { trendId, reason: "Rejected by admin" }, `reject-${trendId}`);
+      toast.success("Rejected");
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Reject failed");
+    }
+  };
+
+  const runDelete = async (t: TrendRow) => {
+    const withArticle = Boolean(t.articleId);
+    const ok = window.confirm(
+      withArticle
+        ? `Delete trend "${t.title}"?\n\nAlso delete the generated news article? Click OK = delete trend + article, Cancel on next step can keep article.\nClick OK to continue.`
+        : `Delete trend "${t.title}"?`
+    );
+    if (!ok) return;
+    let deleteArticle = false;
+    if (withArticle) {
+      deleteArticle = window.confirm("Also permanently delete the linked news article from the site?");
+    }
+    try {
+      await postAction("delete", { trendId: t.id, deleteArticle }, `delete-${t.id}`);
+      toast.success(deleteArticle ? "Trend and article deleted" : "Trend deleted");
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Delete failed");
     }
   };
 
@@ -152,7 +295,113 @@ export default function GoogleTrendsAdminPage() {
     }
   };
 
+  const batches = useMemo(() => {
+    const map = new Map<string, TrendRow[]>();
+    for (const t of trends) {
+      const key = batchKey(t);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(t);
+    }
+    return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  }, [trends]);
+
+  const flatVisible = useMemo(() => {
+    const ordered = batches.flatMap(([, rows]) => rows);
+    return ordered.slice(0, visibleCount);
+  }, [batches, visibleCount]);
+
+  const visibleByBatch = useMemo(() => {
+    const map = new Map<string, TrendRow[]>();
+    for (const t of flatVisible) {
+      const key = batchKey(t);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(t);
+    }
+    return [...map.entries()];
+  }, [flatVisible]);
+
+  const hasMore = trends.length > visibleCount;
+  const verifiedCount = trends.filter((t) => t.status === "verified").length;
   const todayCount = trends.filter((t) => t.status === "fetched" || t.status === "verified").length;
+
+  const renderActions = (t: TrendRow) => {
+    const rowBusy = busy?.includes(t.id);
+    return (
+      <div className="flex flex-wrap items-center gap-1">
+        {(t.status === "fetched" || t.status === "insufficientSources" || t.status === "failed") && (
+          <button
+            onClick={() => runResearch(t.id)}
+            disabled={!!busy}
+            title="Research sources"
+            className="inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-[11px] disabled:opacity-50"
+          >
+            {busy === `research-${t.id}` ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
+            Research
+          </button>
+        )}
+        {t.status === "verified" && (
+          <button
+            onClick={() => runGenerateOne(t.id)}
+            disabled={!!busy}
+            title="Generate article"
+            className="inline-flex items-center gap-0.5 rounded bg-[#1a2b4c] px-1.5 py-0.5 text-[11px] text-white disabled:opacity-50"
+          >
+            {busy === `generate-${t.id}` ? <Loader2 size={12} className="animate-spin" /> : <FilePlus2 size={12} />}
+            Generate
+          </button>
+        )}
+        {t.status === "pendingApproval" && (
+          <>
+            <button
+              onClick={() => runApprove(t.id)}
+              disabled={!!busy}
+              title="Approve & publish"
+              className="rounded p-1 text-green-600 hover:bg-green-50 disabled:opacity-50"
+            >
+              <Check size={14} />
+            </button>
+            <button
+              onClick={() => runReject(t.id)}
+              disabled={!!busy}
+              title="Reject"
+              className="rounded p-1 text-red-600 hover:bg-red-50 disabled:opacity-50"
+            >
+              <X size={14} />
+            </button>
+          </>
+        )}
+        {t.articleId && (
+          <>
+            <Link
+              href={`/admin/news/${t.articleId}/edit`}
+              className="inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-[11px] text-blue-700 hover:bg-blue-50"
+              title="View / edit article"
+            >
+              <Eye size={12} />
+              View
+            </Link>
+            <Link
+              href={`/admin/news/${t.articleId}/edit`}
+              className="rounded px-1.5 py-0.5 text-[11px] text-blue-700 hover:bg-blue-50"
+            >
+              Edit
+            </Link>
+          </>
+        )}
+        {!t.articleId && t.status === "pendingApproval" && (
+          <span className="text-[11px] text-amber-700">Ready to approve</span>
+        )}
+        <button
+          onClick={() => runDelete(t)}
+          disabled={!!busy || !!rowBusy}
+          title="Delete trend"
+          className="rounded p-1 text-red-500 hover:bg-red-50 disabled:opacity-50"
+        >
+          {busy === `delete-${t.id}` ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+        </button>
+      </div>
+    );
+  };
 
   return (
     <RoleGuard>
@@ -163,11 +412,16 @@ export default function GoogleTrendsAdminPage() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm text-gray-600">
-                  Mode: <strong>{settings?.mode === "officialApi" && settings.officialApiConfigured ? "Official API" : "RSS (official export)"}</strong>
+                  Mode:{" "}
+                  <strong>
+                    {settings?.mode === "officialApi" && settings.officialApiConfigured
+                      ? "Official API"
+                      : "RSS (official export)"}
+                  </strong>
                   {" · "}Country: {settings?.country || "IN"}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  Trends are discovery signals only — articles require verified trusted RSS sources.
+                  Workflow: Fetch → delete unwanted → Research Sources → Generate (per row or all one-by-one) → Approve/Reject.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -179,17 +433,30 @@ export default function GoogleTrendsAdminPage() {
                   {busy === "toggle" && <Loader2 size={14} className="animate-spin" />}
                   {settings?.enabled ? "Enabled" : "Disabled"}
                 </button>
-                <button onClick={() => runAction("fetch")} disabled={!!busy} className="inline-flex items-center gap-1 rounded-lg bg-[#1a2b4c] px-3 py-2 text-sm text-white">
+                <button
+                  onClick={runFetch}
+                  disabled={!!busy}
+                  className="inline-flex items-center gap-1 rounded-lg bg-[#1a2b4c] px-3 py-2 text-sm text-white disabled:opacity-50"
+                >
                   {busy === "fetch" ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
                   {busy === "fetch" ? "Fetching…" : "Fetch Trends"}
                 </button>
-                <button onClick={() => runAction("research")} disabled={!!busy} className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
+                <button
+                  onClick={() => runResearch()}
+                  disabled={!!busy}
+                  className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm disabled:opacity-50"
+                >
                   {busy === "research" ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
                   {busy === "research" ? "Researching…" : "Research Sources"}
                 </button>
-                <button onClick={() => runAction("generate")} disabled={!!busy} className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
-                  {busy === "generate" ? <Loader2 size={14} className="animate-spin" /> : null}
-                  {busy === "generate" ? "Generating…" : "Generate Articles"}
+                <button
+                  onClick={runGenerateAll}
+                  disabled={!!busy || verifiedCount === 0}
+                  className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm disabled:opacity-50"
+                  title={verifiedCount ? `Generate ${verifiedCount} verified trend(s) one by one` : "No verified trends"}
+                >
+                  {busy === "generate-all" ? <Loader2 size={14} className="animate-spin" /> : <FilePlus2 size={14} />}
+                  {busy === "generate-all" ? "Generating…" : `Generate All (${verifiedCount})`}
                 </button>
                 <button onClick={load} disabled={!!busy} className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
                   <RefreshCw size={14} className={loading || busy ? "animate-spin" : ""} />
@@ -197,16 +464,36 @@ export default function GoogleTrendsAdminPage() {
               </div>
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-4 text-sm">
-              <div className="rounded-lg bg-gray-50 p-3"><p className="text-gray-500">Active pipeline</p><p className="font-bold">{todayCount}</p></div>
-              <div className="rounded-lg bg-gray-50 p-3"><p className="text-gray-500">Pending approval</p><p className="font-bold">{trends.filter((t) => t.status === "pendingApproval").length}</p></div>
-              <div className="rounded-lg bg-gray-50 p-3"><p className="text-gray-500">Published</p><p className="font-bold">{trends.filter((t) => t.status === "published").length}</p></div>
-              <div className="rounded-lg bg-gray-50 p-3"><p className="text-gray-500">Last fetch</p><p className="font-bold text-xs">{settings?.lastFetchRun ? new Date(settings.lastFetchRun).toLocaleString() : "Never"}</p></div>
+              <div className="rounded-lg bg-gray-50 p-3">
+                <p className="text-gray-500">Active pipeline</p>
+                <p className="font-bold">{todayCount}</p>
+              </div>
+              <div className="rounded-lg bg-gray-50 p-3">
+                <p className="text-gray-500">Pending approval</p>
+                <p className="font-bold">{trends.filter((t) => t.status === "pendingApproval").length}</p>
+              </div>
+              <div className="rounded-lg bg-gray-50 p-3">
+                <p className="text-gray-500">Published</p>
+                <p className="font-bold">{trends.filter((t) => t.status === "published").length}</p>
+              </div>
+              <div className="rounded-lg bg-gray-50 p-3">
+                <p className="text-gray-500">Last fetch</p>
+                <p className="font-bold text-xs">
+                  {settings?.lastFetchRun ? new Date(settings.lastFetchRun).toLocaleString() : "Never"}
+                </p>
+              </div>
             </div>
             {settings?.lastFetchSummary?.message ? (
-              <div className={`mt-3 rounded-lg px-3 py-2 text-sm ${(settings.lastFetchSummary.fetched || 0) > 0 ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-900"}`}>
+              <div
+                className={`mt-3 rounded-lg px-3 py-2 text-sm ${
+                  (settings.lastFetchSummary.fetched || 0) > 0 ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-900"
+                }`}
+              >
                 <strong>Last fetch result:</strong> {settings.lastFetchSummary.message}
-                <span className="block text-xs mt-1 opacity-80">
-                  RSS {settings.lastFetchSummary.total} · saved {settings.lastFetchSummary.fetched} · skipped {settings.lastFetchSummary.skipped} · duplicates {settings.lastFetchSummary.duplicates} · errors {settings.lastFetchSummary.errors}
+                <span className="mt-1 block text-xs opacity-80">
+                  RSS {settings.lastFetchSummary.total} · saved {settings.lastFetchSummary.fetched} · skipped{" "}
+                  {settings.lastFetchSummary.skipped} · duplicates {settings.lastFetchSummary.duplicates} · errors{" "}
+                  {settings.lastFetchSummary.errors}
                 </span>
               </div>
             ) : null}
@@ -215,65 +502,85 @@ export default function GoogleTrendsAdminPage() {
           {loading ? (
             <LoadingSpinner size="lg" />
           ) : (
-            <div className="overflow-hidden rounded-xl bg-white shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="border-b bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3">Trend</th>
-                      <th className="px-4 py-3">Category</th>
-                      <th className="px-4 py-3">Volume</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3">Risk</th>
-                      <th className="px-4 py-3">Score</th>
-                      <th className="px-4 py-3">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {trends.length === 0 && (
-                      <tr>
-                        <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">
-                          No trends saved yet. Click <strong>Fetch Trends</strong> — if the toast says duplicates/skipped, there is nothing new to show.
-                        </td>
-                      </tr>
-                    )}
-                    {trends.slice(0, 50).map((t) => (
-                      <tr key={t.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <p className="line-clamp-2 font-medium">{t.title}</p>
-                          {t.verificationNotes && <p className="text-xs text-gray-500 line-clamp-1">{t.verificationNotes}</p>}
-                          {t.errorMessage && <p className="text-xs text-red-500 line-clamp-1">{t.errorMessage}</p>}
-                        </td>
-                        <td className="px-4 py-3 text-xs">{t.category}<br /><span className="text-gray-500">{t.mappedCategoryId}</span></td>
-                        <td className="px-4 py-3">{t.searchVolume.toLocaleString()}</td>
-                        <td className="px-4 py-3"><span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold">{t.status}</span></td>
-                        <td className="px-4 py-3">{t.riskLevel}</td>
-                        <td className="px-4 py-3">{t.priorityScore}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex gap-1">
-                            {t.status === "pendingApproval" && (
-                              <>
-                                <button onClick={() => runAction("approve", t.id)} title="Approve & Publish" className="rounded p-1 text-green-600 hover:bg-green-50"><Check size={16} /></button>
-                                <button onClick={() => runAction("reject", t.id)} title="Reject" className="rounded p-1 text-red-600 hover:bg-red-50"><X size={16} /></button>
-                              </>
-                            )}
-                            {t.articleId && (
-                              <Link href={`/admin/news/${t.articleId}/edit`} className="rounded p-1 text-blue-600 hover:bg-blue-50 text-xs">Edit</Link>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <div className="space-y-4">
+              {trends.length === 0 && (
+                <div className="rounded-xl bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
+                  No trends saved yet. Click <strong>Fetch Trends</strong>.
+                </div>
+              )}
+
+              {visibleByBatch.map(([key, rows], batchIndex) => (
+                <div key={key} className="overflow-hidden rounded-xl bg-white shadow-sm">
+                  <div className="flex items-center justify-between border-b bg-gray-50 px-4 py-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+                      {batchIndex === 0 ? "Latest fetch" : "Previous fetch"} · {formatBatchLabel(key)}
+                      <span className="ml-2 font-normal text-gray-400">({rows.length})</span>
+                    </p>
+                  </div>
+                  {batchIndex > 0 && <div className="border-t-2 border-dashed border-gray-200" />}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="border-b bg-white">
+                        <tr>
+                          <th className="px-4 py-2">Trend</th>
+                          <th className="px-4 py-2">Category</th>
+                          <th className="px-4 py-2">Volume</th>
+                          <th className="px-4 py-2">Status</th>
+                          <th className="px-4 py-2">Risk</th>
+                          <th className="px-4 py-2">Score</th>
+                          <th className="px-4 py-2">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {rows.map((t) => (
+                          <tr key={t.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3">
+                              <p className="line-clamp-2 font-medium">{t.title}</p>
+                              {t.verificationNotes && (
+                                <p className="line-clamp-1 text-xs text-gray-500">{t.verificationNotes}</p>
+                              )}
+                              {t.errorMessage && (
+                                <p className="line-clamp-1 text-xs text-red-500">{t.errorMessage}</p>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-xs">
+                              {t.category}
+                              <br />
+                              <span className="text-gray-500">{t.mappedCategoryId}</span>
+                            </td>
+                            <td className="px-4 py-3">{t.searchVolume.toLocaleString()}</td>
+                            <td className="px-4 py-3">
+                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold">{t.status}</span>
+                            </td>
+                            <td className="px-4 py-3">{t.riskLevel}</td>
+                            <td className="px-4 py-3">{t.priorityScore}</td>
+                            <td className="px-4 py-3">{renderActions(t)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+
+              {hasMore && (
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
+                    className="rounded-lg border border-[#1a2b4c] bg-white px-4 py-2 text-sm font-medium text-[#1a2b4c] hover:bg-gray-50"
+                  >
+                    Show more previous trends ({trends.length - visibleCount} more)
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
           {logs.length > 0 && (
             <div className="rounded-xl bg-white p-4 shadow-sm">
-              <h3 className="text-sm font-semibold mb-2">Recent automation logs</h3>
-              <ul className="space-y-1 max-h-48 overflow-y-auto text-xs text-gray-600">
+              <h3 className="mb-2 text-sm font-semibold">Recent automation logs</h3>
+              <ul className="max-h-48 space-y-1 overflow-y-auto text-xs text-gray-600">
                 {logs.slice(0, 15).map((log, idx) => (
                   <li key={log.id || idx} className="border-b border-gray-50 py-1">
                     <span className="font-medium text-gray-800">{log.type || "log"}</span>

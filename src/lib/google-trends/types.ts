@@ -89,6 +89,8 @@ export interface TrendTopic {
   verificationNotes?: string;
   errorMessage?: string;
   isTestRecord?: boolean;
+  /** ISO timestamp shared by all trends saved in the same Fetch click */
+  fetchBatchId?: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 }

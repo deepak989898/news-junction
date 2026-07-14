@@ -58,6 +58,7 @@ export async function runFetchGoogleTrends(options?: { isTest?: boolean }) {
   let duplicates = 0;
   let skipped = 0;
   let errors = 0;
+  const fetchBatchId = new Date().toISOString();
 
   for (const item of items) {
     try {
@@ -114,6 +115,7 @@ export async function runFetchGoogleTrends(options?: { isTest?: boolean }) {
         sourceType: settings.mode === "officialApi" ? "googleTrendsApi" : "googleTrendsRss",
         sourceUrl: item.sourceUrl,
         fetchedAt: item.fetchedAt,
+        fetchBatchId,
         status: "fetched",
         riskLevel,
         duplicateScore: dup.duplicateScore,

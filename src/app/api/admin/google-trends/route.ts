@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/auth/verify-admin";
 import {
+  deleteTrendTopic,
   getGoogleTrendsSettings,
   getRecentTrendTopics,
   getTrendAutomationLogs,
@@ -8,9 +9,12 @@ import {
   updateGoogleTrendsSettings,
 } from "@/lib/google-trends/server-db";
 import { runFetchGoogleTrends } from "@/lib/google-trends/fetch-pipeline";
-import { runResearchTrends } from "@/lib/google-trends/research-pipeline";
-import { runProcessTrendArticles } from "@/lib/google-trends/process-pipeline";
+import { researchTrendById, runResearchTrends } from "@/lib/google-trends/research-pipeline";
+import { processTrendById, runProcessTrendArticles } from "@/lib/google-trends/process-pipeline";
 import { approveTrendForPublish, rejectTrend } from "@/lib/google-trends/publish-pipeline";
+
+export const runtime = "nodejs";
+export const maxDuration = 120;
 
 export async function GET(request: NextRequest) {
   const admin = await verifyAdmin(request);
@@ -18,7 +22,7 @@ export async function GET(request: NextRequest) {
 
   const [settings, trends, logs] = await Promise.all([
     getGoogleTrendsSettings(),
-    getRecentTrendTopics(100),
+    getRecentTrendTopics(120),
     getTrendAutomationLogs(30),
   ]);
 
@@ -39,15 +43,22 @@ export async function POST(request: NextRequest) {
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
-  const { action, trendId, reason } = body;
+  const { action, trendId, reason, deleteArticle } = body;
 
   switch (action) {
     case "fetch":
       return NextResponse.json({ success: true, ...(await runFetchGoogleTrends()) });
     case "research":
-      return NextResponse.json({ success: true, ...(await runResearchTrends(5)) });
+      if (trendId) {
+        return NextResponse.json({ success: true, ...(await researchTrendById(String(trendId))) });
+      }
+      return NextResponse.json({ success: true, ...(await runResearchTrends(30)) });
     case "generate":
-      return NextResponse.json({ success: true, ...(await runProcessTrendArticles(2)) });
+      if (trendId) {
+        return NextResponse.json({ success: true, ...(await processTrendById(String(trendId))) });
+      }
+      // Process one verified topic per request — client loops for “generate all”
+      return NextResponse.json({ success: true, ...(await runProcessTrendArticles(1)) });
     case "approve":
       if (!trendId) return NextResponse.json({ error: "trendId required" }, { status: 400 });
       return NextResponse.json({ success: true, articleId: await approveTrendForPublish(trendId) });
@@ -55,6 +66,12 @@ export async function POST(request: NextRequest) {
       if (!trendId) return NextResponse.json({ error: "trendId required" }, { status: 400 });
       await rejectTrend(trendId, reason);
       return NextResponse.json({ success: true });
+    case "delete":
+      if (!trendId) return NextResponse.json({ error: "trendId required" }, { status: 400 });
+      return NextResponse.json({
+        success: true,
+        ...(await deleteTrendTopic(String(trendId), { deleteArticle: Boolean(deleteArticle) })),
+      });
     case "sources": {
       if (!trendId) return NextResponse.json({ error: "trendId required" }, { status: 400 });
       const sources = await getTrendSourceCandidates(trendId);

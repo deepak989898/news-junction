@@ -95,6 +95,7 @@ function mapTrendTopic(id: string, data: FirebaseFirestore.DocumentData): TrendT
     verificationNotes: data.verificationNotes,
     errorMessage: data.errorMessage,
     isTestRecord: Boolean(data.isTestRecord),
+    fetchBatchId: data.fetchBatchId || null,
     createdAt: tsToIso(data.createdAt),
     updatedAt: tsToIso(data.updatedAt),
   };
@@ -123,6 +124,38 @@ export async function updateTrendTopic(id: string, data: Record<string, unknown>
     ...data,
     updatedAt: FieldValue.serverTimestamp(),
   });
+}
+
+export async function deleteTrendTopic(id: string, options?: { deleteArticle?: boolean }) {
+  const db = getAdminDb();
+  const trend = await getTrendTopicById(id);
+  if (!trend) throw new Error("Trend not found");
+
+  const sources = await db
+    .collection(COLLECTIONS.trendSourceCandidates)
+    .where("trendId", "==", id)
+    .get();
+  const batch = db.batch();
+  sources.docs.forEach((d) => batch.delete(d.ref));
+  batch.delete(db.collection(COLLECTIONS.trendTopics).doc(id));
+  await batch.commit();
+
+  if (options?.deleteArticle && trend.articleId) {
+    try {
+      await db.collection("news").doc(trend.articleId).delete();
+    } catch {
+      // article may already be gone
+    }
+  }
+
+  await logTrendAutomation({
+    type: "fetch",
+    trendId: id,
+    message: `Deleted trend: ${trend.title}${options?.deleteArticle && trend.articleId ? " (+ article)" : ""}`,
+    status: "deleted",
+  });
+
+  return { deleted: true, articleId: trend.articleId || null };
 }
 
 export async function getTrendTopicById(id: string): Promise<TrendTopic | null> {
