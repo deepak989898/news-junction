@@ -2,12 +2,16 @@ import { ArticleImageAnalysis, ImagePipelineInput } from "./types";
 import type { NewsVisualPlan } from "./visual-plan";
 
 export const QUALITY_DIRECTIVES = `Technical quality requirements:
+- Bright, well-lit editorial photography — NOT dark, NOT underexposed, NOT moody night-cinema look
+- Clear daylight or soft professional studio/newsroom lighting with visible detail in shadows
 - Ultra-sharp focus on the main subject, crisp edges, no motion blur, no soft focus
 - Professional Reuters/AP/BBC/NDTV editorial quality with proper exposure and rich natural colors
 - High clarity and contrast — NOT faded, NOT washed out, NOT hazy, NOT low-resolution looking
 - Single unified photograph/scene only — absolutely NO split-screen, NO diptych, NO side-by-side panels, NO before/after layout, NO collage, NO multiple frames
 - ONE coherent scene filling the entire landscape frame edge to edge
-- Strong subject-background separation, immediately readable at thumbnail size`;
+- Strong subject-background separation, immediately readable at thumbnail size
+- Absolutely NO Hindi/Devanagari letters, NO tofu/box characters, NO unreadable glyphs inside the image
+- Prefer little or no in-image text; if English labels appear they must be short, sharp, and spelled correctly`;
 
 const CATEGORY_RULES: Record<string, string> = {
   vyapar: `BUSINESS / MARKETS visual rules:
@@ -88,6 +92,17 @@ export function buildProfessionalNewsImagePrompt(args: {
     ? "neutral symbolic scene related to the topic — NOT any real person's face or likeness"
     : plan.mainSubject || analysis.primarySubject;
 
+  const personBlock =
+    !neutral && analysis.isRealPersonPrimary
+      ? `Real-person editorial rules:
+- Generate a photorealistic, believable Indian/global news portrait or event image of the primary person when they are the story focus
+- Face must be fully visible in frame (no cut-off forehead/chin), natural proportions, anatomically correct
+- Aim for high likeness / recognition quality for a public-figure news thumbnail (serious editorial, not cartoon)
+- Neutral journalistic expression; do not invent criminal, humiliating, or fabricated event poses
+- Keep lighting bright and clear for face detail
+- Prefer chest-up or three-quarter framing for portraits`
+      : "";
+
   return `Create a premium editorial featured image for a trusted Indian digital news website (News Junction).
 
 Article headline:
@@ -134,6 +149,7 @@ ${plan.mustAvoid.join("; ")}
 
 Style requirements:
 - Premium digital newsroom editorial quality
+- Bright, clear, high-visibility lighting suitable for a news website card
 - Immediately understandable at thumbnail size
 - One clear visual focal point
 - Strong subject-background separation
@@ -145,8 +161,11 @@ Style requirements:
 - Professional color balance
 - Suitable for desktop cards, mobile cards, social sharing and Google Discover
 - Leave clean lower-third visual space for an optional later HTML/SVG headline overlay
+- Do NOT render Hindi/Devanagari text in the picture (glyphs often break)
 
 ${QUALITY_DIRECTIVES}
+
+${personBlock}
 
 ${categoryRules(input.categoryId)}
 

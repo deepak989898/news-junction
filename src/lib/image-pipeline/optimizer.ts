@@ -29,16 +29,17 @@ export function isSourceLargeEnough(width: number, height: number): boolean {
 }
 
 /**
- * Enhance contrast, saturation and sharpness before resize/compress.
- * Fixes washed-out / faded OpenAI and RSS images.
+ * Enhance contrast, saturation and brightness before resize/compress.
+ * OpenAI news images often come out underexposed/moody — lift them for cards.
  */
 export async function enhanceForNewsDisplay(buffer: Buffer): Promise<Buffer> {
   const sharp = await getSharp();
   return sharp(buffer)
     .rotate()
     .normalize()
-    .modulate({ saturation: 1.06, brightness: 1.01 })
-    .sharpen({ sigma: 1.1, m1: 0.8, m2: 0.4, x1: 2, y2: 10, y3: 20 })
+    .modulate({ saturation: 1.1, brightness: 1.18 })
+    .gamma(1.05)
+    .sharpen({ sigma: 1.05, m1: 0.75, m2: 0.4, x1: 2, y2: 10, y3: 20 })
     .toBuffer();
 }
 

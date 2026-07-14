@@ -10,18 +10,27 @@ export function decideImageStrategy(
     settings.allowSourceImages &&
     input.sourceAllowsImageReuse !== false &&
     (input.sourceTrustLevel === "high" || input.sourceTrustLevel === "medium");
+  const aiOn = settings.openAiImageEnabled && settings.generateImagesAutomatically;
 
   let strategy: ImageStrategy = "category_fallback";
   let reason = "Using category fallback as safe default.";
 
   if (analysis.isRealPersonPrimary) {
-    if (hasSourceImage && sourcePermitted) {
+    if (hasSourceImage && sourcePermitted && input.preferHostedFirst) {
       strategy = "licensed_source_image";
-      reason = "Real-person article: using permitted RSS/source image instead of AI face generation.";
-    } else {
+      reason = "Real-person article: prefer permitted source image when available.";
+    } else if (aiOn && !settings.realPersonAiImageDisabled) {
+      strategy = "openai_generated";
+      reason = "Real-person article: generating high-likeness editorial portrait via OpenAI.";
+    } else if (hasSourceImage && sourcePermitted) {
+      strategy = "licensed_source_image";
+      reason = "Real-person article: using permitted RSS/source image.";
+    } else if (settings.realPersonAiImageDisabled) {
       strategy = "neutral_illustration";
-      reason =
-        "Real-person article: AI face generation disabled. Using neutral contextual illustration or category fallback.";
+      reason = "Real-person AI faces disabled — neutral contextual visual or fallback.";
+    } else {
+      strategy = "category_fallback";
+      reason = "Real-person article without usable image path.";
     }
   } else if (hasSourceImage && sourcePermitted && input.preferHostedFirst) {
     strategy = "licensed_source_image";
@@ -31,30 +40,41 @@ export function decideImageStrategy(
     analysis.subjectType === "health" ||
     analysis.subjectType === "generic_topic" ||
     analysis.subjectType === "building" ||
-    analysis.subjectType === "location"
+    analysis.subjectType === "location" ||
+    analysis.subjectType === "product" ||
+    analysis.subjectType === "organization" ||
+    analysis.subjectType === "event"
   ) {
-    if (settings.openAiImageEnabled && settings.generateImagesAutomatically) {
+    if (aiOn) {
       strategy = "openai_generated";
-      reason = "Topic suitable for editorial AI illustration without identifiable person likeness.";
+      reason = "Topic suitable for editorial AI featured image.";
     } else if (hasSourceImage && sourcePermitted) {
       strategy = "licensed_source_image";
       reason = "AI disabled; using permitted source image.";
     }
   } else if (analysis.subjectType === "court" || analysis.subjectType === "government") {
-    strategy = "neutral_illustration";
-    reason = "Institutional topic: neutral building or symbolic editorial visual, no fake officials.";
+    if (aiOn) {
+      strategy = "openai_generated";
+      reason = "Institutional topic: editorial building/symbolic scene (no fabricated verdict).";
+    } else {
+      strategy = "neutral_illustration";
+      reason = "Institutional topic without AI — neutral fallback path.";
+    }
   } else if (analysis.subjectType === "sports_event") {
     if (hasSourceImage && sourcePermitted) {
       strategy = "licensed_source_image";
       reason = "Sports event: prefer licensed source or official match image.";
+    } else if (aiOn) {
+      strategy = "openai_generated";
+      reason = "Sports topic: editorial stadium/action scene.";
     } else {
       strategy = "neutral_illustration";
-      reason = "Sports topic without licensed image: stadium/equipment visual without fake player faces.";
+      reason = "Sports topic without licensed image.";
     }
   } else if (hasSourceImage && sourcePermitted) {
     strategy = "licensed_source_image";
     reason = "Permitted source image available.";
-  } else if (settings.openAiImageEnabled && settings.generateImagesAutomatically) {
+  } else if (aiOn) {
     strategy = "openai_generated";
     reason = "No permitted source image; generating editorial visual.";
   }
@@ -65,7 +85,7 @@ export function decideImageStrategy(
     strategy === "openai_generated"
   ) {
     strategy = "neutral_illustration";
-    reason = "Real-person safeguard: OpenAI generation blocked.";
+    reason = "Real-person safeguard: OpenAI face generation blocked by settings.";
   }
 
   return { ...analysis, imageStrategy: strategy, reason };

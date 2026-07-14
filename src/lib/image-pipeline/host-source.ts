@@ -8,7 +8,7 @@ export async function hostSourceImageOnFirebase(
   const fetched = await fetchPermittedImageBuffer(sourceUrl, {
     openAiImageEnabled: true,
     generateImagesAutomatically: true,
-    realPersonAiImageDisabled: true,
+    realPersonAiImageDisabled: false,
     minimumRelevanceScore: 85,
     minimumQualityScore: 80,
     minimumClarityScore: 80,

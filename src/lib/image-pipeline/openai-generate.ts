@@ -94,7 +94,7 @@ export async function generateOpenAiImage(
     input,
     analysis,
     plan,
-    neutral: neutral || analysis.isRealPersonPrimary,
+    neutral: neutral,
   });
 
   let prompt = basePrompt;
@@ -121,10 +121,12 @@ export async function generateOpenAiImage(
 
   if (config.textOverlayEnabled || plan.overlayTextRecommended) {
     try {
-      const headline = (input.titleEn || input.titleHi || "").trim();
-      const live = /\blive\b|लाइव/i.test(headline);
+      const headlineEn = (input.titleEn || "").trim();
+      const headlineHi = (input.titleHi || "").trim();
+      const live = /\blive\b|लाइव/i.test(`${headlineEn} ${headlineHi}`);
       rawBuffer = await applyNewsTextOverlay(rawBuffer, {
-        headline,
+        headline: headlineEn || headlineHi,
+        headlineEn: headlineEn || undefined,
         categoryLabel: input.categoryNameEn || input.categoryId,
         live,
       });

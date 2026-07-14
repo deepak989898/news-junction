@@ -24,7 +24,7 @@
 - `OPENAI_IMAGE_MAX_ATTEMPTS` (default `2`)
 - `OPENAI_IMAGE_AUTO_GENERATION` (default true)
 - `OPENAI_PLANNER_MODEL` (default `gpt-4o-mini` — visual plan JSON)
-- `NEWS_IMAGE_TEXT_OVERLAY_ENABLED` (default true — branded headline overlay via Sharp; set `false` to disable)
+- `NEWS_IMAGE_TEXT_OVERLAY_ENABLED` (default **false** — enable only if you want English lower-third overlays; Hindi glyphs are skipped to avoid tofu boxes)
 - `GEMINI_API_KEY` (required for Google Gemini image generation; also used for Gemini text)
 - `IMAGEN_API_KEY` (deprecated alias — use `GEMINI_API_KEY` instead)
 - `ELEVENLABS_API_KEY` (optional provider)

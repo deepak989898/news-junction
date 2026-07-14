@@ -15,12 +15,29 @@ import { detectRiskLevel, shouldAutoPublish } from "./risk-detector";
 import { resolveAutomationArticleImage, generateAutomationArticleImage } from "./image-generator";
 import type { ArticleImageMetadata } from "@/lib/image-pipeline/types";
 import { analyzeArticleSubject } from "@/lib/image-pipeline/analysis";
+import { isLogoFallback } from "@/lib/image-pipeline/fallbacks";
 import { RawNewsStatus } from "./types";
 import { detectArticleLocation, geoFieldsToFirestore } from "@/lib/location/detection";
 import {
   getDailyNewsDistribution,
   shouldDeferInternationalArticle,
 } from "@/lib/location/quota";
+
+function isWeakOrFailedImage(
+  imageUrl: string,
+  metadata: ArticleImageMetadata | undefined,
+  defaultCategoryImage: string
+): boolean {
+  if (!imageUrl) return true;
+  if (isLogoFallback(imageUrl)) return true;
+  if (imageUrl === defaultCategoryImage) return true;
+  if (imageUrl.startsWith("/images/fallbacks/")) return true;
+  if (metadata?.imageOrigin === "fallback") return true;
+  if (metadata?.imageStatus === "fallback" || metadata?.imageStatus === "failed") return true;
+  const prompt = String(metadata?.imagePrompt || "");
+  if (/No permitted image found|category fallback/i.test(prompt)) return true;
+  return false;
+}
 
 function buildGeoForArticle(
   aiOutput: { titleHi: string; titleEn: string; summaryHi: string; summaryEn: string },
@@ -237,6 +254,29 @@ export async function processRawNewsItem(
         options
       );
       const { imageUrl, generated, metadata } = imageResult;
+
+      // Never auto-publish when AI/source image failed and we only have a category fallback.
+      if (isWeakOrFailedImage(imageUrl, metadata, settings.defaultCategoryImage)) {
+        await updateRawNews(rawNewsId, {
+          status: "pendingApproval",
+          aiOutput,
+          riskLevel: finalRisk,
+          errorMessage: "Image generation/source failed — needs review before publish",
+          ...(generated && imageUrl ? { generatedImageUrl: imageUrl } : {}),
+        });
+        await logAutomation({
+          type: "process",
+          message: `Held for approval (weak/fallback image): ${aiOutput.titleEn}`,
+          rawNewsId,
+          sourceId: rawItem.sourceId,
+          status: "pendingApproval",
+        });
+        return {
+          status: "pendingApproval",
+          message: "Image failed/fallback — sent to approval queue instead of auto-publish",
+        };
+      }
+
       if (generated && imageUrl !== settings.defaultCategoryImage) {
         await updateRawNews(rawNewsId, { generatedImageUrl: imageUrl });
       }
@@ -437,9 +477,7 @@ export async function regenerateArticleImage(
   });
 
   if (analysis.isRealPersonPrimary) {
-    throw new Error(
-      "Real-person article: AI face generation is disabled. Use a licensed or official image, or upload manually."
-    );
+    // Real-person OpenAI portraits are allowed; keep going.
   }
 
   const generated = await generateAutomationArticleImage({

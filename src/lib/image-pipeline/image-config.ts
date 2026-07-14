@@ -36,7 +36,7 @@ export function getOpenAiImageConfig(): OpenAiImageConfig {
     quality: asQuality(process.env.OPENAI_IMAGE_QUALITY),
     size: asSize(process.env.OPENAI_IMAGE_SIZE),
     maxAttempts: Math.max(1, Math.min(3, Number(process.env.OPENAI_IMAGE_MAX_ATTEMPTS || 2))),
-    textOverlayEnabled: process.env.NEWS_IMAGE_TEXT_OVERLAY_ENABLED !== "false",
+    textOverlayEnabled: process.env.NEWS_IMAGE_TEXT_OVERLAY_ENABLED === "true",
     autoGeneration: process.env.OPENAI_IMAGE_AUTO_GENERATION !== "false",
   };
 }

@@ -3,7 +3,7 @@ import { ImagePipelineSettings } from "./types";
 export const DEFAULT_IMAGE_PIPELINE_SETTINGS: ImagePipelineSettings = {
   openAiImageEnabled: true,
   generateImagesAutomatically: true,
-  realPersonAiImageDisabled: true,
+  realPersonAiImageDisabled: false,
   minimumRelevanceScore: 85,
   minimumQualityScore: 80,
   minimumClarityScore: 80,

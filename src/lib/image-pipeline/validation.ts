@@ -56,12 +56,13 @@ export function validateImageSelection(params: {
   let personMismatchRisk: ImageValidationResult["personMismatchRisk"] = "low";
 
   if (params.analysis.isRealPersonPrimary && params.imageOrigin === "openai") {
-    personMismatchRisk = "high";
-    rejectionReasons.push("Real-person article must not use AI-generated likeness.");
+    // Allowed: editorial AI portrait/likeness for public-figure news features.
+    personMismatchRisk = "medium";
   }
 
   if (params.analysis.isRealPersonPrimary && params.imageOrigin === "fallback") {
     personMismatchRisk = "medium";
+    rejectionReasons.push("Real-person article is still on category fallback — regenerate or upload a better image.");
   }
 
   if (params.analysis.riskLevel === "high" && params.imageOrigin === "openai") {
@@ -83,8 +84,7 @@ export function validateImageSelection(params: {
     relevanceScore >= params.minimumRelevanceScore &&
     clarityScore >= params.minimumClarityScore &&
     qualityScore >= params.minimumQualityScore &&
-    misleadingRisk !== "high" &&
-    personMismatchRisk !== "high";
+    misleadingRisk !== "high";
 
   return {
     relevanceScore,

@@ -259,12 +259,12 @@ export default function NewsForm({
           </div>
           {articleId && (
             <p className="mb-3 text-xs text-gray-500">
-              Creates a new OpenAI editorial image from the current headline and summary (30–60 seconds). Real-person articles block AI face generation — upload a licensed image instead.
+              Creates a new OpenAI editorial image from the current headline and summary (30–60 seconds). Public-figure stories can generate a high-likeness editorial portrait.
             </p>
           )}
           {imageMeta?.isRealPersonPrimary && (
             <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              Real-person article: AI face generation is disabled. Use a licensed or official image.
+              Real-person article: OpenAI will generate an editorial portrait/likeness. Review carefully before publishing.
             </div>
           )}
           {imageMeta && (imageMeta.imageOrigin || imageMeta.imageRelevanceScore != null) && (

@@ -161,19 +161,24 @@ export async function resolveArticleImage(input: ImagePipelineInput): Promise<Im
       const canUseOpenAi = dailyCount < settings.maximumDailyImages;
 
       const useNeutral =
-        input.forceNeutralAi ||
-        analysis.isRealPersonPrimary ||
-        strategy === "neutral_illustration" ||
-        settings.realPersonAiImageDisabled && analysis.isRealPersonPrimary;
+        Boolean(input.forceNeutralAi) ||
+        (settings.realPersonAiImageDisabled && analysis.isRealPersonPrimary) ||
+        (strategy === "neutral_illustration" && !analysis.isRealPersonPrimary);
 
       const useOpenAi =
         canUseOpenAi &&
-        (strategy === "openai_generated" || strategy === "neutral_illustration") &&
-        !analysis.isRealPersonPrimary;
+        (strategy === "openai_generated" ||
+          strategy === "neutral_illustration" ||
+          (analysis.isRealPersonPrimary && !settings.realPersonAiImageDisabled));
 
-      if (useOpenAi || (useNeutral && canUseOpenAi && strategy !== "licensed_source_image")) {
+      if (useOpenAi && strategy !== "licensed_source_image") {
         try {
-          const generated = await generateOpenAiImage(input, analysis, storageId, useNeutral || analysis.isRealPersonPrimary);
+          const generated = await generateOpenAiImage(
+            input,
+            analysis,
+            storageId,
+            useNeutral && !analysis.isRealPersonPrimary
+          );
           prompt = generated.prompt;
           if (generated.url && isUsableFirebaseImageUrl(generated.url)) {
             const dup = generated.fileHash
@@ -407,11 +412,11 @@ export async function generateAutomationArticleImage(params: {
       sourceUrl: "",
       originalLink: "",
       originalImage: "",
-      forceNeutralAi: params.forceNeutral || analysis.isRealPersonPrimary,
+      forceNeutralAi: Boolean(params.forceNeutral),
     },
     analysis,
     params.rawNewsId,
-    Boolean(params.forceNeutral || analysis.isRealPersonPrimary)
+    Boolean(params.forceNeutral)
   );
 
   return url;
