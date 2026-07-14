@@ -152,7 +152,7 @@ export default function NewsForm({
       return;
     }
     setRegeneratingImage(true);
-    const toastId = toast.loading("Generating new AI image from headline... (30–60 sec)");
+    const toastId = toast.loading("Generating AI image… this can take up to ~90 seconds");
     try {
       const result = await regenerateArticleImageApi(articleId, {
         titleEn: formData.titleEn,
@@ -163,7 +163,14 @@ export default function NewsForm({
       setFormData((prev) => ({ ...prev, imageUrl: result.imageUrl }));
       toast.success("New AI image generated and saved to article", { id: toastId, duration: 5000 });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to regenerate image", { id: toastId });
+      const msg = error instanceof Error ? error.message : "Failed to regenerate image";
+      const timeout = /timeout|FUNCTION_INVOCATION_TIMEOUT|504|524/i.test(msg);
+      toast.error(
+        timeout
+          ? "Image generation timed out on the server. Wait a few seconds and click Regenerate again."
+          : msg,
+        { id: toastId, duration: 8000 }
+      );
     } finally {
       setRegeneratingImage(false);
     }

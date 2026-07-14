@@ -28,6 +28,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Image regeneration failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const timedOut = /timeout|FUNCTION_INVOCATION_TIMEOUT|AbortError/i.test(message);
+    return NextResponse.json(
+      {
+        error: timedOut
+          ? "Image generation timed out. Please try Regenerate AI Image again."
+          : message,
+        code: timedOut ? "FUNCTION_INVOCATION_TIMEOUT" : undefined,
+      },
+      { status: timedOut ? 504 : 500 }
+    );
   }
 }

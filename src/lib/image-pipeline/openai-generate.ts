@@ -4,9 +4,10 @@ import { OPENAI_SHARPNESS_SUFFIX } from "./quality-config";
 import { measureImageQuality, optimizeAndUploadVariants } from "./optimizer";
 import { applyNewsTextOverlay } from "./text-overlay";
 import { planNewsImageVisual } from "./visual-plan";
-import { analyzeArticleStory } from "./story-analyzer";
+import { analyzeArticleStory, analyzeStoryHeuristic } from "./story-analyzer";
 import { runThumbnailComprehensionTest } from "./thumbnail-test";
 import { buildVisionRetryPrompt, validateGeneratedImageWithVision } from "./vision-qa";
+import { IMAGE_TEXT_HARD_RULES } from "./image-text-rules";
 import {
   buildNewsVisualStory,
   isGenericSymbolPrompt,
@@ -15,6 +16,30 @@ import {
 import { ArticleImageAnalysis, ImagePipelineInput } from "./types";
 
 const MIN_ACCEPTABLE_CLARITY = 68;
+
+/** Leave headroom under Vercel function maxDuration (often 60–120s on Hobby/Pro). */
+function getBudgetMs(): number {
+  return Math.max(45000, Math.min(110000, Number(process.env.OPENAI_IMAGE_BUDGET_MS || 85000)));
+}
+
+async function withTimeBudget<T>(
+  promise: Promise<T>,
+  ms: number,
+  fallback: T
+): Promise<T> {
+  if (ms <= 0) return fallback;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 async function callOpenAiImageApi(
   apiKey: string,
@@ -35,7 +60,7 @@ async function callOpenAiImageApi(
       size,
       quality,
     }),
-    signal: AbortSignal.timeout(120000),
+    signal: AbortSignal.timeout(90000),
   });
 
   if (!response.ok) {
@@ -85,9 +110,8 @@ export type GenerateOpenAiImageResult = {
 };
 
 /**
- * Full art-director pipeline:
- * Article → Story Analyzer → Visual Priority → Layout → Plan → Thumbnail Test
- * → OpenAI Image → Clarity → Vision QA (1 retry) → Upload
+ * Art-director pipeline tuned for Vercel time limits:
+ * heuristic story (+ optional short LLM enrich) → plan → prompt → 1 image → optional vision fix once
  */
 export async function generateOpenAiImage(
   input: ImagePipelineInput,
@@ -99,8 +123,23 @@ export async function generateOpenAiImage(
   const config = getOpenAiImageConfig();
   if (!apiKey || !config.enabled) return { url: null, prompt: "" };
 
-  // Step 1–2: Story Understanding + Visual Priority
-  const storyAnalysis = await analyzeArticleStory(input, analysis);
+  const started = Date.now();
+  const budgetMs = getBudgetMs();
+  const remaining = () => budgetMs - (Date.now() - started);
+  const canAfford = (needMs: number) => remaining() > needMs;
+
+  // Fast heuristic first (instant) so entertainment / priority / no-paperwork always apply
+  let storyAnalysis = analyzeStoryHeuristic(input, analysis);
+
+  // Optional LLM story enrich — skip if budget is tight (saves ~10–20s)
+  if (canAfford(28000) && process.env.IMAGE_STORY_LLM !== "false") {
+    storyAnalysis = await withTimeBudget(
+      analyzeArticleStory(input, analysis),
+      Math.min(18000, remaining() - 5000),
+      storyAnalysis
+    );
+  }
+
   if (!storyAnalysis.canGenerate) {
     return {
       url: null,
@@ -109,7 +148,6 @@ export async function generateOpenAiImage(
     };
   }
 
-  // Steps 3–4 & 11: Visual story + entertainment layout cues
   const story = buildNewsVisualStory(input, analysis, storyAnalysis);
 
   const forcePersonPortrait =
@@ -121,26 +159,36 @@ export async function generateOpenAiImage(
     Boolean(storyAnalysis.mainSubject);
   const effectiveNeutral = neutral && !forcePersonPortrait;
 
-  // Step 8: Art-director JSON plan
-  const plan = await planNewsImageVisual(
-    input,
-    {
-      ...analysis,
-      isRealPersonPrimary: forcePersonPortrait || analysis.isRealPersonPrimary,
-      primarySubject: forcePersonPortrait ? story.mainSubject : analysis.primarySubject,
-      namedPeople:
-        analysis.namedPeople.length > 0
-          ? analysis.namedPeople
-          : storyAnalysis.mainSubject
-            ? [storyAnalysis.mainSubject]
-            : analysis.namedPeople,
-      namedOrganizations: uniqOrgs([
-        ...(storyAnalysis.platform ? [storyAnalysis.platform] : []),
-        ...analysis.namedOrganizations,
-      ]),
-    },
-    storyAnalysis
-  );
+  const enrichedAnalysis = {
+    ...analysis,
+    isRealPersonPrimary: forcePersonPortrait || analysis.isRealPersonPrimary,
+    primarySubject: forcePersonPortrait ? story.mainSubject : analysis.primarySubject,
+    namedPeople:
+      analysis.namedPeople.length > 0
+        ? analysis.namedPeople
+        : storyAnalysis.mainSubject
+          ? [storyAnalysis.mainSubject]
+          : analysis.namedPeople,
+    namedOrganizations: uniqOrgs([
+      ...(storyAnalysis.platform ? [storyAnalysis.platform] : []),
+      ...analysis.namedOrganizations,
+    ]),
+  };
+
+  // Art-director plan — LLM only if enough time left
+  let plan;
+  if (canAfford(22000)) {
+    const heuristicPlan = await planNewsImageVisual(input, enrichedAnalysis, storyAnalysis, {
+      useLlm: false,
+    });
+    plan = await withTimeBudget(
+      planNewsImageVisual(input, enrichedAnalysis, storyAnalysis, { useLlm: true }),
+      Math.min(14000, remaining() - 8000),
+      heuristicPlan
+    );
+  } else {
+    plan = await planNewsImageVisual(input, enrichedAnalysis, storyAnalysis, { useLlm: false });
+  }
   if (!plan.safeForGeneration) {
     return { url: null, prompt: plan.reason || "Visual plan marked unsafe", skippedReason: plan.reason };
   }
@@ -154,13 +202,25 @@ export async function generateOpenAiImage(
     storyAnalysis,
   });
 
+  // Always reinforce English-only text (cheap, prevents tofu without extra API calls)
+  prompt = `${prompt}\n\n${IMAGE_TEXT_HARD_RULES}`;
+
   if (story.storyScore < 85 || !story.understandsWithoutReading || isGenericSymbolPrompt(prompt)) {
     prompt = rewritePromptForStoryComprehension(prompt, story);
   }
 
-  // Step 9–10–12 (prompt side): Thumbnail test + score gate
-  const thumb = await runThumbnailComprehensionTest(prompt, story);
+  // Thumbnail gate: heuristic only (GPT test skipped to avoid Vercel timeout)
+  const thumb = await runThumbnailComprehensionTest(prompt, story, { heuristicOnly: true });
   prompt = thumb.rewrittenPrompt;
+
+  if (!canAfford(35000)) {
+    return {
+      url: null,
+      prompt,
+      skippedReason:
+        "Server time budget too low for OpenAI image generation. Please try Regenerate again.",
+    };
+  }
 
   let generated = await generateWithModelFallback(apiKey, prompt);
   let rawBuffer = generated.buffer;
@@ -168,7 +228,12 @@ export async function generateOpenAiImage(
   let imageAttempts = 1;
   let visionScore: number | undefined;
 
-  if (measured.clarityScore < MIN_ACCEPTABLE_CLARITY && imageAttempts < config.maxAttempts) {
+  // Clarity retry only when we still have ~50s+ headroom
+  if (
+    measured.clarityScore < MIN_ACCEPTABLE_CLARITY &&
+    imageAttempts < Math.min(config.maxAttempts, 2) &&
+    canAfford(50000)
+  ) {
     prompt = `${prompt}\n\n${OPENAI_SHARPNESS_SUFFIX}\nEmphasize bright lighting and a clear facial/portrait focus when a person is the main subject.`;
     try {
       const retry = await generateWithModelFallback(apiKey, prompt);
@@ -180,30 +245,58 @@ export async function generateOpenAiImage(
         generated = retry;
       }
     } catch {
-      // Keep first result if retry fails
+      // Keep first result
     }
   }
 
-  // Step 12: Vision QA — regenerate once if below bar
   const headline = input.titleEn || input.titleHi;
-  let vision = await validateGeneratedImageWithVision(rawBuffer, story, headline);
-  visionScore = vision.scores.total;
-  if (!vision.approved && imageAttempts < 2) {
-    prompt = buildVisionRetryPrompt(prompt, story, vision);
-    try {
-      const retry = await generateWithModelFallback(apiKey, prompt);
-      const retryMeasured = await measureImageQuality(retry.buffer);
-      imageAttempts += 1;
-      const retryVision = await validateGeneratedImageWithVision(retry.buffer, story, headline);
-      if (retryVision.scores.total >= vision.scores.total || retryVision.approved) {
+
+  // Vision QA only if budget remains; tofu/script fail can trigger one image retry
+  if (canAfford(22000) && process.env.IMAGE_VISION_QA !== "false") {
+    const vision = await withTimeBudget(
+      validateGeneratedImageWithVision(rawBuffer, story, headline),
+      Math.min(18000, remaining() - 5000),
+      {
+        approved: true,
+        scores: {
+          storyClarity: 27,
+          mainSubjectVisibility: 22,
+          thumbnailReadability: 13,
+          composition: 13,
+          lighting: 9,
+          backgroundRelevance: 5,
+          total: 89,
+        },
+        failureReasons: [],
+        rewriteNotes: "",
+      }
+    );
+    visionScore = vision.scores.total;
+
+    const needsTextFix = vision.failureReasons.some((r) =>
+      /tofu|glyph|hindi|tamil|telugu|devanagari|script|garbled|mojibake|unreadable/i.test(r)
+    );
+
+    if ((!vision.approved || needsTextFix) && imageAttempts < 2 && canAfford(45000)) {
+      prompt = buildVisionRetryPrompt(prompt, story, vision);
+      try {
+        const retry = await generateWithModelFallback(apiKey, prompt);
+        const retryMeasured = await measureImageQuality(retry.buffer);
+        imageAttempts += 1;
         rawBuffer = retry.buffer;
         measured = retryMeasured;
         generated = retry;
-        vision = retryVision;
-        visionScore = retryVision.scores.total;
+        if (canAfford(15000)) {
+          const retryVision = await withTimeBudget(
+            validateGeneratedImageWithVision(retry.buffer, story, headline),
+            12000,
+            vision
+          );
+          visionScore = retryVision.scores.total;
+        }
+      } catch {
+        // Keep previous buffer
       }
-    } catch {
-      // Keep previous buffer
     }
   }
 

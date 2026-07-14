@@ -260,7 +260,7 @@ who, whatHappened, whyNews, twoSecondRead, bestVisual, visualPriority, entertain
           { role: "user", content: user },
         ],
       }),
-      signal: AbortSignal.timeout(45000),
+      signal: AbortSignal.timeout(12000),
     });
 
     if (!response.ok) return base;

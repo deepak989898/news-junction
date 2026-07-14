@@ -70,19 +70,20 @@ function parseJsonObject(raw: string): Record<string, unknown> | null {
  */
 export async function runThumbnailComprehensionTest(
   prompt: string,
-  story: NewsVisualStory
+  story: NewsVisualStory,
+  options?: { heuristicOnly?: boolean }
 ): Promise<ThumbnailTestResult> {
   const heuristic = heuristicScores(prompt, story);
   const apiKey = process.env.OPENAI_API_KEY;
 
-  if (!apiKey) {
+  if (!apiKey || options?.heuristicOnly) {
     const ok = heuristic.total >= MIN_SCORE && story.understandsWithoutReading;
     const rewritten = ok
       ? prompt
       : rewritePromptForStoryComprehension(
           prompt,
           story,
-          "Strengthen who/what/where for 250px thumbnail readability; keep main person 60-70% of frame."
+          "Strengthen who/what/where for 250px thumbnail readability; keep main person 60-70% of frame; English/Latin text only."
         );
     return {
       ok: ok || rewritten !== prompt,
@@ -91,7 +92,7 @@ export async function runThumbnailComprehensionTest(
       knowsWhere: Boolean(story.location || story.organizations[0]),
       scores: heuristic,
       rewrittenPrompt: rewritten,
-      reason: ok ? "Heuristic thumbnail test passed" : "Heuristic rewrite applied",
+      reason: options?.heuristicOnly ? "Heuristic thumbnail test (fast path)" : ok ? "Heuristic thumbnail test passed" : "Heuristic rewrite applied",
     };
   }
 

@@ -161,9 +161,12 @@ function parsePlanJson(raw: string): Partial<NewsVisualPlan> | null {
 export async function planNewsImageVisual(
   input: ImagePipelineInput,
   analysis: ArticleImageAnalysis,
-  storyAnalysis?: StoryAnalysisResult | null
+  storyAnalysis?: StoryAnalysisResult | null,
+  options?: { useLlm?: boolean }
 ): Promise<NewsVisualPlan> {
   const base = fallbackPlan(input, analysis, storyAnalysis);
+  if (options?.useLlm === false) return base;
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return base;
 
@@ -220,7 +223,7 @@ If people are named, mainSubject MUST be that person (editorial portrait), not a
           { role: "user", content: user },
         ],
       }),
-      signal: AbortSignal.timeout(45000),
+      signal: AbortSignal.timeout(12000),
     });
 
     if (!response.ok) return base;

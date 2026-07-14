@@ -109,7 +109,7 @@ Must avoid: ${story.mustAvoid.slice(0, 8).join("; ")}`,
           },
         ],
       }),
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!response.ok) {
