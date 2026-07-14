@@ -140,11 +140,26 @@ export async function generateOpenAiImage(
     );
   }
 
+  // Never block image generation by category. Fall back to heuristic / headline if needed.
   if (!storyAnalysis.canGenerate) {
-    return {
-      url: null,
-      prompt: "",
-      skippedReason: storyAnalysis.reason || "Story analyzer could not answer who/what/best-visual",
+    const heuristic = analyzeStoryHeuristic(input, analysis);
+    const headline = input.titleEn || input.titleHi || "news story";
+    storyAnalysis = {
+      ...heuristic,
+      canGenerate: true,
+      reason: heuristic.reason || "Best-effort editorial image for any category",
+      understanding: {
+        who: heuristic.understanding.who !== "unclear subject"
+          ? heuristic.understanding.who
+          : heuristic.mainSubject || headline,
+        whatHappened: heuristic.understanding.whatHappened || headline,
+        whyNews: heuristic.understanding.whyNews || input.categoryNameEn || "news",
+        twoSecondRead: heuristic.understanding.twoSecondRead || headline.slice(0, 140),
+        bestVisual:
+          heuristic.understanding.bestVisual ||
+          `Editorial news image focused on ${heuristic.mainSubject || headline}`,
+      },
+      mainSubject: heuristic.mainSubject || headline,
     };
   }
 
@@ -190,7 +205,12 @@ export async function generateOpenAiImage(
     plan = await planNewsImageVisual(input, enrichedAnalysis, storyAnalysis, { useLlm: false });
   }
   if (!plan.safeForGeneration) {
-    return { url: null, prompt: plan.reason || "Visual plan marked unsafe", skippedReason: plan.reason };
+    // Category / style refusals must not block — proceed with this plan when we have a subject
+    if (plan.mainSubject) {
+      plan = { ...plan, safeForGeneration: true, reason: plan.reason || "Proceeding despite plan caution" };
+    } else {
+      return { url: null, prompt: plan.reason || "Visual plan marked unsafe", skippedReason: plan.reason };
+    }
   }
 
   let prompt = buildProfessionalNewsImagePrompt({

@@ -127,7 +127,7 @@ function fallbackPlan(
     frameBalance,
     imageType: isEnt ? "ENTERTAINMENT" : personLed ? "REAL_PUBLIC_FIGURE" : "EVENT",
     overlayTextRecommended: false,
-    safeForGeneration: storyAnalysis ? storyAnalysis.canGenerate !== false : true,
+    safeForGeneration: true,
     reason: isEnt
       ? `entertainment ${storyAnalysis?.entertainmentStyle} heuristic plan`
       : personLed
@@ -176,17 +176,20 @@ export async function planNewsImageVisual(
 
   const system = `You are a senior news-image art director for an Indian digital newsroom.
 Return ONLY valid JSON for a featured image plan.
+You create plans for ALL categories: sports, politics, business, crime, weather, technology, entertainment, etc.
 Rules:
 - Stay factual to the provided article context.
 - Prefer one clear visual subject.
-- If a named public figure / actor exists, they MUST be mainSubject and occupy ~60-70% of the frame.
+- If a named public figure / athlete / actor exists, they MUST be mainSubject and occupy ~60-70% of the frame.
 - Frame balance: main person ~60%, supporting ~25%, background ~15%.
 - Logos, documents, and icons must NEVER be larger than the main subject.
 - NEVER use scales of justice, gavel, paperwork, or generic court clipart as the main subject when a person is named — unless the article is explicitly legal news.
+- For sports: athlete or match atmosphere first; jersey/stadium cues only when relevant.
 - For entertainment / OTT / movie stories: premium poster layout, warm cinematic lighting, platform logo smaller than actor, no invented objects.
 - Never invent market numbers, scores, quotes, or case details.
 - Prefer Indian or story-accurate location context when relevant.
-- In-image text: English/Latin only. Never Hindi/Tamil/Telugu/Devanagari. Never tofu boxes.`;
+- In-image text: English/Latin only. Never Hindi/Tamil/Telugu/Devanagari. Never tofu boxes.
+- safeForGeneration: true for every clear news story. Never false just because the article is not entertainment.`;
 
   const user = `Create a visual plan JSON with keys:
 mainSubject, secondarySubject, secondarySubjects, locationContext, visualEvent, visualStory, objects, background, composition, cameraAngle, lighting, mood, colorPalette, editorialStyle, mustInclude, mustAvoid, avoid, visualPriority, frameBalance, imageType, overlayTextRecommended, safeForGeneration, reason.
@@ -266,7 +269,7 @@ If people are named, mainSubject MUST be that person (editorial portrait), not a
       frameBalance: String(parsed.frameBalance || base.frameBalance).slice(0, 220),
       imageType: String(parsed.imageType || base.imageType).slice(0, 40),
       overlayTextRecommended: Boolean(parsed.overlayTextRecommended),
-      safeForGeneration: parsed.safeForGeneration !== false && base.safeForGeneration,
+      safeForGeneration: true,
       reason: String(parsed.reason || base.reason).slice(0, 220),
       entertainmentTemplate: base.entertainmentTemplate,
     };

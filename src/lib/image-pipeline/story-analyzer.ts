@@ -165,11 +165,12 @@ export function analyzeStoryHeuristic(
     ? `Premium entertainment poster: portrait of ${who} (~60-70%), title branding, ${platform || "platform"} logo smaller than person`
     : `Editorial focus on ${who} communicating ${whatHappened}`;
 
+  // Always allow generation for every category (sports, politics, business, etc.).
+  // Entertainment style is optional branding only — never a gate.
   const canAnswer =
-    Boolean(who && who !== "unclear subject") &&
+    Boolean(who) &&
     Boolean(whatHappened) &&
-    Boolean(bestVisual) &&
-    (!isEntertainment || Boolean(person || movieTitle));
+    Boolean(bestVisual);
 
   return {
     understanding: {
@@ -190,8 +191,53 @@ export function analyzeStoryHeuristic(
     reason: canAnswer
       ? isEntertainment
         ? `Entertainment ${entertainmentStyle}: priority ${visualPriority.join(" > ")}`
-        : "Story understanding sufficient"
-      : "Cannot answer who/what/best-visual — skip image generation",
+        : `Editorial image for ${input.categoryId || "news"}: priority ${visualPriority.join(" > ")}`
+      : "Cannot answer who/what/best-visual — using headline fallback",
+  };
+}
+
+/** Category / entertainment mismatch must never block image generation. */
+function isCategoryRefusalReason(reason: string): boolean {
+  return /does not fit|not (a )?(typical|suitable)|wrong categor|only (for )?entertain|not entertainment|not (a )?movie|outside (of )?entertain|cannot generate.*(entertain|movie)|no (suitable )?entertain/i.test(
+    reason
+  );
+}
+
+function resolveCanGenerate(args: {
+  llmCanGenerate: boolean;
+  reason: string;
+  who: string;
+  whatHappened: string;
+  bestVisual: string;
+  heuristic: StoryAnalysisResult;
+}): { canGenerate: boolean; reason: string } {
+  const hasBasics =
+    Boolean(args.who?.trim()) &&
+    Boolean(args.whatHappened?.trim()) &&
+    Boolean(args.bestVisual?.trim());
+
+  if (args.llmCanGenerate && hasBasics) {
+    return { canGenerate: true, reason: args.reason || args.heuristic.reason };
+  }
+
+  // LLM refused because article is sports/politics/etc. — ignore and proceed
+  if (isCategoryRefusalReason(args.reason) || (hasBasics && !args.llmCanGenerate)) {
+    return {
+      canGenerate: true,
+      reason: args.heuristic.canGenerate
+        ? args.heuristic.reason
+        : "Proceeding with editorial image for any news category",
+    };
+  }
+
+  if (args.heuristic.canGenerate) {
+    return { canGenerate: true, reason: args.heuristic.reason };
+  }
+
+  // Last resort: still generate from headline/subject if present
+  return {
+    canGenerate: Boolean(args.who?.trim() || args.heuristic.mainSubject),
+    reason: args.reason || args.heuristic.reason,
   };
 }
 
@@ -211,22 +257,24 @@ export async function analyzeArticleStory(
   const summary = (input.summaryEn || input.summaryHi || "").replace(/\s+/g, " ").slice(0, 500);
 
   const system = `You are an experienced News Art Director for an Indian digital newsroom (News Junction).
-Before any image is generated, you MUST understand the story.
+You plan featured images for EVERY news category: sports, politics, business, crime, weather, technology, health, world, national, local, AND entertainment.
 Return ONLY valid JSON.
 Answer:
-- who: most important subject
+- who: most important subject (player, politician, company, event, celebrity — whatever fits the story)
 - whatHappened: what happened
 - whyNews: why this is news
 - twoSecondRead: what people must understand in 2 seconds
-- bestVisual: which visual tells the story best
+- bestVisual: which visual tells the story best (sports action / editorial portrait / event scene / etc.)
 Also return:
-- visualPriority: ranked array (most important first). For OTT movie news e.g. ["Samantha","Maa Inti Bangaaram","JioHotstar","Streaming"]
-- Wrong priorities: oversized logos, documents, posters as #1 when an actor is the story
-- entertainmentStyle: one of movie_news|ott_release|celebrity_interview|trailer|box_office|music_launch|award_show|tv_series|null
+- visualPriority: ranked array (most important first). Sports e.g. ["Jasprit Bumrah","India ODI","England series"]. OTT e.g. ["Samantha","Maa Inti Bangaaram","JioHotstar"]
+- Wrong priorities: oversized logos, documents, posters as #1 when a person is the story
+- entertainmentStyle: ONLY for entertainment/OTT/movie stories — one of movie_news|ott_release|celebrity_interview|trailer|box_office|music_launch|award_show|tv_series. For sports/politics/business/other set null.
 - platform, movieTitle, mainSubject, secondarySubjects
-- canGenerate: false if you cannot answer who/what/why/bestVisual clearly
+- canGenerate: true for EVERY clear news story regardless of category. Set false ONLY if who AND whatHappened are completely unknowable.
+- NEVER set canGenerate false because the article is not entertainment, not a movie, or "does not fit entertainment".
 Rules:
 - Do NOT invent unrelated objects (paper, contract, laptop, mic, courtroom) unless the article mentions them.
+- For sports: athlete / team / match atmosphere first.
 - For streaming/OTT stories, actor > movie title > platform > streaming cue.
 - Platform logos must never outrank the main person.`;
 
@@ -282,27 +330,53 @@ who, whatHappened, whyNews, twoSecondRead, bestVisual, visualPriority, entertain
     const visualPriority = asStringArray(parsed.visualPriority).length
       ? asStringArray(parsed.visualPriority)
       : base.visualPriority;
-    const canGenerate =
-      parsed.canGenerate !== false &&
-      Boolean(who) &&
-      Boolean(whatHappened) &&
-      Boolean(bestVisual);
+    const reasonRaw = String(parsed.reason || base.reason).slice(0, 220);
+    const resolved = resolveCanGenerate({
+      llmCanGenerate: parsed.canGenerate !== false,
+      reason: reasonRaw,
+      who,
+      whatHappened,
+      bestVisual,
+      heuristic: base,
+    });
+
+    // If LLM refused for category reasons, keep its story fields when usable; else prefer heuristic.
+    const useHeuristicStory =
+      !resolved.canGenerate ||
+      isCategoryRefusalReason(reasonRaw) ||
+      (!who && Boolean(base.understanding.who));
 
     return {
-      understanding: { who, whatHappened, whyNews, twoSecondRead, bestVisual },
-      visualPriority,
-      entertainmentStyle,
+      understanding: useHeuristicStory && isCategoryRefusalReason(reasonRaw)
+        ? base.understanding
+        : { who, whatHappened, whyNews, twoSecondRead, bestVisual },
+      visualPriority:
+        visualPriority.length && !isCategoryRefusalReason(reasonRaw)
+          ? visualPriority
+          : base.visualPriority.length
+            ? base.visualPriority
+            : visualPriority,
+      entertainmentStyle: isCategoryRefusalReason(reasonRaw)
+        ? base.entertainmentStyle
+        : entertainmentStyle,
       platform: String(parsed.platform || base.platform).slice(0, 80),
       movieTitle: String(parsed.movieTitle || base.movieTitle).slice(0, 120),
-      mainSubject: String(parsed.mainSubject || who || base.mainSubject).slice(0, 160),
+      mainSubject: String(
+        (isCategoryRefusalReason(reasonRaw) ? base.mainSubject : parsed.mainSubject) ||
+          who ||
+          base.mainSubject
+      ).slice(0, 160),
       secondarySubjects: asStringArray(parsed.secondarySubjects).length
         ? asStringArray(parsed.secondarySubjects)
         : base.secondarySubjects,
-      isEntertainment: Boolean(entertainmentStyle) || base.isEntertainment,
-      canGenerate,
-      reason: String(parsed.reason || base.reason).slice(0, 220),
+      isEntertainment: Boolean(
+        (isCategoryRefusalReason(reasonRaw) ? base.entertainmentStyle : entertainmentStyle) ||
+          base.isEntertainment
+      ),
+      canGenerate: resolved.canGenerate,
+      reason: resolved.reason.slice(0, 220),
     };
   } catch {
-    return base;
+    return { ...base, canGenerate: true, reason: base.reason || "Heuristic editorial image" };
   }
 }
