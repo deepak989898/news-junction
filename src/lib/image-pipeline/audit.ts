@@ -86,12 +86,12 @@ export function classifyArticleImage(data: Record<string, unknown>): {
   const origin = String(data.imageOrigin || "");
 
   if (analysis.isRealPersonPrimary && origin === "openai") {
-    reasons.push("Real-person article with AI-generated image");
-    return { classification: "real_person_mismatch_risk", isRealPersonPrimary: true, reasons };
+    // OpenAI editorial portraits are allowed — flag only for manual review notes, not as hard mismatch.
+    reasons.push("Real-person article uses AI editorial portrait — review likeness quality");
   }
 
   if (analysis.isRealPersonPrimary && (origin === "fallback" || isLogoFallback(imageUrl))) {
-    reasons.push("Real-person article without licensed image");
+    reasons.push("Real-person article without licensed/AI image");
     return { classification: "real_person_mismatch_risk", isRealPersonPrimary: true, reasons };
   }
 
@@ -115,6 +115,10 @@ export function classifyArticleImage(data: Record<string, unknown>): {
     return { classification: "generic", isRealPersonPrimary: analysis.isRealPersonPrimary, reasons };
   }
 
+  if (analysis.isRealPersonPrimary && origin === "openai") {
+    return { classification: "correct", isRealPersonPrimary: true, reasons: reasons.length ? reasons : ["AI portrait present"] };
+  }
+
   return { classification: "correct", isRealPersonPrimary: analysis.isRealPersonPrimary, reasons: ["Meets basic criteria"] };
 }
 
@@ -124,12 +128,18 @@ export async function auditPublishedArticleImages(limit = 500): Promise<{
   total: number;
 }> {
   const db = getAdminDb();
-  const snap = await db
-    .collection("news")
-    .where("status", "==", "published")
-    .orderBy("publishedAt", "desc")
-    .limit(limit)
-    .get();
+  let snap;
+  try {
+    snap = await db
+      .collection("news")
+      .where("status", "==", "published")
+      .orderBy("publishedAt", "desc")
+      .limit(limit)
+      .get();
+  } catch {
+    // Fallback if composite index/query fails.
+    snap = await db.collection("news").where("status", "==", "published").limit(limit).get();
+  }
 
   const summary: Record<ImageAuditClassification, number> = {
     correct: 0,
@@ -160,7 +170,7 @@ export async function auditPublishedArticleImages(limit = 500): Promise<{
       views: Number(data.views || 0),
       isFeatured: Boolean(data.isFeatured),
       isTrending: Boolean(data.isTrending),
-      publishedAt: data.publishedAt?.toDate?.()?.toISOString?.() || null,
+      publishedAt: data.publishedAt?.toDate?.()?.toISOString?.() || data.publishedAt || null,
       classification,
       imageOrigin: data.imageOrigin as string | undefined,
       imageQualityScore: data.imageQualityScore as number | undefined,

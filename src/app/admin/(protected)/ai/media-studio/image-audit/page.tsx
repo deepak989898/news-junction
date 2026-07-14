@@ -6,6 +6,7 @@ import Image from "next/image";
 import AdminTopbar from "@/components/layout/AdminTopbar";
 import RoleGuard from "@/components/admin/RoleGuard";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import { getAuthToken } from "@/lib/automation/client-api";
 import { RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -59,11 +60,20 @@ export default function ImageAuditPage() {
   const load = async (saveQueue = false) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/image-pipeline/audit?limit=300${saveQueue ? "&saveQueue=1" : ""}`);
-      if (!res.ok) throw new Error("Audit failed");
-      setData(await res.json());
-    } catch {
-      toast.error("Failed to load image audit");
+      const token = await getAuthToken();
+      if (!token) throw new Error("Not authenticated — please log in again");
+
+      const res = await fetch(
+        `/api/admin/image-pipeline/audit?limit=200${saveQueue ? "&saveQueue=1" : ""}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload.error || `Audit failed (${res.status})`);
+      }
+      setData(payload as AuditResponse);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load image audit");
     } finally {
       setLoading(false);
     }
@@ -136,12 +146,20 @@ export default function ImageAuditPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
+                      {filtered.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-500">
+                            No items in this filter.
+                          </td>
+                        </tr>
+                      )}
                       {filtered.slice(0, 50).map((item) => (
                         <tr key={item.newsId} className="hover:bg-gray-50">
                           <td className="px-4 py-3">
                             {item.imageUrl ? (
-                              <div className="relative h-12 w-20 overflow-hidden rounded">
-                                <Image src={item.imageUrl} alt="" fill className="object-cover" sizes="80px" />
+                              <div className="relative h-12 w-20 overflow-hidden rounded bg-gray-100">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={item.imageUrl} alt="" className="h-12 w-20 object-cover" />
                               </div>
                             ) : (
                               <span className="text-xs text-gray-400">None</span>
@@ -172,12 +190,12 @@ export default function ImageAuditPage() {
                             {item.imageOrigin && <p>Origin: {item.imageOrigin}</p>}
                           </td>
                           <td className="px-4 py-3">
-                              <Link
-                                href={`/admin/news/${item.newsId}/edit`}
-                                className="text-xs font-semibold text-blue-600 hover:underline"
-                              >
-                                Edit & Replace
-                              </Link>
+                            <Link
+                              href={`/admin/news/${item.newsId}/edit`}
+                              className="text-xs font-semibold text-blue-600 hover:underline"
+                            >
+                              Edit & Replace
+                            </Link>
                           </td>
                         </tr>
                       ))}
