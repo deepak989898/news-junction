@@ -53,7 +53,7 @@ async function resolveImageForRawItem(
   aiOutput: { titleEn: string; titleHi: string; summaryEn: string; summaryHi?: string },
   categoryNameEn: string,
   categoryNameHi?: string,
-  options?: { preferHostedImage?: boolean; articleId?: string }
+  options?: { preferHostedImage?: boolean; skipOpenAiImage?: boolean; articleId?: string }
 ): Promise<{ imageUrl: string; generated: boolean; metadata?: ArticleImageMetadata; requiresManualReview?: boolean }> {
   const settings = await getAutomationSettings();
 
@@ -82,8 +82,9 @@ async function resolveImageForRawItem(
     sourceTrustLevel,
     sourceAllowsImageReuse: sourceTrustLevel !== "low",
     fallbackImage: settings.defaultCategoryImage,
-    generateAiImages: settings.generateAiImages !== false,
-    preferHostedFirst: options?.preferHostedImage,
+    generateAiImages: settings.generateAiImages !== false && !options?.skipOpenAiImage,
+    preferHostedFirst: options?.preferHostedImage !== false,
+    skipOpenAiImage: options?.skipOpenAiImage === true,
     articleId: options?.articleId,
   });
 
@@ -127,7 +128,7 @@ function applyImageMetadataToNewsUpdate(metadata?: ArticleImageMetadata): Record
 
 export async function processRawNewsItem(
   rawNewsId: string,
-  options?: { preferHostedImage?: boolean }
+  options?: { preferHostedImage?: boolean; skipOpenAiImage?: boolean }
 ): Promise<{
   status: RawNewsStatus;
   newsId?: string;

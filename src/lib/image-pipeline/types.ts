@@ -119,6 +119,8 @@ export interface ImagePipelineInput {
   sourceTrustLevel?: "low" | "medium" | "high";
   sourceAllowsImageReuse?: boolean;
   preferHostedFirst?: boolean;
+  /** Skip OpenAI image calls (use source/fallback) — required for Vercel process timeouts */
+  skipOpenAiImage?: boolean;
   forceNeutralAi?: boolean;
 }
 

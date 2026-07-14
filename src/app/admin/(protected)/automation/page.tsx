@@ -58,12 +58,18 @@ export default function AutomationDashboardPage() {
     setProcessProgress("");
     try {
       if (action === "process") {
-        setProcessProgress("Processing articles with AI (1 per request to avoid timeout)...");
-        const result = await triggerProcessBatches(5, 1);
+        setProcessProgress("Processing articles with AI (1 per request to avoid Vercel timeout)...");
+        const result = await triggerProcessBatches(3, 1);
         setProcessProgress("");
-        toast.success(
-          `Processed ${result.processed}: ${result.pending} pending approval, ${result.published} published, ${result.duplicates} duplicates`
-        );
+        if (result.timedOut) {
+          toast.error(
+            `Vercel timeout after ${result.processed} processed. Click Process again for more. AI images are deferred to Regenerate/Approve.`
+          );
+        } else {
+          toast.success(
+            `Processed ${result.processed}: ${result.pending} pending approval, ${result.published} published, ${result.duplicates} duplicates`
+          );
+        }
       } else {
         const result = await triggerAutomation("fetch");
         toast.success(`Fetch completed: ${JSON.stringify(result)}`);

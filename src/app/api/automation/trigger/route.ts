@@ -3,9 +3,9 @@ import { runFetchNews, runProcessNews } from "@/lib/automation/fetch-pipeline";
 import { verifySuperAdmin } from "@/lib/auth/verify-admin";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
-const MAX_PROCESS_BATCH = 2;
+const MAX_PROCESS_BATCH = 1;
 
 export async function POST(request: NextRequest) {
   try {

@@ -143,7 +143,7 @@ export async function runFetchNews(options?: {
 
 export async function runProcessNews(
   batchSize = 1,
-  options?: { preferHostedImage?: boolean }
+  options?: { preferHostedImage?: boolean; skipOpenAiImage?: boolean }
 ): Promise<{
   processed: number;
   published: number;
@@ -163,10 +163,14 @@ export async function runProcessNews(
   let failed = 0;
   let duplicates = 0;
 
+  // Hobby plan ~60s limit: never run gpt-image during process; regenerate from admin later.
+  const imageOpts = {
+    preferHostedImage: options?.preferHostedImage !== false,
+    skipOpenAiImage: options?.skipOpenAiImage !== false,
+  };
+
   for (const item of items) {
-    const result = await processRawNewsItem(item.id, {
-      preferHostedImage: options?.preferHostedImage,
-    });
+    const result = await processRawNewsItem(item.id, imageOpts);
     processed++;
     if (result.status === "published") published++;
     else if (result.status === "pendingApproval") pending++;

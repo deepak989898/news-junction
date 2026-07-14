@@ -101,7 +101,9 @@ export async function resolveArticleImage(input: ImagePipelineInput): Promise<Im
   }
 
   let analysis = analyzeArticleSubject(input);
-  analysis = await enrichAnalysisWithAi(input, analysis);
+  if (!input.skipOpenAiImage) {
+    analysis = await enrichAnalysisWithAi(input, analysis);
+  }
   analysis = decideImageStrategy(analysis, input, settings);
 
   await logImagePipelineAction({
@@ -149,7 +151,12 @@ export async function resolveArticleImage(input: ImagePipelineInput): Promise<Im
       }
     }
 
-    if (!metadata && settings.openAiImageEnabled && settings.generateImagesAutomatically) {
+    if (
+      !metadata &&
+      !input.skipOpenAiImage &&
+      settings.openAiImageEnabled &&
+      settings.generateImagesAutomatically
+    ) {
       const dailyCount = await countDailyOpenAiImages();
       const canUseOpenAi = dailyCount < settings.maximumDailyImages;
 
@@ -303,6 +310,7 @@ export async function resolveAutomationArticleImage(params: {
   fallbackImage: string;
   generateAiImages: boolean;
   preferHostedFirst?: boolean;
+  skipOpenAiImage?: boolean;
   articleId?: string;
 }): Promise<{
   imageUrl: string;
@@ -312,7 +320,7 @@ export async function resolveAutomationArticleImage(params: {
   requiresManualReview?: boolean;
 }> {
   const settings = await getImagePipelineSettings();
-  settings.generateImagesAutomatically = params.generateAiImages;
+  settings.generateImagesAutomatically = params.generateAiImages && !params.skipOpenAiImage;
   settings.defaultCategoryImage = params.fallbackImage;
 
   const result = await resolveArticleImage({
@@ -332,7 +340,8 @@ export async function resolveAutomationArticleImage(params: {
     generatedImageUrl: params.generatedImageUrl,
     sourceTrustLevel: params.sourceTrustLevel || "medium",
     sourceAllowsImageReuse: params.sourceAllowsImageReuse ?? true,
-    preferHostedFirst: params.preferHostedFirst,
+    preferHostedFirst: params.preferHostedFirst || params.skipOpenAiImage,
+    skipOpenAiImage: params.skipOpenAiImage,
   });
 
   const legacySourceMap: Record<string, "cached" | "ai" | "hosted" | "fallback"> = {
