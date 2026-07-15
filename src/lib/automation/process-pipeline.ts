@@ -154,6 +154,11 @@ export async function processRawNewsItem(
     force?: boolean;
     forcePublish?: boolean;
     skipDuplicateCheck?: boolean;
+    /**
+     * Skip the post-publish OpenAI image regeneration entirely (keeps the source/existing image).
+     * Used by the queue's bulk "Generate & Publish" so it costs ~$0 in image credits.
+     */
+    skipPostPublishImage?: boolean;
   }
 ): Promise<{
   status: RawNewsStatus;
@@ -320,7 +325,9 @@ export async function processRawNewsItem(
       });
 
       // After publish, generate a fresh OpenAI image (process cron often skips image gen for timeouts).
-      if (settings.generateAiImages !== false) {
+      // Bulk "Generate & Publish" from the queue passes skipPostPublishImage to avoid image credits —
+      // it keeps the source/existing image instead.
+      if (settings.generateAiImages !== false && !options?.skipPostPublishImage) {
         void regenerateArticleImage(newsId).catch((err) => {
           console.error("post-publish OpenAI image regenerate failed:", err);
         });

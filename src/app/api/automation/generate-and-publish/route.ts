@@ -10,6 +10,10 @@ export const maxDuration = 120;
  * Bypasses risk gates, source flag, daily caps, weak-image holds and the duplicate guard,
  * because this is an explicit admin action. Called one item at a time by the background
  * bulk runner so the UI stays responsive.
+ *
+ * Images: this flow does NOT call OpenAI for images at all — it reuses the article's
+ * existing/source image (skipOpenAiImage) and skips the post-publish AI regeneration
+ * (skipPostPublishImage). So bulk publishing costs ~$0 in image credits (content only).
  */
 export async function POST(request: NextRequest) {
   const admin = await verifyAdmin(request);
@@ -28,6 +32,8 @@ export async function POST(request: NextRequest) {
       skipDuplicateCheck: true,
       preferHostedImage: true,
       skipOpenAiImage: true,
+      // Bulk queue publish: never generate an AI image (keeps the source image, ~$0 cost).
+      skipPostPublishImage: true,
     });
 
     return NextResponse.json({ success: true, ...result });
