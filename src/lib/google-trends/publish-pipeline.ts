@@ -21,6 +21,7 @@ export async function publishTrendArticle(trendId: string): Promise<string> {
 
   const category = await getCategoryById(String(trend.mappedCategoryId));
   const automation = await getAutomationSettings();
+  const gtSettings = await getGoogleTrendsSettings();
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://news-junction.vercel.app";
   const slug = slugify(String(aiOutput.titleEn || aiOutput.titleHi), { lower: true, strict: true });
 
@@ -85,14 +86,38 @@ export async function publishTrendArticle(trendId: string): Promise<string> {
 
   try {
     const { enrichArticleOnPublish } = await import("@/lib/article-enrichment/on-publish");
-    // Trends already have FAQ — still ensure links + push + meta/social
+    // Trends already have FAQ — still ensure links + push + meta/social.
+    // When GT auto-post is on we publish to social immediately below, so skip the daily queue path here.
     await enrichArticleOnPublish(ref.id, {
       sendPush: true,
-      queueSocial: true,
+      queueSocial: !gtSettings.autoPostToSocial,
       forceFaq: !(Array.isArray(aiOutput.seoFaqItems) && (aiOutput.seoFaqItems as unknown[]).length >= 3),
     });
   } catch (err) {
     console.error("enrich on trend publish failed:", err);
+  }
+
+  if (gtSettings.autoPostToSocial) {
+    try {
+      const { autoPublishArticleToSocialNow } = await import("@/lib/ai-social/service");
+      const social = await autoPublishArticleToSocialNow(ref.id, { createdBy: "google-trends-auto" });
+      await logTrendAutomation({
+        type: "publish",
+        trendId,
+        message: social.published
+          ? `Auto-posted to social: ${social.platforms.join(", ")}`
+          : `Social auto-post skipped: ${social.skipped || "no eligible accounts"}`,
+        status: social.published ? "published" : "skipped",
+      });
+    } catch (err) {
+      console.error("auto social publish on trend publish failed:", err);
+      await logTrendAutomation({
+        type: "error",
+        trendId,
+        message: `Social auto-post failed: ${err instanceof Error ? err.message : "unknown error"}`,
+        status: "failed",
+      });
+    }
   }
 
   return ref.id;

@@ -44,6 +44,8 @@ export interface GoogleTrendsSettings {
   autoPublishLowRisk: boolean;
   autoPublishMediumRisk: boolean;
   highRiskAlwaysApproval: boolean;
+  /** When enabled, published trend articles are auto-posted to connected social accounts (Facebook, etc.) immediately. */
+  autoPostToSocial: boolean;
   sourceResearchTimeoutMs: number;
   aiRetryLimit: number;
   trendCooldownHours: number;

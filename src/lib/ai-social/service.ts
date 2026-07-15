@@ -366,6 +366,76 @@ export async function publishPostImmediately(input: {
   }
 }
 
+/**
+ * Immediately publish an already-published article to all connected + enabled social
+ * accounts (Facebook, Telegram, …). Used by Google Trends auto-publish so a new article
+ * goes live on social the moment it publishes, without waiting for the daily queue cron.
+ * The caller's own toggle is the consent, so this does NOT require social autoPublishEnabled.
+ */
+export async function autoPublishArticleToSocialNow(
+  articleId: string,
+  options?: { createdBy?: string }
+): Promise<{ published: number; failed: number; skipped?: string; platforms: string[] }> {
+  const accounts = await getSocialAccounts();
+  const enabled = accounts.filter((a) => a.enabled && a.status === "connected");
+  if (!enabled.length) {
+    return { published: 0, failed: 0, skipped: "No connected social accounts", platforms: [] };
+  }
+
+  const articleRaw = await getArticleById(articleId);
+  if (!articleRaw) return { published: 0, failed: 0, skipped: "Article not found", platforms: [] };
+  const article = articleRaw as NewsDoc;
+
+  const settings = await getSocialSettings();
+  if (settings.publishOnlyIfFeaturedImageExists && !article.imageUrl) {
+    return { published: 0, failed: 0, skipped: "No featured image", platforms: [] };
+  }
+
+  // Skip platforms that already have a post for this article (avoid duplicates).
+  const existingSnap = await getAdminDb()
+    .collection("socialPostQueue")
+    .where("articleId", "==", articleId)
+    .get();
+  const alreadyPlatforms = new Set(
+    existingSnap.docs
+      .map((d) => d.data() as SocialPostQueueItem)
+      .filter((it) => ["published", "processing", "pending", "scheduled"].includes(String(it.status)))
+      .map((it) => it.platform)
+  );
+
+  const title = String(article.titleEn || article.titleHi || "");
+  const summary = String(article.summaryEn || article.summaryHi || "");
+  const url = `${getSiteUrl()}/article/${String(article.slug || "")}`;
+  const text = `${title}\n\n${summary.slice(0, 180)}\n\n${url}`.trim();
+  const hashtags = Array.isArray(article.tags) ? (article.tags as string[]).slice(0, 5) : [];
+
+  let published = 0;
+  let failed = 0;
+  const platforms: string[] = [];
+
+  for (const account of enabled.slice(0, 5)) {
+    if (alreadyPlatforms.has(account.platform)) continue;
+    try {
+      await publishPostImmediately({
+        articleId,
+        platform: account.platform,
+        text,
+        hashtags,
+        cta: "Read full story on News Junction.",
+        imageUrl: article.imageUrl ? String(article.imageUrl) : undefined,
+        language: "en",
+        createdBy: options?.createdBy || "system-auto-social",
+      });
+      published += 1;
+      platforms.push(account.platform);
+    } catch {
+      failed += 1;
+    }
+  }
+
+  return { published, failed, platforms };
+}
+
 function getSiteUrl(): string {
   return (process.env.NEXT_PUBLIC_SITE_URL || "https://news-junction.vercel.app").replace(/\/$/, "");
 }

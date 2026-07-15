@@ -44,6 +44,7 @@ interface Settings {
   autoPublishLowRisk: boolean;
   autoPublishMediumRisk: boolean;
   highRiskAlwaysApproval: boolean;
+  autoPostToSocial: boolean;
   lastFetchRun: string | null;
   lastResearchRun?: string | null;
   lastProcessRun?: string | null;
@@ -68,6 +69,7 @@ type SettingsPatch = Partial<
     | "autoPublishLowRisk"
     | "autoPublishMediumRisk"
     | "highRiskAlwaysApproval"
+    | "autoPostToSocial"
     | "maximumTopicsPerRun"
     | "maximumArticlesPerDay"
     | "maximumArticlesPerCategoryPerDay"
@@ -771,6 +773,13 @@ export default function GoogleTrendsAdminPage() {
                       checked={settings.highRiskAlwaysApproval}
                       disabled={!!busy || !settings.enabled}
                       onChange={(v) => saveSettings({ highRiskAlwaysApproval: v }, { silent: true })}
+                    />
+                    <ToggleRow
+                      label="Auto-post to social media"
+                      hint="When a trend article publishes, post it immediately to connected accounts (Facebook, Telegram). Connect accounts in AI Social Manager first."
+                      checked={settings.autoPostToSocial}
+                      disabled={!!busy || !settings.enabled}
+                      onChange={(v) => saveSettings({ autoPostToSocial: v }, { silent: true })}
                     />
                     <ToggleRow
                       label="Active trends only"

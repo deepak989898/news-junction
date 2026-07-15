@@ -30,6 +30,7 @@ export const DEFAULT_GOOGLE_TRENDS_SETTINGS: GoogleTrendsSettings = {
   autoPublishLowRisk: false,
   autoPublishMediumRisk: false,
   highRiskAlwaysApproval: true,
+  autoPostToSocial: false,
   sourceResearchTimeoutMs: 45000,
   aiRetryLimit: 1,
   trendCooldownHours: 48,
