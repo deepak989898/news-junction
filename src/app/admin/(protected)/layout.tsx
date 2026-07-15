@@ -5,6 +5,7 @@ import AdminGuard from "@/components/admin/AdminGuard";
 import AdminSidebar from "@/components/layout/AdminSidebar";
 import AdminNavTracker from "@/components/layout/AdminNavTracker";
 import AdminBusyIndicator from "@/components/admin/AdminBusyIndicator";
+import BulkPublishIndicator from "@/components/admin/BulkPublishIndicator";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -13,6 +14,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <AdminGuard>
       <AdminNavTracker />
       <AdminBusyIndicator />
+      <BulkPublishIndicator />
       <div className="admin-compact min-h-screen bg-gray-50">
         <AdminSidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
         <main className="lg:ml-56">

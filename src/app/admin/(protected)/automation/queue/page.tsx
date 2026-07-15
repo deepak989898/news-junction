@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Eye, Check, X, ExternalLink, ImageIcon, Trash2, Pencil, Sparkles } from "lucide-react";
+import { Eye, Check, X, ExternalLink, ImageIcon, Trash2, Pencil, Sparkles, Rocket } from "lucide-react";
 import AdminTopbar from "@/components/layout/AdminTopbar";
 import RoleGuard from "@/components/admin/RoleGuard";
 import ConfirmModal from "@/components/admin/ConfirmModal";
@@ -18,6 +18,7 @@ import {
   bulkDeleteRawNews,
   processRawNewsItemApi,
 } from "@/lib/automation/client-api";
+import { startBulkGeneratePublish, subscribeBulkPublish } from "@/lib/admin/bulk-publish-store";
 import { useAuth } from "@/contexts/AuthContext";
 import { isSuperAdmin } from "@/lib/permissions";
 import toast from "react-hot-toast";
@@ -56,14 +57,22 @@ function canRejectItem(item: RawNewsItem) {
   return item.status === "pendingApproval";
 }
 
-// Fetched/failed items have no AI article yet — admin can generate one on demand.
+// Fetched/failed/duplicate items can be (re)generated into an article on demand.
 function canGenerateItem(item: RawNewsItem) {
-  return (item.status === "fetched" || item.status === "failed") && !item.newsId;
+  return (
+    (item.status === "fetched" || item.status === "failed" || item.status === "duplicate") &&
+    !item.newsId
+  );
 }
 
 // Content that has been generated (but not yet published) can be edited before publishing.
 function canEditItem(item: RawNewsItem) {
   return !!item.aiOutput && !item.newsId && item.status !== "published";
+}
+
+// Any not-yet-published item can be bulk generated & published.
+function canBulkPublishItem(item: RawNewsItem) {
+  return !item.newsId && item.status !== "published";
 }
 
 export default function ApprovalQueuePage() {
@@ -89,6 +98,7 @@ export default function ApprovalQueuePage() {
     contentEn: "",
   });
   const [savingEdit, setSavingEdit] = useState(false);
+  const [bulkRunning, setBulkRunning] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -98,6 +108,20 @@ export default function ApprovalQueuePage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  // Keep the button state in sync and refresh the list when a background task completes.
+  useEffect(() => {
+    let prevRunning = false;
+    const unsub = subscribeBulkPublish((s) => {
+      setBulkRunning(s.running);
+      if (prevRunning && !s.running) {
+        load();
+      }
+      prevRunning = s.running;
+    });
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filtered = useMemo(() => {
     return items.filter((item) => {
@@ -114,6 +138,17 @@ export default function ApprovalQueuePage() {
 
   const approvableSelected = selectedItems.filter(canApproveItem).map((i) => i.id);
   const rejectableSelected = selectedItems.filter(canRejectItem).map((i) => i.id);
+  const publishableSelected = selectedItems.filter(canBulkPublishItem).map((i) => i.id);
+
+  const handleBulkGeneratePublish = () => {
+    if (!publishableSelected.length || bulkRunning) return;
+    const ids = [...publishableSelected];
+    setSelected([]);
+    toast.success(`Publishing ${ids.length} article(s) in the background`);
+    void startBulkGeneratePublish(ids).catch((e) => {
+      toast.error(e instanceof Error ? e.message : "Could not start bulk publish");
+    });
+  };
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -305,6 +340,16 @@ export default function ApprovalQueuePage() {
       {selected.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl bg-[#1a2b4c] p-3 text-white">
           <span className="text-sm font-medium">{selected.length} selected</span>
+          <button
+            type="button"
+            disabled={publishableSelected.length === 0 || bulkRunning}
+            onClick={handleBulkGeneratePublish}
+            className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-bold hover:bg-purple-700 disabled:opacity-50"
+            title="Regenerate the article for each selected item and publish — runs in the background"
+          >
+            <Rocket size={14} />
+            {bulkRunning ? "Publishing…" : `Generate & Publish (${publishableSelected.length})`}
+          </button>
           <button
             type="button"
             disabled={approvableSelected.length === 0 || processing}

@@ -11,8 +11,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Skip AI images during cron process to stay under Vercel Hobby time limits.
-    const result = await runProcessNews(1, { preferHostedImage: true, skipOpenAiImage: true });
+    // Skip AI images during cron process to stay under Vercel time limits (regenerate later).
+    // Process a time-bounded batch so a single daily run clears many fetched items.
+    const result = await runProcessNews(40, {
+      preferHostedImage: true,
+      skipOpenAiImage: true,
+      maxMs: 110_000,
+    });
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Process failed";

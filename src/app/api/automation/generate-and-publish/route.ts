@@ -6,8 +6,10 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 /**
- * Manually generate an AI article for a single fetched/failed queue item.
- * Uses force:true so admins can generate even when scheduled automation is off.
+ * Generate (or regenerate) an article for a single queue item and publish it immediately.
+ * Bypasses risk gates, source flag, daily caps, weak-image holds and the duplicate guard,
+ * because this is an explicit admin action. Called one item at a time by the background
+ * bulk runner so the UI stays responsive.
  */
 export async function POST(request: NextRequest) {
   const admin = await verifyAdmin(request);
@@ -21,11 +23,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "rawNewsId required" }, { status: 400 });
     }
 
-    // Manual admin action: skip the duplicate guard so "duplicate"/"failed" rows can be regenerated.
-    const result = await processRawNewsItem(String(rawNewsId), { force: true, skipDuplicateCheck: true });
+    const result = await processRawNewsItem(String(rawNewsId), {
+      forcePublish: true,
+      skipDuplicateCheck: true,
+      preferHostedImage: true,
+      skipOpenAiImage: true,
+    });
+
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Process failed";
+    const message = error instanceof Error ? error.message : "Generate & publish failed";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

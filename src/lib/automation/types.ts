@@ -53,6 +53,7 @@ export interface RawNewsItem {
   generatedImageUrl?: string;
   newsId?: string;
   errorMessage?: string;
+  processAttempts?: number;
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -63,6 +64,9 @@ export interface AutomationSettings {
   autoPublishLowRisk: boolean;
   autoPublishMediumRisk: boolean;
   highRiskAlwaysApproval: boolean;
+  /** Master switch: when on (with automation on), publish EVERY processed article automatically,
+   * ignoring risk level, source flag, weak-image holds and daily caps. */
+  autoPublishAll: boolean;
   maxArticlesPerDay: number;
   maxArticlesPerCategoryPerDay: number;
   publishIntervalMinutes: number;

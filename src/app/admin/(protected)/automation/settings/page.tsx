@@ -174,9 +174,17 @@ export default function AutomationSettingsPage() {
 
         <div className="space-y-3">
           <h4 className="text-sm font-bold text-gray-700">Auto Publish Rules</h4>
-          <ToggleSwitch label="Auto Publish Low Risk" checked={settings.autoPublishLowRisk} onChange={(v) => setSettings({ ...settings, autoPublishLowRisk: v })} />
-          <ToggleSwitch label="Auto Publish Medium Risk" checked={settings.autoPublishMediumRisk} onChange={(v) => setSettings({ ...settings, autoPublishMediumRisk: v })} />
-          <ToggleSwitch label="High Risk Always Needs Approval" checked={settings.highRiskAlwaysApproval} onChange={(v) => setSettings({ ...settings, highRiskAlwaysApproval: v })} />
+          <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+            <ToggleSwitch
+              label="Publish everything automatically"
+              checked={settings.autoPublishAll === true}
+              onChange={(v) => setSettings({ ...settings, autoPublishAll: v })}
+              description="When ON, every fetched article is published automatically as soon as it's processed — ignoring risk level, source approval flag, weak-image holds and daily limits. The rules below are bypassed. Failed items are retried automatically."
+            />
+          </div>
+          <ToggleSwitch label="Auto Publish Low Risk" checked={settings.autoPublishLowRisk} disabled={settings.autoPublishAll === true} onChange={(v) => setSettings({ ...settings, autoPublishLowRisk: v })} />
+          <ToggleSwitch label="Auto Publish Medium Risk" checked={settings.autoPublishMediumRisk} disabled={settings.autoPublishAll === true} onChange={(v) => setSettings({ ...settings, autoPublishMediumRisk: v })} />
+          <ToggleSwitch label="High Risk Always Needs Approval" checked={settings.highRiskAlwaysApproval} disabled={settings.autoPublishAll === true} onChange={(v) => setSettings({ ...settings, highRiskAlwaysApproval: v })} />
         </div>
 
         <button type="submit" disabled={saving} className="rounded-lg bg-[#c41e20] px-8 py-3 text-sm font-bold text-white disabled:opacity-50">

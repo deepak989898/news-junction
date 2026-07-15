@@ -83,9 +83,11 @@ function shouldTrackAdminApi(url: string): boolean {
     if (!u.pathname.startsWith("/api/")) return false;
     // Skip noisy pure-auth probes if any
     if (u.pathname.startsWith("/api/auth")) return false;
+    // Background tasks (e.g. bulk generate & publish) must not show the blocking overlay.
+    if (u.searchParams.has("njBackground")) return false;
     return true;
   } catch {
-    return url.includes("/api/");
+    return url.includes("/api/") && !url.includes("njBackground");
   }
 }
 

@@ -46,6 +46,7 @@ function mapRawNews(id: string, data: FirebaseFirestore.DocumentData): RawNewsIt
     generatedImageUrl: data.generatedImageUrl || undefined,
     newsId: data.newsId || undefined,
     errorMessage: data.errorMessage || undefined,
+    processAttempts: data.processAttempts || 0,
     createdAt: tsToIso(data.createdAt),
     updatedAt: tsToIso(data.updatedAt),
   };

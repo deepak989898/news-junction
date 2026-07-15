@@ -159,7 +159,7 @@ export async function runFetchNews(options?: {
 
 export async function runProcessNews(
   batchSize = 1,
-  options?: { preferHostedImage?: boolean; skipOpenAiImage?: boolean }
+  options?: { preferHostedImage?: boolean; skipOpenAiImage?: boolean; maxMs?: number }
 ): Promise<{
   processed: number;
   published: number;
@@ -185,7 +185,12 @@ export async function runProcessNews(
     skipOpenAiImage: options?.skipOpenAiImage !== false,
   };
 
+  // Optional time budget so a single run can clear many items without hitting the function timeout.
+  const startedAt = Date.now();
+  const maxMs = options?.maxMs ?? 0;
+
   for (const item of items) {
+    if (maxMs > 0 && Date.now() - startedAt > maxMs) break;
     const result = await processRawNewsItem(item.id, imageOpts);
     processed++;
     if (result.status === "published") published++;
@@ -242,8 +247,8 @@ export async function runAutoPublishCycle(options?: { force?: boolean; batchSize
     fetchResult = { fetched: 0, duplicates: 0, skippedQueued: 0, errors: 0, skipped: true };
   }
 
-  const batchSize = options?.batchSize ?? settings.processBatchSizePerRun ?? 1;
-  const processResult = await runProcessNews(batchSize, { preferHostedImage: true });
+  const batchSize = options?.batchSize ?? Math.max(settings.processBatchSizePerRun ?? 1, 8);
+  const processResult = await runProcessNews(batchSize, { preferHostedImage: true, maxMs: 50_000 });
 
   return {
     skipped: false,

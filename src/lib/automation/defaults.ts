@@ -7,6 +7,7 @@ export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
   autoPublishLowRisk: true,
   autoPublishMediumRisk: false,
   highRiskAlwaysApproval: true,
+  autoPublishAll: false,
   maxArticlesPerDay: 48,
   maxArticlesPerCategoryPerDay: 8,
   publishIntervalMinutes: 30,

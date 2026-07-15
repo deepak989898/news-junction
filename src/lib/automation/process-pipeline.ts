@@ -23,6 +23,9 @@ import {
   shouldDeferInternationalArticle,
 } from "@/lib/location/quota";
 
+// How many times to retry a raw item that fails during processing before giving up.
+const MAX_PROCESS_ATTEMPTS = 3;
+
 function isWeakOrFailedImage(
   imageUrl: string,
   metadata: ArticleImageMetadata | undefined,
@@ -145,16 +148,23 @@ function applyImageMetadataToNewsUpdate(metadata?: ArticleImageMetadata): Record
 
 export async function processRawNewsItem(
   rawNewsId: string,
-  options?: { preferHostedImage?: boolean; skipOpenAiImage?: boolean; force?: boolean }
+  options?: {
+    preferHostedImage?: boolean;
+    skipOpenAiImage?: boolean;
+    force?: boolean;
+    forcePublish?: boolean;
+    skipDuplicateCheck?: boolean;
+  }
 ): Promise<{
   status: RawNewsStatus;
   newsId?: string;
   message: string;
 }> {
   const settings = await getAutomationSettings();
-  // `force` lets an admin manually generate an article from the queue even when
-  // scheduled automation is turned off.
-  if (!settings.automationEnabled && !options?.force) {
+  // `force`/`forcePublish` let an admin manually generate/publish an article from the queue
+  // even when scheduled automation is turned off.
+  const force = options?.force === true || options?.forcePublish === true;
+  if (!settings.automationEnabled && !force) {
     return { status: "fetched", message: "Automation disabled" };
   }
 
@@ -164,27 +174,30 @@ export async function processRawNewsItem(
   await updateRawNews(rawNewsId, { status: "processing" });
 
   try {
-    const dupCheck = await checkDuplicate(
-      rawItem.originalLink,
-      rawItem.originalTitle,
-      settings.duplicateThreshold,
-      rawNewsId
-    );
+    // Admin-forced generation (e.g. re-publishing a "duplicate") skips the duplicate guard.
+    if (!options?.skipDuplicateCheck) {
+      const dupCheck = await checkDuplicate(
+        rawItem.originalLink,
+        rawItem.originalTitle,
+        settings.duplicateThreshold,
+        rawNewsId
+      );
 
-    if (dupCheck.isDuplicate) {
-      await updateRawNews(rawNewsId, {
-        status: "duplicate",
-        duplicateScore: dupCheck.duplicateScore,
-        errorMessage: dupCheck.reason,
-      });
-      await logAutomation({
-        type: "process",
-        message: `Duplicate: ${dupCheck.reason}`,
-        rawNewsId,
-        sourceId: rawItem.sourceId,
-        status: "duplicate",
-      });
-      return { status: "duplicate", message: dupCheck.reason || "Duplicate detected" };
+      if (dupCheck.isDuplicate) {
+        await updateRawNews(rawNewsId, {
+          status: "duplicate",
+          duplicateScore: dupCheck.duplicateScore,
+          errorMessage: dupCheck.reason,
+        });
+        await logAutomation({
+          type: "process",
+          message: `Duplicate: ${dupCheck.reason}`,
+          rawNewsId,
+          sourceId: rawItem.sourceId,
+          status: "duplicate",
+        });
+        return { status: "duplicate", message: dupCheck.reason || "Duplicate detected" };
+      }
     }
 
     const aiOutput = await generateArticleContent(settings.aiProvider, {
@@ -213,12 +226,17 @@ export async function processRawNewsItem(
     };
     const categoryNameEn = (catData as { nameEn?: string }).nameEn || "India";
 
+    // Master "publish everything" mode ignores risk gates, source flag, daily caps and holds.
+    // `forcePublish` (admin-triggered bulk generate & publish) forces the same behaviour per item.
+    const publishAll = settings.autoPublishAll === true || options?.forcePublish === true;
+
     const publishedCounts = await countPublishedToday();
     const categoryCount = publishedCounts.byCategory[categoryId] || 0;
 
     const canPublish =
-      publishedCounts.total < settings.maxArticlesPerDay &&
-      categoryCount < settings.maxArticlesPerCategoryPerDay;
+      publishAll ||
+      (publishedCounts.total < settings.maxArticlesPerDay &&
+        categoryCount < settings.maxArticlesPerCategoryPerDay);
 
     const sourceDoc = await getAdminDb().collection("sources").doc(rawItem.sourceId).get();
     const sourceData = sourceDoc.exists ? (sourceDoc.data() as Record<string, unknown>) : undefined;
@@ -230,10 +248,13 @@ export async function processRawNewsItem(
     const distribution = await getDailyNewsDistribution();
     const intlDefer = shouldDeferInternationalArticle(geo.geoScope, geo.isIndiaNews, distribution);
 
-    let autoPublish = canPublish &&
-      shouldAutoPublish(finalRisk, sourceAutoPublish, settings) &&
-      aiOutput.titleHi && aiOutput.contentHi &&
-      !intlDefer.defer;
+    const hasPublishableContent = Boolean(aiOutput.titleHi && aiOutput.contentHi);
+    let autoPublish = hasPublishableContent && (
+      publishAll ||
+      (canPublish &&
+        shouldAutoPublish(finalRisk, sourceAutoPublish, settings) &&
+        !intlDefer.defer)
+    );
 
     await updateRawNews(rawNewsId, {
       aiOutput,
@@ -257,8 +278,9 @@ export async function processRawNewsItem(
       );
       const { imageUrl, generated, metadata } = imageResult;
 
-      // Never auto-publish when AI/source image failed and we only have a category fallback.
-      if (isWeakOrFailedImage(imageUrl, metadata, settings.defaultCategoryImage)) {
+      // Never auto-publish when AI/source image failed and we only have a category fallback —
+      // unless "publish everything" mode is on (image can be regenerated after publish).
+      if (!publishAll && isWeakOrFailedImage(imageUrl, metadata, settings.defaultCategoryImage)) {
         await updateRawNews(rawNewsId, {
           status: "pendingApproval",
           aiOutput,
@@ -329,10 +351,33 @@ export async function processRawNewsItem(
     return { status: "pendingApproval", message: "Sent to approval queue" };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Processing failed";
-    await updateRawNews(rawNewsId, { status: "failed", errorMessage: message });
+    const attempts = (rawItem.processAttempts || 0) + 1;
+
+    // Auto-retry: requeue as "fetched" so the next process run picks it up again.
+    if (attempts < MAX_PROCESS_ATTEMPTS) {
+      await updateRawNews(rawNewsId, {
+        status: "fetched",
+        processAttempts: attempts,
+        errorMessage: `Attempt ${attempts}/${MAX_PROCESS_ATTEMPTS} failed: ${message}`,
+      });
+      await logAutomation({
+        type: "error",
+        message: `Retry ${attempts}/${MAX_PROCESS_ATTEMPTS}: ${message}`,
+        rawNewsId,
+        sourceId: rawItem.sourceId,
+        status: "retry",
+      });
+      return { status: "fetched", message: `Will retry (attempt ${attempts}/${MAX_PROCESS_ATTEMPTS})` };
+    }
+
+    await updateRawNews(rawNewsId, {
+      status: "failed",
+      processAttempts: attempts,
+      errorMessage: message,
+    });
     await logAutomation({
       type: "error",
-      message,
+      message: `Failed after ${attempts} attempts: ${message}`,
       rawNewsId,
       sourceId: rawItem.sourceId,
       status: "failed",
