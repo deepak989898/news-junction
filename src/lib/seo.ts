@@ -34,8 +34,22 @@ export function resolveShareImageUrl(article: {
   return trimmed.startsWith("/") ? `${SITE_URL}${trimmed}` : `${SITE_URL}/${trimmed}`;
 }
 
-export function buildDefaultMetadata(): Metadata {
-  return {
+/**
+ * Google Search Console "HTML tag" verification gives a value like:
+ *   <meta name="google-site-verification" content="abc123..." />
+ * Admins may paste either the full tag or just the code — normalize to the raw code.
+ */
+function normalizeGoogleSiteVerification(raw?: string): string {
+  const val = (raw || "").trim();
+  if (!val) return "";
+  const match = val.match(/content=["']([^"']+)["']/i);
+  return (match ? match[1] : val).trim();
+}
+
+export function buildDefaultMetadata(options?: { googleSiteVerification?: string }): Metadata {
+  const googleVerification = normalizeGoogleSiteVerification(options?.googleSiteVerification);
+
+  const metadata: Metadata = {
     title: {
       default: `${BRAND.name} - ${BRAND.taglineHi} | ${BRAND.taglineEn}`,
       template: `%s | ${BRAND.name}`,
@@ -73,6 +87,12 @@ export function buildDefaultMetadata(): Metadata {
       shortcut: ["/favicon-96.png"],
     },
   };
+
+  if (googleVerification) {
+    metadata.verification = { google: googleVerification };
+  }
+
+  return metadata;
 }
 
 function buildShareMetadataFromFields(args: {

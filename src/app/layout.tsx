@@ -3,13 +3,19 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Providers from "@/components/Providers";
 import { buildDefaultMetadata } from "@/lib/seo";
+import { getSiteSettingsServer } from "@/lib/site-settings-server";
 
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = buildDefaultMetadata();
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getSiteSettingsServer();
+  return buildDefaultMetadata({
+    googleSiteVerification: settings.googleSearchConsoleVerification,
+  });
+}
 
 export default function RootLayout({
   children,

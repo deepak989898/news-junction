@@ -1,6 +1,7 @@
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import GoogleAnalytics from "@/components/analytics/GoogleAnalytics";
+import MicrosoftClarity from "@/components/analytics/MicrosoftClarity";
 import { getSiteSettingsServer } from "@/lib/site-settings-server";
 
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
@@ -9,6 +10,7 @@ export default async function PublicLayout({ children }: { children: React.React
   return (
     <>
       <GoogleAnalytics gaId={settings.googleAnalyticsId} />
+      <MicrosoftClarity clarityId={settings.microsoftClarityId} />
       <Header />
       <main className="flex-1">{children}</main>
       <Footer />

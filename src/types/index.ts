@@ -144,6 +144,7 @@ export interface SiteSettings {
   adsEnabled: boolean;
   googleAnalyticsId: string;
   googleSearchConsoleVerification: string;
+  microsoftClarityId: string;
   metaTitle: string;
   metaDescription: string;
   footerText: string;

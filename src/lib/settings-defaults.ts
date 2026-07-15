@@ -16,6 +16,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   adsEnabled: false,
   googleAnalyticsId: "",
   googleSearchConsoleVerification: "",
+  microsoftClarityId: "",
   metaTitle: "News Junction - सच्ची खबर, हर नजर | REAL NEWS, REAL IMPACT",
   metaDescription:
     "News Junction - Your trusted source for Hindi and English news. Breaking news, trending stories, and in-depth coverage.",

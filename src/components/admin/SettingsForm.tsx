@@ -141,6 +141,7 @@ export default function SettingsForm({ initialSettings, onSave }: SettingsFormPr
           <FormTextarea label="Meta Description" name="metaDescription" value={settings.metaDescription} onChange={handleChange} rows={3} />
           <FormInput label="Google Analytics ID" name="googleAnalyticsId" value={settings.googleAnalyticsId} onChange={handleChange} placeholder="G-XXXXXXXXXX" />
           <FormInput label="Google Search Console Verification" name="googleSearchConsoleVerification" value={settings.googleSearchConsoleVerification} onChange={handleChange} />
+          <FormInput label="Microsoft Clarity Project ID" name="microsoftClarityId" value={settings.microsoftClarityId} onChange={handleChange} placeholder="xxxxxxxxxx" />
         </div>
       )}
 
