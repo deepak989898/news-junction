@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import NewsArticleImage from "@/components/news/NewsArticleImage";
 import SectionHeading from "@/components/ui/SectionHeading";
 import Link from "next/link";
-import { Share2 } from "lucide-react";
+import { Share2, Bot, AlertTriangle } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { addBookmarkApi, addHistoryApi, removeBookmarkApi, getBookmarksApi } from "@/lib/personalization/client-api";
@@ -37,6 +37,22 @@ import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { FacebookIcon, WhatsAppIcon, XIcon } from "@/components/news/SocialShareIcons";
 import ArticleBodySections from "@/components/news/ArticleBodySections";
 
+function formatCorrectedAt(value: unknown, lang: "hi" | "en"): string {
+  if (!value) return "";
+  let d: Date | null = null;
+  if (typeof value === "string") d = new Date(value);
+  else {
+    const maybe = value as { toDate?: () => Date };
+    if (typeof maybe.toDate === "function") d = maybe.toDate();
+  }
+  if (!d || Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(lang === "hi" ? "hi-IN" : "en-IN", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
 export default function ArticleClient() {
   const params = useParams();
   const slug = params.slug as string;
@@ -49,7 +65,7 @@ export default function ArticleClient() {
   const [notFound, setNotFound] = useState(false);
   const [audioLang, setAudioLang] = useState<"hi" | "en">("hi");
   const [isBookmarked, setIsBookmarked] = useState(false);
-  const [startedAt, setStartedAt] = useState<number>(Date.now());
+  const [startedAt, setStartedAt] = useState<number>(() => Date.now());
   const [completedRead, setCompletedRead] = useState(false);
 
   useEffect(() => {
@@ -81,6 +97,8 @@ export default function ArticleClient() {
   }, [slug]);
 
   useEffect(() => {
+    // Reset read-time tracking whenever the article (slug) changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStartedAt(Date.now());
     setCompletedRead(false);
     const onScroll = () => {
@@ -296,7 +314,17 @@ export default function ArticleClient() {
 
             <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-500">
               <span>
-                {t.by} <strong className="text-[#1a2b4c]">{article.author}</strong>
+                {t.by}{" "}
+                {article.authorSlug ? (
+                  <Link
+                    href={`/authors/${article.authorSlug}`}
+                    className="font-semibold text-[#1a2b4c] hover:text-[#c41e20]"
+                  >
+                    {article.author}
+                  </Link>
+                ) : (
+                  <strong className="text-[#1a2b4c]">{article.author}</strong>
+                )}
               </span>
               <span>·</span>
               <span>
@@ -309,6 +337,35 @@ export default function ArticleClient() {
                 </>
               )}
             </div>
+
+            {(article.correctionNoteHi ||
+              article.correctionNoteEn ||
+              article.correctionStatus === "corrected" ||
+              article.correctionStatus === "updated") && (
+              <div className="mt-4 flex items-start gap-2 rounded-lg border-l-4 border-[#e85d04] bg-orange-50 p-3 text-sm text-gray-700">
+                <AlertTriangle size={16} className="mt-0.5 shrink-0 text-[#e85d04]" />
+                <div>
+                  <strong className="text-[#1a2b4c]">
+                    {language === "hi" ? "सुधार / अपडेट" : "Correction / Update"}
+                  </strong>
+                  {formatCorrectedAt(article.correctedAt, language) ? (
+                    <span className="text-gray-500">
+                      {" "}
+                      · {formatCorrectedAt(article.correctedAt, language)}
+                    </span>
+                  ) : null}
+                  {(language === "hi" ? article.correctionNoteHi : article.correctionNoteEn) ||
+                  article.correctionNoteEn ||
+                  article.correctionNoteHi ? (
+                    <p className="mt-1">
+                      {language === "hi"
+                        ? article.correctionNoteHi || article.correctionNoteEn
+                        : article.correctionNoteEn || article.correctionNoteHi}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            )}
 
             {article.imageUrl && (
               <div className="relative mt-6 aspect-[16/9] overflow-hidden rounded-lg bg-gray-100">
@@ -408,6 +465,26 @@ export default function ArticleClient() {
             </div>
 
             <ArticleBodySections summary={summary} content={content} />
+
+            {(article.aiAssisted || article.aiDisclosureHi || article.aiDisclosureEn) && (
+              <div className="mt-5 flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-500">
+                <Bot size={15} className="mt-0.5 shrink-0 text-[#e85d04]" />
+                <span>
+                  {language === "hi"
+                    ? article.aiDisclosureHi ||
+                      (article.humanReviewed
+                        ? "यह लेख एआई सहायता से तैयार किया गया और संपादकीय रूप से समीक्षित है।"
+                        : "यह लेख एआई सहायता से तैयार किया गया है और इसकी स्वचालित या मैन्युअल समीक्षा की जा सकती है।")
+                    : article.aiDisclosureEn ||
+                      (article.humanReviewed
+                        ? "This article was produced with AI assistance and editorially reviewed."
+                        : "This article was produced with AI assistance and may be reviewed automatically or manually.")}{" "}
+                  <Link href="/ai-usage-policy" className="font-medium text-[#c41e20] hover:underline">
+                    {language === "hi" ? "एआई उपयोग नीति" : "AI Usage Policy"}
+                  </Link>
+                </span>
+              </div>
+            )}
 
             <AdSlotRenderer location="inArticle" className="my-6" />
 

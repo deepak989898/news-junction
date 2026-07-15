@@ -42,6 +42,7 @@ const navItems = [
   { href: "/admin/locations", label: "Locations", icon: MapPin, roles: ["super_admin", "editor"] },
   { href: "/admin/analytics/location-coverage", label: "Location Coverage", icon: BarChart3, roles: ["super_admin", "editor"] },
   { href: "/admin/system-verification", label: "System Verification", icon: ClipboardCheck, roles: ["super_admin"] },
+  { href: "/admin/trust", label: "Trust & Policies", icon: ShieldCheck, roles: ["super_admin", "editor"] },
   { href: "/admin/ai/content-studio", label: "AI Content Studio", icon: Sparkles, roles: ["super_admin", "editor"] },
   { href: "/admin/ai/seo-manager", label: "AI SEO Manager", icon: SearchCheck, roles: ["super_admin", "editor"] },
   { href: "/admin/ai/media-studio", label: "AI Media Studio", icon: ImagePlus, roles: ["super_admin", "editor"] },

@@ -380,6 +380,37 @@ service cloud.firestore {
       allow create, update, delete: if isAuthenticated() && request.auth.uid == userId;
     }
 
+    // Trust & Transparency: public policy pages (About, Editorial, Privacy, etc.).
+    // Content is public; only admins may edit. Per-page super-admin gating for
+    // legal/ownership pages is enforced server-side in the admin API.
+    match /sitePages/{pageKey} {
+      allow read: if true;
+      allow create, update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    // Ownership, contact & legal configuration (public transparency details).
+    match /trustSettings/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    // Author profiles — publicly readable, admin-managed.
+    match /authors/{authorId} {
+      allow read: if true;
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Contact form submissions — NEVER publicly readable. Writes happen only via
+    // the server (Admin SDK) through /api/contact, so client creates are denied.
+    match /contactSubmissions/{submissionId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
     // Deny everything not explicitly matched above (no more open catch-all).
     // Server code uses the Admin SDK, which bypasses these rules entirely.
     match /{document=**} {

@@ -28,6 +28,48 @@ async function getPublishedArticleUrls(siteUrl: string): Promise<MetadataRoute.S
   }
 }
 
+/** Published trust/policy pages + contact + authors directory. */
+async function getPolicyAndAuthorUrls(siteUrl: string, now: Date): Promise<MetadataRoute.Sitemap> {
+  try {
+    const { POLICY_PAGES } = await import("@/lib/trust/page-config");
+    const { getSitePageServer, getAuthorsServer } = await import("@/lib/trust/server");
+
+    const policyEntries = await Promise.all(
+      POLICY_PAGES.map(async (meta) => {
+        const page = await getSitePageServer(meta.key);
+        if (!page.published) return null;
+        return {
+          url: `${siteUrl}${meta.path}`,
+          lastModified: page.lastUpdatedAt ? new Date(page.lastUpdatedAt) : now,
+          changeFrequency: "monthly" as const,
+          priority: 0.4,
+        };
+      })
+    );
+
+    const staticTrust: MetadataRoute.Sitemap = [
+      { url: `${siteUrl}/contact-us`, lastModified: now, changeFrequency: "monthly", priority: 0.4 },
+      { url: `${siteUrl}/authors`, lastModified: now, changeFrequency: "weekly", priority: 0.4 },
+    ];
+
+    const authors = await getAuthorsServer({ activeOnly: true });
+    const authorEntries: MetadataRoute.Sitemap = authors.map((a) => ({
+      url: `${siteUrl}/authors/${a.slug}`,
+      lastModified: a.updatedAt ? new Date(a.updatedAt) : now,
+      changeFrequency: "weekly" as const,
+      priority: 0.3,
+    }));
+
+    return [
+      ...(policyEntries.filter(Boolean) as MetadataRoute.Sitemap),
+      ...staticTrust,
+      ...authorEntries,
+    ];
+  } catch {
+    return [];
+  }
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = getSiteUrl();
   const now = new Date();
@@ -46,7 +88,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }));
 
-  const articlePages = await getPublishedArticleUrls(siteUrl);
+  const [articlePages, policyAndAuthorPages] = await Promise.all([
+    getPublishedArticleUrls(siteUrl),
+    getPolicyAndAuthorUrls(siteUrl, now),
+  ]);
 
-  return [...staticPages, ...categoryPages, ...articlePages];
+  return [...staticPages, ...categoryPages, ...policyAndAuthorPages, ...articlePages];
 }

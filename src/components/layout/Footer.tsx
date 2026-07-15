@@ -9,6 +9,43 @@ import { Category } from "@/types";
 import { BRAND } from "@/lib/constants";
 import AdSlotRenderer from "@/components/ads/AdSlotRenderer";
 
+const FOOTER_GROUPS: {
+  titleEn: string;
+  titleHi: string;
+  links: { href: string; en: string; hi: string }[];
+}[] = [
+  {
+    titleEn: "Company",
+    titleHi: "कंपनी",
+    links: [
+      { href: "/about-us", en: "About Us", hi: "हमारे बारे में" },
+      { href: "/contact-us", en: "Contact Us", hi: "संपर्क करें" },
+      { href: "/authors", en: "Authors", hi: "लेखक" },
+      { href: "/ownership-and-funding", en: "Ownership & Funding", hi: "स्वामित्व और वित्तपोषण" },
+    ],
+  },
+  {
+    titleEn: "Editorial",
+    titleHi: "संपादकीय",
+    links: [
+      { href: "/editorial-policy", en: "Editorial Policy", hi: "संपादकीय नीति" },
+      { href: "/fact-checking-policy", en: "Fact-Checking Policy", hi: "तथ्य-जाँच नीति" },
+      { href: "/corrections-policy", en: "Corrections Policy", hi: "सुधार नीति" },
+      { href: "/ethics-policy", en: "Ethics Policy", hi: "नैतिकता नीति" },
+      { href: "/ai-usage-policy", en: "AI Usage Policy", hi: "एआई उपयोग नीति" },
+    ],
+  },
+  {
+    titleEn: "Legal",
+    titleHi: "कानूनी",
+    links: [
+      { href: "/privacy-policy", en: "Privacy Policy", hi: "गोपनीयता नीति" },
+      { href: "/terms-and-conditions", en: "Terms & Conditions", hi: "नियम और शर्तें" },
+      { href: "/user-data-deletion", en: "Data Deletion", hi: "डेटा हटाएँ" },
+    ],
+  },
+];
+
 export default function Footer() {
   const { language } = useLanguage();
   const { settings } = useSettings();
@@ -77,18 +114,30 @@ export default function Footer() {
           </div>
         </div>
 
+        {/* Trust, editorial & legal groups */}
+        <div className="mt-6 grid gap-6 border-t border-white/10 pt-6 sm:grid-cols-3">
+          {FOOTER_GROUPS.map((group) => (
+            <div key={group.titleEn}>
+              <h4 className="mb-3 text-sm font-bold uppercase tracking-wider text-[#c41e20]">
+                {language === "hi" ? group.titleHi : group.titleEn}
+              </h4>
+              <ul className="space-y-2">
+                {group.links.map((link) => (
+                  <li key={link.href}>
+                    <Link
+                      href={link.href}
+                      className="text-sm text-gray-300 transition-colors hover:text-white"
+                    >
+                      {language === "hi" ? link.hi : link.en}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+
         <div className="mt-6 border-t border-white/10 pt-4 text-center text-sm text-gray-400">
-          <div className="mb-3 flex flex-wrap justify-center gap-4">
-            <Link href="/privacy-policy" className="hover:text-white transition-colors">
-              {language === "hi" ? "गोपनीयता नीति" : "Privacy Policy"}
-            </Link>
-            <Link href="/terms" className="hover:text-white transition-colors">
-              {language === "hi" ? "सेवा की शर्तें" : "Terms of Service"}
-            </Link>
-            <Link href="/user-data-deletion" className="hover:text-white transition-colors">
-              {language === "hi" ? "डेटा हटाएँ" : "Data Deletion"}
-            </Link>
-          </div>
           {settings.footerText || `© ${year} ${settings.siteName || BRAND.name}. ${language === "hi" ? "सर्वाधिकार सुरक्षित" : "All rights reserved"}.`}
         </div>
       </div>

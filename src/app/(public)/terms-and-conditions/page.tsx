@@ -6,15 +6,15 @@ import { getSitePageServer, getTrustConfigServer, buildPolicyMetadata } from "@/
 export const revalidate = 300;
 
 export async function generateMetadata(): Promise<Metadata> {
-  const page = await getSitePageServer("privacy-policy");
+  const page = await getSitePageServer("terms-and-conditions");
   return buildPolicyMetadata(page);
 }
 
-export default async function PrivacyPolicyPage() {
+export default async function TermsAndConditionsPage() {
   const [page, config] = await Promise.all([
-    getSitePageServer("privacy-policy"),
+    getSitePageServer("terms-and-conditions"),
     getTrustConfigServer(),
   ]);
   if (!page.published) notFound();
-  return <PolicyPageView page={page} variant="privacy" config={config} />;
+  return <PolicyPageView page={page} variant="terms" config={config} />;
 }

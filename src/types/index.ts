@@ -121,6 +121,22 @@ export interface NewsArticle {
   isLocalNews?: boolean;
   locationDetectedBy?: string;
   locationReviewed?: boolean;
+  // Author profile linking (optional — falls back to the `author` string).
+  authorId?: string;
+  authorSlug?: string;
+  // Corrections & transparency (optional; render only when present).
+  correctionStatus?: string;
+  correctionNoteHi?: string;
+  correctionNoteEn?: string;
+  correctedAt?: Timestamp | string | null;
+  factCheckStatus?: string;
+  // AI usage disclosure (optional; render only when applicable).
+  contentCreationMethod?: string;
+  aiAssisted?: boolean;
+  humanReviewed?: boolean;
+  aiDisclosureHi?: string;
+  aiDisclosureEn?: string;
+  imageSourceType?: string;
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
   publishedAt: Timestamp | null;
