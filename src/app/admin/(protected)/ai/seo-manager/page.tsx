@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Sparkles, Search, Check, X, Link2, ListChecks, Wand2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Sparkles, Search, Check, X, Link2, ListChecks, Wand2, AlertTriangle, ExternalLink, ArrowRight } from "lucide-react";
 import AdminTopbar from "@/components/layout/AdminTopbar";
 import RoleGuard from "@/components/admin/RoleGuard";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
@@ -26,8 +27,59 @@ import toast from "react-hot-toast";
 
 type Tool = "audit" | "keywords" | "meta" | "slug" | "internal" | "faq";
 
+type ArticleRef = { id: string; titleHi: string; titleEn: string; slug: string };
+
+type IssueKey =
+  | "missingMeta"
+  | "missingInternalLinks"
+  | "thinContent"
+  | "missingAlt"
+  | "duplicateTitles"
+  | "pendingSeoSuggestions";
+
+/** How each clickable dashboard metric maps to an action target. */
+const ISSUE_CONFIG: Record<
+  IssueKey,
+  { label: string; listKey?: string; suggestTool?: Tool; canBackfill?: boolean; howto: string }
+> = {
+  missingMeta: {
+    label: "Missing meta",
+    listKey: "missingMetaArticles",
+    suggestTool: "meta",
+    canBackfill: true,
+    howto: "इन articles में SEO meta नहीं है। नीचे किसी article पर 'SEO tools' दबाकर Generate Meta → Apply करें, या ऊपर 'Backfill' से एक साथ auto-fix करें।",
+  },
+  missingInternalLinks: {
+    label: "No internal links",
+    listKey: "missingInternalLinksArticles",
+    suggestTool: "internal",
+    canBackfill: true,
+    howto: "इन articles में internal links नहीं हैं। 'Backfill' से auto-fix करें, या हर article पर Internal Links tool चलाकर Approve + Apply करें।",
+  },
+  thinContent: {
+    label: "Thin content",
+    listKey: "thinContentArticles",
+    howto: "इन articles का content 1200 characters से कम है। 'Open editor' दबाकर content बढ़ाएँ।",
+  },
+  missingAlt: {
+    label: "Missing image ALT",
+    listKey: "missingAltArticles",
+    howto: "इन articles में image ALT text (हिन्दी + English) नहीं है। 'Open editor' दबाकर ALT भरें।",
+  },
+  duplicateTitles: {
+    label: "Duplicate titles",
+    listKey: "duplicateTitleArticles",
+    howto: "इन articles के titles एक जैसे हैं। 'Open editor' दबाकर हर title को unique बनाएँ।",
+  },
+  pendingSeoSuggestions: {
+    label: "Pending SEO suggestions",
+    howto: "AI द्वारा सुझाए गए internal links और topics नीचे हैं — इन्हें Approve/Reject करें।",
+  },
+};
+
 export default function AiSeoManagerPage() {
   const { adminUser } = useAuth();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState<string | null>(null);
   const [articles, setArticles] = useState<NewsArticle[]>([]);
@@ -44,6 +96,10 @@ export default function AiSeoManagerPage() {
   const [faq, setFaq] = useState<Record<string, unknown>[] | null>(null);
   const [links, setLinks] = useState<Record<string, unknown>[] | null>(null);
   const [gap, setGap] = useState<Record<string, unknown>[] | null>(null);
+  const [activeIssue, setActiveIssue] = useState<IssueKey | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
+  const actionRef = useRef<HTMLDivElement>(null);
+  const toolsRef = useRef<HTMLDivElement>(null);
 
   const selectedArticle = useMemo(
     () => articles.find((a) => a.id === selectedId) || null,
@@ -184,6 +240,65 @@ export default function AiSeoManagerPage() {
     toast.success("SEO AI settings updated");
   };
 
+  const issueArticles = (key: IssueKey): ArticleRef[] => {
+    const listKey = ISSUE_CONFIG[key].listKey;
+    if (!listKey) return [];
+    return ((dashboard?.[listKey] as ArticleRef[]) || []) as ArticleRef[];
+  };
+
+  const openIssue = (key: IssueKey) => {
+    setActiveIssue(key);
+    setTimeout(() => actionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+  };
+
+  const focusArticleInTools = (id: string) => {
+    setSelectedId(id);
+    setTimeout(() => toolsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
+  };
+
+  const runBackfill = async () => {
+    setBackfilling(true);
+    setRunning("backfill");
+    try {
+      const { runWithAdminBusy } = await import("@/lib/admin/busy-store");
+      const { backfillArticleEnrichmentApi } = await import("@/lib/article-enrichment/client-api");
+      const res = (await runWithAdminBusy("Backfilling FAQ + links + meta…", () =>
+        backfillArticleEnrichmentApi(40)
+      )) as { processed?: number };
+      toast.success(`Backfilled ${res.processed ?? 0} articles (FAQ, internal links, meta)`);
+      await refreshAll();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Backfill failed");
+    } finally {
+      setBackfilling(false);
+      setRunning(null);
+    }
+  };
+
+  const renderIssueCard = (key: IssueKey, label: string, count: number) => {
+    const active = activeIssue === key;
+    const hasWork = count > 0;
+    return (
+      <button
+        type="button"
+        onClick={() => openIssue(key)}
+        className={`group flex flex-col items-start rounded-lg border p-3 text-left transition ${
+          active
+            ? "border-[#c41e20] bg-red-50 ring-1 ring-[#c41e20]"
+            : hasWork
+            ? "border-amber-300 bg-amber-50 hover:border-[#c41e20] hover:bg-red-50"
+            : "border-gray-200 bg-gray-50 hover:border-gray-300"
+        }`}
+      >
+        <span className="text-gray-500">{label}</span>
+        <span className={`text-lg font-bold ${hasWork ? "text-[#c41e20]" : "text-green-600"}`}>{count}</span>
+        <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-[#1a2b4c] opacity-70 transition group-hover:opacity-100">
+          {hasWork ? "Fix now" : "View"} <ArrowRight className="h-3 w-3" />
+        </span>
+      </button>
+    );
+  };
+
   if (loading) return <LoadingSpinner size="lg" />;
 
   return (
@@ -214,18 +329,131 @@ export default function AiSeoManagerPage() {
       )}
 
       <div className="mb-6 rounded-xl bg-white p-5 shadow-sm">
-        <h3 className="mb-3 font-semibold text-[#1a2b4c]">SEO Dashboard</h3>
+        <h3 className="mb-1 font-semibold text-[#1a2b4c]">SEO Dashboard</h3>
+        <p className="mb-3 text-xs text-gray-500">
+          किसी भी highlighted card पर click करें — नीचे उन्हीं articles/suggestions की list खुलेगी जहाँ action चाहिए।
+        </p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
-          <div><p className="text-gray-500">Average SEO score</p><p className="font-bold">{String(dashboard?.avgSeoScore || 0)}</p></div>
-          <div><p className="text-gray-500">Missing meta</p><p className="font-bold">{String(dashboard?.missingMeta || 0)}</p></div>
-          <div><p className="text-gray-500">Missing image ALT</p><p className="font-bold">{String(dashboard?.missingAlt || 0)}</p></div>
-          <div><p className="text-gray-500">Thin content</p><p className="font-bold">{String(dashboard?.thinContent || 0)}</p></div>
-          <div><p className="text-gray-500">No internal links</p><p className="font-bold">{String(dashboard?.missingInternalLinks || 0)}</p></div>
-          <div><p className="text-gray-500">Duplicate titles</p><p className="font-bold">{String(dashboard?.duplicateTitles || 0)}</p></div>
-          <div><p className="text-gray-500">Pending SEO suggestions</p><p className="font-bold">{String(dashboard?.pendingSeoSuggestions || 0)}</p></div>
-          <div><p className="text-gray-500">Google News checklist</p><p className="font-bold">{Array.isArray(dashboard?.googleNewsReadinessChecklist) ? "Ready" : "Needs review"}</p></div>
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <p className="text-gray-500">Average SEO score</p>
+            <p className="text-lg font-bold">{String(dashboard?.avgSeoScore || 0)}</p>
+          </div>
+          {renderIssueCard("missingMeta", "Missing meta", Number(dashboard?.missingMeta || 0))}
+          {renderIssueCard("missingAlt", "Missing image ALT", Number(dashboard?.missingAlt || 0))}
+          {renderIssueCard("thinContent", "Thin content", Number(dashboard?.thinContent || 0))}
+          {renderIssueCard("missingInternalLinks", "No internal links", Number(dashboard?.missingInternalLinks || 0))}
+          {renderIssueCard("duplicateTitles", "Duplicate titles", Number(dashboard?.duplicateTitles || 0))}
+          {renderIssueCard("pendingSeoSuggestions", "Pending SEO suggestions", Number(dashboard?.pendingSeoSuggestions || 0))}
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <p className="text-gray-500">Google News checklist</p>
+            <p className="text-lg font-bold">{Array.isArray(dashboard?.googleNewsReadinessChecklist) ? "Ready" : "Needs review"}</p>
+          </div>
         </div>
       </div>
+
+      {activeIssue && (
+        <div ref={actionRef} className="mb-6 rounded-xl border-2 border-[#c41e20] bg-white p-5 shadow-sm">
+          <div className="mb-2 flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-[#c41e20]" />
+              <h3 className="font-semibold text-[#1a2b4c]">
+                Action needed — {ISSUE_CONFIG[activeIssue].label}
+                {activeIssue !== "pendingSeoSuggestions" && ` (${issueArticles(activeIssue).length})`}
+              </h3>
+            </div>
+            <button className="text-sm text-gray-500 hover:text-gray-800" onClick={() => setActiveIssue(null)}>
+              <X className="mr-1 inline h-4 w-4" />Close
+            </button>
+          </div>
+          <p className="mb-3 text-sm text-gray-600">{ISSUE_CONFIG[activeIssue].howto}</p>
+
+          {ISSUE_CONFIG[activeIssue].canBackfill && (
+            <button
+              className="mb-3 rounded bg-[#c41e20] px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+              disabled={backfilling || !!running}
+              onClick={runBackfill}
+            >
+              {backfilling ? "Backfilling…" : "Fix automatically (Backfill up to 40)"}
+            </button>
+          )}
+
+          {activeIssue === "pendingSeoSuggestions" ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div>
+                <p className="mb-2 text-sm font-semibold text-[#1a2b4c]">Internal link suggestions</p>
+                <div className="max-h-72 space-y-2 overflow-auto">
+                  {(((dashboard?.pendingLinks as Record<string, unknown>[]) || []).length === 0) && (
+                    <p className="text-xs text-gray-500">कोई pending internal-link suggestion नहीं।</p>
+                  )}
+                  {((dashboard?.pendingLinks as Record<string, unknown>[]) || []).map((l) => (
+                    <div key={String(l.id)} className="rounded border bg-gray-50 p-2 text-xs">
+                      <p className="font-semibold">{String(l.titleEn || l.anchorTextEn || l.id)}</p>
+                      <div className="mt-1 flex gap-3">
+                        <button className="text-green-600" onClick={() => reviewSuggestion(String(l.id), "link", "approved")}>
+                          <Check className="inline h-4 w-4" /> Approve
+                        </button>
+                        <button className="text-red-600" onClick={() => reviewSuggestion(String(l.id), "link", "rejected")}>
+                          <X className="inline h-4 w-4" /> Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="mb-2 text-sm font-semibold text-[#1a2b4c]">Topic suggestions</p>
+                <div className="max-h-72 space-y-2 overflow-auto">
+                  {(((dashboard?.pendingTopics as Record<string, unknown>[]) || []).length === 0) && (
+                    <p className="text-xs text-gray-500">कोई pending topic suggestion नहीं।</p>
+                  )}
+                  {((dashboard?.pendingTopics as Record<string, unknown>[]) || []).map((t) => (
+                    <div key={String(t.id)} className="rounded border bg-gray-50 p-2 text-xs">
+                      <p className="font-semibold">{String(t.titleEn || t.titleHi || t.id)}</p>
+                      {!!t.reason && <p className="text-gray-600">{String(t.reason)}</p>}
+                      <div className="mt-1 flex gap-3">
+                        <button className="text-green-600" onClick={() => reviewSuggestion(String(t.id), "topic", "approved")}>
+                          <Check className="inline h-4 w-4" /> Approve
+                        </button>
+                        <button className="text-red-600" onClick={() => reviewSuggestion(String(t.id), "topic", "rejected")}>
+                          <X className="inline h-4 w-4" /> Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : issueArticles(activeIssue).length === 0 ? (
+            <p className="rounded border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+              यहाँ कुछ भी ठीक करने को नहीं है 🎉
+            </p>
+          ) : (
+            <div className="max-h-96 divide-y overflow-auto rounded border">
+              {issueArticles(activeIssue).map((a) => (
+                <div key={a.id} className="flex items-center justify-between gap-3 p-2 text-sm">
+                  <span className="min-w-0 flex-1 truncate">{a.titleEn || a.titleHi || a.slug || a.id}</span>
+                  <div className="flex shrink-0 gap-2">
+                    {ISSUE_CONFIG[activeIssue].suggestTool && (
+                      <button
+                        className="rounded border px-2 py-1 text-xs hover:bg-gray-50"
+                        onClick={() => focusArticleInTools(a.id)}
+                      >
+                        SEO tools
+                      </button>
+                    )}
+                    <button
+                      className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs hover:bg-gray-50"
+                      onClick={() => router.push(`/admin/news/${a.id}/edit`)}
+                    >
+                      <ExternalLink className="h-3 w-3" /> Open editor
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mb-6 grid gap-6 lg:grid-cols-3">
         <div className="rounded-xl bg-white p-5 shadow-sm">
@@ -240,7 +468,7 @@ export default function AiSeoManagerPage() {
           <p className="mt-2 text-xs text-gray-500">Selected: {selectedArticle?.titleEn || selectedArticle?.titleHi || "None"}</p>
         </div>
 
-        <div className="rounded-xl bg-white p-5 shadow-sm lg:col-span-2">
+        <div ref={toolsRef} className="rounded-xl bg-white p-5 shadow-sm lg:col-span-2">
           <h3 className="mb-3 font-semibold text-[#1a2b4c]">SEO Tools</h3>
           <div className="grid gap-2 md:grid-cols-3">
             <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" onClick={() => runTool("audit")} disabled={!!running}><ListChecks className="mr-1 inline h-4 w-4" />{running === "audit" ? "Running…" : "Run SEO Audit"}</button>
@@ -253,24 +481,10 @@ export default function AiSeoManagerPage() {
           <button className="mt-3 rounded bg-[#1a2b4c] px-4 py-2 text-sm font-bold text-white disabled:opacity-50" disabled={!!running} onClick={runContentGap}>Run Content Gap Finder</button>
           <button
             className="mt-3 ml-2 rounded border border-[#c41e20] px-4 py-2 text-sm font-bold text-[#c41e20] disabled:opacity-50"
-            disabled={!!running}
-            onClick={async () => {
-              setRunning("backfill");
-              try {
-                const { runWithAdminBusy } = await import("@/lib/admin/busy-store");
-                const { backfillArticleEnrichmentApi } = await import("@/lib/article-enrichment/client-api");
-                const res = (await runWithAdminBusy("Backfilling FAQ + links…", () =>
-                  backfillArticleEnrichmentApi(40)
-                )) as { processed?: number };
-                toast.success(`Backfilled FAQ/links on ${res.processed ?? 0} articles`);
-              } catch (e) {
-                toast.error(e instanceof Error ? e.message : "Backfill failed");
-              } finally {
-                setRunning(null);
-              }
-            }}
+            disabled={!!running || backfilling}
+            onClick={runBackfill}
           >
-            {running === "backfill" ? "Backfilling…" : "Backfill FAQ + Internal Links"}
+            {backfilling ? "Backfilling…" : "Backfill FAQ + Internal Links"}
           </button>
         </div>
       </div>

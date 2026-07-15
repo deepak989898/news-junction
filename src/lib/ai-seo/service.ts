@@ -333,22 +333,59 @@ export async function getSeoDashboardData() {
     .get();
   const pendingTopics = await getAdminDb().collection("seoTopicSuggestions").where("status", "==", "pending").limit(20).get();
 
+  type ArticleRef = { id: string; titleHi: string; titleEn: string; slug: string };
+  const toRef = (id: string, data: Record<string, unknown>): ArticleRef => ({
+    id,
+    titleHi: String(data.titleHi || ""),
+    titleEn: String(data.titleEn || ""),
+    slug: String(data.slug || ""),
+  });
+
   let missingMeta = 0;
   let missingAlt = 0;
   let thinContent = 0;
   let missingInternalLinks = 0;
+  const missingMetaArticles: ArticleRef[] = [];
+  const missingAltArticles: ArticleRef[] = [];
+  const thinContentArticles: ArticleRef[] = [];
+  const missingInternalLinksArticles: ArticleRef[] = [];
   const titleMap = new Map<string, number>();
+  const titleRefs = new Map<string, ArticleRef[]>();
   news.docs.forEach((d) => {
     const data = d.data();
+    const ref = toRef(d.id, data);
     const contentLen = stripHtml(String(data.contentEn || data.contentHi || "")).length;
-    if (!data.seoDescription) missingMeta += 1;
-    if (!data.imageAltHi || !data.imageAltEn) missingAlt += 1;
-    if (contentLen < 1200) thinContent += 1;
-    if (!Array.isArray(data.seoInternalLinks) || data.seoInternalLinks.length === 0) missingInternalLinks += 1;
+    if (!data.seoDescription) {
+      missingMeta += 1;
+      missingMetaArticles.push(ref);
+    }
+    if (!data.imageAltHi || !data.imageAltEn) {
+      missingAlt += 1;
+      missingAltArticles.push(ref);
+    }
+    if (contentLen < 1200) {
+      thinContent += 1;
+      thinContentArticles.push(ref);
+    }
+    if (!Array.isArray(data.seoInternalLinks) || data.seoInternalLinks.length === 0) {
+      missingInternalLinks += 1;
+      missingInternalLinksArticles.push(ref);
+    }
     const t = String(data.titleEn || "").trim();
-    if (t) titleMap.set(t, (titleMap.get(t) || 0) + 1);
+    if (t) {
+      titleMap.set(t, (titleMap.get(t) || 0) + 1);
+      const arr = titleRefs.get(t) || [];
+      arr.push(ref);
+      titleRefs.set(t, arr);
+    }
   });
   const duplicateTitles = Array.from(titleMap.values()).filter((v) => v > 1).length;
+  const duplicateTitleArticles: ArticleRef[] = [];
+  titleRefs.forEach((arr) => {
+    if (arr.length > 1) duplicateTitleArticles.push(...arr);
+  });
+
+  const cap = (arr: ArticleRef[]) => arr.slice(0, 100);
 
   return {
     totalPublished: news.size,
@@ -358,6 +395,11 @@ export async function getSeoDashboardData() {
     thinContent,
     missingInternalLinks,
     duplicateTitles,
+    missingMetaArticles: cap(missingMetaArticles),
+    missingAltArticles: cap(missingAltArticles),
+    thinContentArticles: cap(thinContentArticles),
+    missingInternalLinksArticles: cap(missingInternalLinksArticles),
+    duplicateTitleArticles: cap(duplicateTitleArticles),
     pendingSeoSuggestions: pendingLinks.size + pendingTopics.size,
     googleNewsReadinessChecklist: [
       "Original title and summary",
