@@ -25,16 +25,16 @@ export default function FeaturedNews({ articles, sideArticles }: FeaturedNewsPro
 
   const slides = articles.filter(Boolean);
   const count = slides.length;
+  // Clamp during render so we never depend on a state-reset effect.
+  const active = count > 0 ? ((index % count) + count) % count : 0;
 
+  // Auto-advance. Keyed on `active` so the timer restarts after each slide and
+  // after manual navigation, giving a consistent, reliable cadence.
   useEffect(() => {
     if (count <= 1 || paused) return;
-    const id = setInterval(() => setIndex((i) => (i + 1) % count), AUTOPLAY_MS);
-    return () => clearInterval(id);
-  }, [count, paused]);
-
-  useEffect(() => {
-    if (index >= count) setIndex(0);
-  }, [count, index]);
+    const id = setTimeout(() => setIndex((i) => i + 1), AUTOPLAY_MS);
+    return () => clearTimeout(id);
+  }, [active, count, paused]);
 
   if (count === 0) return null;
 
@@ -43,13 +43,13 @@ export default function FeaturedNews({ articles, sideArticles }: FeaturedNewsPro
   return (
     <section className="grid gap-6 lg:grid-cols-3">
       <div
-        className="group relative overflow-hidden rounded-xl lg:col-span-2"
+        className="group relative overflow-hidden rounded-xl aspect-[16/10] md:aspect-[16/9] lg:col-span-2 lg:aspect-auto lg:min-h-[360px]"
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
       >
         <div
-          className="flex transition-transform duration-700 ease-out"
-          style={{ transform: `translateX(-${index * 100}%)` }}
+          className="absolute inset-0 flex transition-transform duration-700 ease-out"
+          style={{ transform: `translateX(-${active * 100}%)` }}
         >
           {slides.map((article, i) => {
             const title = getArticleTitle(article, language);
@@ -62,9 +62,9 @@ export default function FeaturedNews({ articles, sideArticles }: FeaturedNewsPro
               <Link
                 key={article.id}
                 href={`/article/${article.slug}`}
-                className="relative w-full shrink-0"
+                className="relative h-full w-full shrink-0"
               >
-                <div className="relative aspect-[16/10] md:aspect-[16/9]">
+                <div className="relative h-full w-full">
                   {article.imageUrl ? (
                     <NewsArticleImage
                       src={article.imageUrl}
@@ -81,7 +81,7 @@ export default function FeaturedNews({ articles, sideArticles }: FeaturedNewsPro
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
                 </div>
-                <div className="absolute bottom-0 left-0 right-0 p-5 md:p-8">
+                <div className="absolute bottom-0 left-0 right-0 p-5 pb-12 md:p-8 md:pb-14">
                   <span className="inline-block rounded bg-[#c41e20] px-2 py-0.5 text-xs font-bold uppercase text-white">
                     {categoryName}
                   </span>
@@ -102,30 +102,30 @@ export default function FeaturedNews({ articles, sideArticles }: FeaturedNewsPro
           <>
             <button
               type="button"
-              onClick={() => go(index - 1)}
+              onClick={() => go(active - 1)}
               aria-label="Previous slide"
-              className="absolute left-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition hover:bg-black/60 focus:opacity-100 group-hover:opacity-100"
+              className="absolute left-2 top-1/2 z-30 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition hover:bg-black/60 focus:opacity-100 group-hover:opacity-100"
             >
               <ChevronLeft size={20} />
             </button>
             <button
               type="button"
-              onClick={() => go(index + 1)}
+              onClick={() => go(active + 1)}
               aria-label="Next slide"
-              className="absolute right-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition hover:bg-black/60 focus:opacity-100 group-hover:opacity-100"
+              className="absolute right-2 top-1/2 z-30 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition hover:bg-black/60 focus:opacity-100 group-hover:opacity-100"
             >
               <ChevronRight size={20} />
             </button>
-            <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/35 px-2.5 py-1.5 backdrop-blur-sm">
+            <div className="pointer-events-none absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/45 px-3 py-2 shadow-lg ring-1 ring-white/20 backdrop-blur-sm">
               {slides.map((_, i) => (
                 <button
                   key={i}
                   type="button"
                   onClick={() => go(i)}
                   aria-label={`Go to slide ${i + 1}`}
-                  aria-current={i === index}
-                  className={`h-2 rounded-full transition-all ${
-                    i === index ? "w-6 bg-white" : "w-2 bg-white/60 hover:bg-white/90"
+                  aria-current={i === active}
+                  className={`pointer-events-auto h-2.5 rounded-full transition-all ${
+                    i === active ? "w-7 bg-white" : "w-2.5 bg-white/70 hover:bg-white"
                   }`}
                 />
               ))}
