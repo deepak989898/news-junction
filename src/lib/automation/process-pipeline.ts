@@ -145,14 +145,16 @@ function applyImageMetadataToNewsUpdate(metadata?: ArticleImageMetadata): Record
 
 export async function processRawNewsItem(
   rawNewsId: string,
-  options?: { preferHostedImage?: boolean; skipOpenAiImage?: boolean }
+  options?: { preferHostedImage?: boolean; skipOpenAiImage?: boolean; force?: boolean }
 ): Promise<{
   status: RawNewsStatus;
   newsId?: string;
   message: string;
 }> {
   const settings = await getAutomationSettings();
-  if (!settings.automationEnabled) {
+  // `force` lets an admin manually generate an article from the queue even when
+  // scheduled automation is turned off.
+  if (!settings.automationEnabled && !options?.force) {
     return { status: "fetched", message: "Automation disabled" };
   }
 

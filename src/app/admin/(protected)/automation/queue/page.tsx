@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Eye, Check, X, ExternalLink, ImageIcon, Trash2 } from "lucide-react";
+import { Eye, Check, X, ExternalLink, ImageIcon, Trash2, Pencil, Sparkles } from "lucide-react";
 import AdminTopbar from "@/components/layout/AdminTopbar";
 import RoleGuard from "@/components/admin/RoleGuard";
 import ConfirmModal from "@/components/admin/ConfirmModal";
 import StatusBadge from "@/components/admin/StatusBadge";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
-import { getAllRawNews } from "@/firebase/firestore";
+import { getAllRawNews, updateRawNewsClient } from "@/firebase/firestore";
 import { RawNewsItem } from "@/lib/automation/types";
 import {
   approveRawNews,
@@ -16,6 +16,7 @@ import {
   bulkApproveRawNews,
   bulkRejectRawNews,
   bulkDeleteRawNews,
+  processRawNewsItemApi,
 } from "@/lib/automation/client-api";
 import { useAuth } from "@/contexts/AuthContext";
 import { isSuperAdmin } from "@/lib/permissions";
@@ -23,10 +24,28 @@ import toast from "react-hot-toast";
 
 type BulkAction = "approve" | "reject" | "delete";
 
+type EditForm = {
+  titleHi: string;
+  titleEn: string;
+  summaryHi: string;
+  summaryEn: string;
+  contentHi: string;
+  contentEn: string;
+};
+
 function getItemImageUrl(item: RawNewsItem): string | null {
   if (item.generatedImageUrl?.startsWith("https")) return item.generatedImageUrl;
   if (item.originalImage?.startsWith("https")) return item.originalImage;
   return null;
+}
+
+function formatFetchedAt(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const date = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  return `${date}, ${time}`;
 }
 
 function canApproveItem(item: RawNewsItem) {
@@ -35,6 +54,16 @@ function canApproveItem(item: RawNewsItem) {
 
 function canRejectItem(item: RawNewsItem) {
   return item.status === "pendingApproval";
+}
+
+// Fetched/failed items have no AI article yet — admin can generate one on demand.
+function canGenerateItem(item: RawNewsItem) {
+  return (item.status === "fetched" || item.status === "failed") && !item.newsId;
+}
+
+// Content that has been generated (but not yet published) can be edited before publishing.
+function canEditItem(item: RawNewsItem) {
+  return !!item.aiOutput && !item.newsId && item.status !== "published";
 }
 
 export default function ApprovalQueuePage() {
@@ -49,6 +78,17 @@ export default function ApprovalQueuePage() {
   const [confirmAction, setConfirmAction] = useState<{ type: BulkAction; ids: string[] } | null>(null);
   const [processing, setProcessing] = useState(false);
   const [bulkProgress, setBulkProgress] = useState("");
+  const [rowBusy, setRowBusy] = useState<string | null>(null);
+  const [editItem, setEditItem] = useState<RawNewsItem | null>(null);
+  const [editForm, setEditForm] = useState<EditForm>({
+    titleHi: "",
+    titleEn: "",
+    summaryHi: "",
+    summaryEn: "",
+    contentHi: "",
+    contentEn: "",
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -94,6 +134,55 @@ export default function ApprovalQueuePage() {
       url,
       alt: item.aiOutput?.imageAltHi || item.aiOutput?.titleHi || item.originalTitle,
     });
+  };
+
+  const handleGenerate = async (item: RawNewsItem) => {
+    setRowBusy(item.id);
+    try {
+      const res = await processRawNewsItemApi(item.id);
+      if (res.status === "published") {
+        toast.success("Article generated and published");
+      } else if (res.status === "pendingApproval") {
+        toast.success("Article generated — ready to review & publish");
+      } else if (res.status === "duplicate") {
+        toast(res.message || "Detected as duplicate");
+      } else {
+        toast(res.message || "Processed");
+      }
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Generate failed");
+    } finally {
+      setRowBusy(null);
+    }
+  };
+
+  const openEdit = (item: RawNewsItem) => {
+    setEditItem(item);
+    setEditForm({
+      titleHi: item.aiOutput?.titleHi || "",
+      titleEn: item.aiOutput?.titleEn || "",
+      summaryHi: item.aiOutput?.summaryHi || "",
+      summaryEn: item.aiOutput?.summaryEn || "",
+      contentHi: item.aiOutput?.contentHi || "",
+      contentEn: item.aiOutput?.contentEn || "",
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!editItem || !editItem.aiOutput) return;
+    setSavingEdit(true);
+    try {
+      const updatedAiOutput = { ...editItem.aiOutput, ...editForm };
+      await updateRawNewsClient(editItem.id, { aiOutput: updatedAiOutput });
+      toast.success("Changes saved");
+      setEditItem(null);
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   const handleSingleConfirm = async () => {
@@ -260,7 +349,7 @@ export default function ApprovalQueuePage() {
         {filtered.length === 0 ? (
           <p className="p-12 text-center text-gray-500">No items in queue.</p>
         ) : (
-          <table className="w-full min-w-[900px] text-left text-sm">
+          <table className="w-full min-w-[1050px] text-left text-sm">
             <thead className="border-b bg-gray-50">
               <tr>
                 <th className="px-3 py-3">
@@ -274,6 +363,7 @@ export default function ApprovalQueuePage() {
                 <th className="px-3 py-3 font-semibold">Image</th>
                 <th className="px-4 py-3 font-semibold">Title</th>
                 <th className="px-4 py-3 font-semibold">Source</th>
+                <th className="px-4 py-3 font-semibold">Fetched</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
                 <th className="px-4 py-3 font-semibold">Risk</th>
                 <th className="px-4 py-3 font-semibold">Actions</th>
@@ -321,6 +411,7 @@ export default function ApprovalQueuePage() {
                       <p className="line-clamp-1 text-xs text-gray-500">{item.aiOutput?.titleEn}</p>
                     </td>
                     <td className="px-4 py-3 text-gray-600">{item.sourceName}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">{formatFetchedAt(item.createdAt)}</td>
                     <td className="px-4 py-3"><StatusBadge status={item.status} /></td>
                     <td className="px-4 py-3"><StatusBadge status={item.riskLevel} /></td>
                     <td className="px-4 py-3">
@@ -331,6 +422,33 @@ export default function ApprovalQueuePage() {
                         <a href={item.originalLink} target="_blank" rel="noopener noreferrer" className="rounded p-1.5 text-blue-600 hover:bg-blue-50" title="Source">
                           <ExternalLink size={16} />
                         </a>
+                        {canGenerateItem(item) && (
+                          <button
+                            type="button"
+                            onClick={() => handleGenerate(item)}
+                            disabled={rowBusy === item.id}
+                            className="flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-50 disabled:opacity-50"
+                            title="Generate AI article for this item"
+                          >
+                            {rowBusy === item.id ? (
+                              <LoadingSpinner size="sm" />
+                            ) : (
+                              <>
+                                <Sparkles size={14} /> Generate
+                              </>
+                            )}
+                          </button>
+                        )}
+                        {canEditItem(item) && (
+                          <button
+                            type="button"
+                            onClick={() => openEdit(item)}
+                            className="rounded p-1.5 text-amber-600 hover:bg-amber-50"
+                            title="Edit content before publishing"
+                          >
+                            <Pencil size={16} />
+                          </button>
+                        )}
                         {canApproveItem(item) && (
                           <button
                             type="button"
@@ -450,13 +568,24 @@ export default function ApprovalQueuePage() {
                   </p>
                 )}
                 {preview.status === "pendingApproval" && (
-                  <div className="mt-4 flex gap-3">
+                  <div className="mt-4 flex flex-wrap gap-3">
                     <button
                       type="button"
                       onClick={() => setConfirmAction({ type: "approve", ids: [preview.id] })}
                       className="rounded-lg bg-green-600 px-6 py-2 text-sm font-bold text-white"
                     >
                       Approve & Publish
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const item = preview;
+                        setPreview(null);
+                        openEdit(item);
+                      }}
+                      className="flex items-center gap-2 rounded-lg border border-amber-300 px-6 py-2 text-sm font-medium text-amber-700"
+                    >
+                      <Pencil size={15} /> Edit
                     </button>
                     <button
                       type="button"
@@ -471,6 +600,103 @@ export default function ApprovalQueuePage() {
             ) : (
               <p className="text-gray-500">Not yet processed by AI. Run process cron or wait for automation.</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {editItem && (
+        <div className="fixed inset-0 z-[105] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => !savingEdit && setEditItem(null)} />
+          <div className="relative max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-[#1a2b4c]">Edit article content</h3>
+              <button type="button" onClick={() => !savingEdit && setEditItem(null)}><X size={20} /></button>
+            </div>
+            <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Edit the AI-generated content, then Save. Approve &amp; Publish afterwards to push it live.
+            </p>
+
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-semibold">Title (Hindi)</span>
+                  <input
+                    value={editForm.titleHi}
+                    onChange={(e) => setEditForm((p) => ({ ...p, titleHi: e.target.value }))}
+                    className="w-full rounded-lg border px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-semibold">Title (English)</span>
+                  <input
+                    value={editForm.titleEn}
+                    onChange={(e) => setEditForm((p) => ({ ...p, titleEn: e.target.value }))}
+                    className="w-full rounded-lg border px-3 py-2 text-sm"
+                  />
+                </label>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-semibold">Summary (Hindi)</span>
+                  <textarea
+                    value={editForm.summaryHi}
+                    onChange={(e) => setEditForm((p) => ({ ...p, summaryHi: e.target.value }))}
+                    rows={3}
+                    className="w-full rounded-lg border px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-semibold">Summary (English)</span>
+                  <textarea
+                    value={editForm.summaryEn}
+                    onChange={(e) => setEditForm((p) => ({ ...p, summaryEn: e.target.value }))}
+                    rows={3}
+                    className="w-full rounded-lg border px-3 py-2 text-sm"
+                  />
+                </label>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-semibold">Content (Hindi)</span>
+                  <textarea
+                    value={editForm.contentHi}
+                    onChange={(e) => setEditForm((p) => ({ ...p, contentHi: e.target.value }))}
+                    rows={10}
+                    className="w-full rounded-lg border px-3 py-2 font-mono text-xs"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-semibold">Content (English)</span>
+                  <textarea
+                    value={editForm.contentEn}
+                    onChange={(e) => setEditForm((p) => ({ ...p, contentEn: e.target.value }))}
+                    rows={10}
+                    className="w-full rounded-lg border px-3 py-2 font-mono text-xs"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setEditItem(null)}
+                disabled={savingEdit}
+                className="rounded-lg border px-5 py-2 text-sm font-medium disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveEdit}
+                disabled={savingEdit}
+                className="flex items-center gap-2 rounded-lg bg-[#1a2b4c] px-6 py-2 text-sm font-bold text-white disabled:opacity-50"
+              >
+                {savingEdit ? <LoadingSpinner size="sm" /> : "Save changes"}
+              </button>
+            </div>
           </div>
         </div>
       )}

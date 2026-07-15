@@ -41,6 +41,13 @@ export async function approveRawNews(rawNewsId: string) {
   return adminApiPost("/api/automation/approve", { rawNewsId });
 }
 
+export async function processRawNewsItemApi(rawNewsId: string) {
+  return adminApiPost<{ status: string; newsId?: string; message: string }>(
+    "/api/automation/process-item",
+    { rawNewsId }
+  );
+}
+
 export async function rejectRawNewsApi(rawNewsId: string, reason?: string) {
   return adminApiPost("/api/automation/reject", { rawNewsId, reason });
 }
