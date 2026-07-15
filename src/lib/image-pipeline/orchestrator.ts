@@ -58,6 +58,51 @@ async function hostSourceImage(
   };
 }
 
+/** Whether a URL is a usable remote https image we can reference directly (e.g. RSS/source thumbnail). */
+function isUsableRemoteImageUrl(url?: string): boolean {
+  if (!url) return false;
+  if (!/^https:\/\//i.test(url)) return false;
+  // Skip obvious non-image placeholders / tracking pixels.
+  if (/\.svg(\?|$)/i.test(url)) return false;
+  return true;
+}
+
+/**
+ * Last-resort result that references the source image URL directly (no re-hosting/optimizing).
+ * Used when server-side hosting/optimization or AI generation is unavailable, so the article keeps
+ * the image already shown in the queue instead of dropping to a logo fallback.
+ */
+function buildRawSourceResult(
+  input: ImagePipelineInput,
+  analysis: Awaited<ReturnType<typeof analyzeArticleSubject>>,
+  reason: string
+): ImagePipelineResult {
+  const url = input.originalImage;
+  return {
+    metadata: {
+      imageUrl: url,
+      imageOriginalUrl: url,
+      imageLargeUrl: url,
+      imageMediumUrl: url,
+      imageThumbnailUrl: url,
+      imageWebpUrl: url,
+      imageOrigin: "source",
+      imageStatus: "approved",
+      imageLicence: input.sourceTrustLevel === "high" ? "source_feed_permitted" : "source_feed_direct",
+      imageCredit: input.sourceName,
+      imageSourceName: input.sourceName,
+      imageSourcePageUrl: input.originalLink,
+      imageGeneratedAt: new Date().toISOString(),
+      imageAnalysis: analysis,
+      imagePrompt: reason,
+    },
+    generated: true,
+    source: "source",
+    strategy: analysis.imageStrategy,
+    requiresManualReview: false,
+  };
+}
+
 function buildFallbackResult(
   input: ImagePipelineInput,
   settings: Awaited<ReturnType<typeof getImagePipelineSettings>>,
@@ -89,6 +134,32 @@ export async function resolveArticleImage(input: ImagePipelineInput): Promise<Im
     return {
       metadata: {
         imageUrl: input.generatedImageUrl!,
+        imageOrigin: "cached",
+        imageStatus: "approved",
+        imageGeneratedAt: new Date().toISOString(),
+      },
+      generated: true,
+      source: "cached",
+      strategy: "licensed_source_image",
+      requiresManualReview: false,
+    };
+  }
+
+  // Reuse an already-associated remote image (e.g. the source thumbnail shown in the queue) when we
+  // are not going to synthesize a fresh AI image. This is what admins expect when re-publishing
+  // fetched/duplicate items: keep the image that is already there instead of a logo fallback.
+  if (
+    (input.skipOpenAiImage || input.preferHostedFirst) &&
+    isUsableRemoteImageUrl(input.generatedImageUrl)
+  ) {
+    return {
+      metadata: {
+        imageUrl: input.generatedImageUrl!,
+        imageOriginalUrl: input.generatedImageUrl!,
+        imageLargeUrl: input.generatedImageUrl!,
+        imageMediumUrl: input.generatedImageUrl!,
+        imageThumbnailUrl: input.generatedImageUrl!,
+        imageWebpUrl: input.generatedImageUrl!,
         imageOrigin: "cached",
         imageStatus: "approved",
         imageGeneratedAt: new Date().toISOString(),
@@ -241,6 +312,18 @@ export async function resolveArticleImage(input: ImagePipelineInput): Promise<Im
     }
 
     if (!metadata) {
+      // Server-side hosting/AI unavailable — keep the source image the admin already sees in the
+      // queue rather than dropping to a logo fallback.
+      if (isUsableRemoteImageUrl(input.originalImage)) {
+        await logImagePipelineAction({
+          type: "validate",
+          articleId: input.articleId,
+          rawNewsId: input.rawNewsId,
+          origin: "source",
+          message: "Hosting unavailable — using source image URL directly",
+        });
+        return buildRawSourceResult(input, analysis, "Source image used directly (hosting/optimization unavailable).");
+      }
       return buildFallbackResult(input, settings, analysis, "No permitted image found; using category fallback.");
     }
 
@@ -296,6 +379,18 @@ export async function resolveArticleImage(input: ImagePipelineInput): Promise<Im
 
     if (attempt >= maxAttempts) break;
     analysis = { ...analysis, imageStrategy: "neutral_illustration" };
+  }
+
+  // Prefer the source image the admin already sees in the queue over a logo fallback.
+  if (isUsableRemoteImageUrl(input.originalImage)) {
+    await logImagePipelineAction({
+      type: "validate",
+      articleId: input.articleId,
+      rawNewsId: input.rawNewsId,
+      origin: "source",
+      message: "Validation failed — using source image URL directly",
+    });
+    return buildRawSourceResult(input, analysis, "Source image used directly after validation retries.");
   }
 
   return buildFallbackResult(input, settings, analysis, "Validation failed after retries; category fallback assigned.");
