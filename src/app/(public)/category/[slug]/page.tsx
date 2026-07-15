@@ -9,6 +9,7 @@ import NewsCard from "@/components/news/NewsCard";
 import PopularNews from "@/components/news/PopularNews";
 import AdSlotRenderer from "@/components/ads/AdSlotRenderer";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import SectionHeading from "@/components/ui/SectionHeading";
 import Link from "next/link";
 import RajyaCategorySections from "@/components/location/RajyaCategorySections";
 
@@ -50,15 +51,15 @@ export default function CategoryPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-12">
+      <div className="mx-auto max-w-7xl px-4 py-6">
         <LoadingSpinner size="lg" />
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
-      <nav className="mb-4 text-sm text-gray-500">
+    <div className="mx-auto max-w-7xl px-4 py-4">
+      <nav className="mb-3 text-sm text-gray-500">
         <Link href="/" className="hover:text-[#c41e20]">
           {language === "hi" ? "होम" : "Home"}
         </Link>
@@ -66,9 +67,9 @@ export default function CategoryPage() {
         <span className="text-[#1a2b4c] font-medium">{categoryName}</span>
       </nav>
 
-      <h1 className="mb-6 text-3xl font-bold text-[#1a2b4c]">{categoryName}</h1>
+      <SectionHeading as="h1" size="text-3xl" className="mb-4">{categoryName}</SectionHeading>
 
-      <div className="grid gap-8 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3">
         <section className="lg:col-span-2">
           {slug === "rajya" ? (
             <RajyaCategorySections />

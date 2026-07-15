@@ -3,6 +3,7 @@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { NewsArticle } from "@/types";
 import { getArticleTitle } from "@/lib/utils";
+import SectionHeading from "@/components/ui/SectionHeading";
 import Link from "next/link";
 
 interface PopularNewsProps {
@@ -16,9 +17,9 @@ export default function PopularNews({ articles }: PopularNewsProps) {
 
   return (
     <aside className="rounded-xl bg-white p-5 shadow-sm">
-      <h2 className="mb-4 border-b-2 border-[#c41e20] pb-2 text-lg font-bold text-[#1a2b4c]">
+      <SectionHeading size="text-lg" className="mb-4">
         {t.popularNews}
-      </h2>
+      </SectionHeading>
       <ol className="space-y-3">
         {articles.map((article, index) => (
           <li key={article.id}>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import NewsArticleImage from "@/components/news/NewsArticleImage";
+import SectionHeading from "@/components/ui/SectionHeading";
 import Link from "next/link";
 import { Share2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -207,7 +208,7 @@ export default function ArticleClient() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-12">
+      <div className="mx-auto max-w-7xl px-4 py-6">
         <LoadingSpinner size="lg" />
       </div>
     );
@@ -215,7 +216,7 @@ export default function ArticleClient() {
 
   if (notFound || !article) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-12 text-center">
+      <div className="mx-auto max-w-7xl px-4 py-6 text-center">
         <h1 className="text-2xl font-bold text-[#1a2b4c]">Article Not Found</h1>
         <p className="mt-2 text-gray-500">
           {language === "hi" ? "यह खबर उपलब्ध नहीं है।" : "This article is not available."}
@@ -248,26 +249,26 @@ export default function ArticleClient() {
     {
       name: "Facebook",
       Icon: FacebookIcon,
-      className: "hover:bg-[#1877F2] hover:text-white hover:border-[#1877F2]",
+      color: "#1877F2",
       url: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`,
     },
     {
       name: "X",
       Icon: XIcon,
-      className: "hover:bg-black hover:text-white hover:border-black",
+      color: "#000000",
       url: `https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(title)}`,
     },
     {
       name: "WhatsApp",
       Icon: WhatsAppIcon,
-      className: "hover:bg-[#25D366] hover:text-white hover:border-[#25D366]",
+      color: "#25D366",
       url: `https://api.whatsapp.com/send?text=${encodeURIComponent(`${title}\n${shareUrl}`)}`,
     },
   ];
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
-      <nav className="mb-4 text-sm text-gray-500">
+    <div className="mx-auto max-w-7xl px-4 py-4">
+      <nav className="mb-3 text-sm text-gray-500">
         <Link href="/" className="hover:text-[#c41e20]">
           {t.home}
         </Link>
@@ -282,9 +283,9 @@ export default function ArticleClient() {
         <span className="line-clamp-1 text-[#1a2b4c]">{title}</span>
       </nav>
 
-      <div className="grid gap-8 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3">
         <article className="lg:col-span-2">
-          <div className="rounded-xl bg-white p-6 shadow-sm md:p-8">
+          <div className="rounded-xl bg-white p-5 shadow-sm md:p-6">
             <span className="inline-block rounded bg-[#c41e20] px-2 py-0.5 text-xs font-bold uppercase text-white">
               {categoryName}
             </span>
@@ -397,7 +398,8 @@ export default function ArticleClient() {
                   href={link.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-[#1a2b4c] transition-colors ${link.className}`}
+                  style={{ backgroundColor: link.color }}
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-white shadow-sm transition hover:opacity-90"
                   aria-label={`Share on ${link.name}`}
                 >
                   <link.Icon size={17} />
@@ -476,7 +478,7 @@ export default function ArticleClient() {
 
           {related.length > 0 && (
             <section className="mt-8">
-              <h2 className="mb-4 text-xl font-bold text-[#1a2b4c]">{t.relatedNews}</h2>
+              <SectionHeading className="mb-4">{t.relatedNews}</SectionHeading>
               <div className="grid gap-4 sm:grid-cols-2">
                 {related.map((item) => (
                   <NewsCard key={item.id} article={item} variant="compact" />
@@ -489,9 +491,9 @@ export default function ArticleClient() {
         <aside className="space-y-6">
           <AdSlotRenderer location="sidebar" />
           <div className="rounded-xl bg-white p-5 shadow-sm">
-            <h2 className="mb-4 border-b-2 border-[#c41e20] pb-2 text-lg font-bold text-[#1a2b4c]">
+            <SectionHeading size="text-lg" className="mb-4">
               {t.latestNews}
-            </h2>
+            </SectionHeading>
             {latest.map((item) => (
               <NewsCard key={item.id} article={item} variant="hero-side" />
             ))}

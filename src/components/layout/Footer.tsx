@@ -26,8 +26,8 @@ export default function Footer() {
   return (
     <footer className="mt-auto bg-[#1a2b4c] text-white">
       <AdSlotRenderer location="footer" className="mx-auto max-w-7xl px-4 py-2" />
-      <div className="mx-auto max-w-7xl px-4 py-10">
-        <div className="grid gap-8 md:grid-cols-3">
+      <div className="mx-auto max-w-7xl px-4 py-6">
+        <div className="grid gap-6 md:grid-cols-3">
           <div>
             <h3 className="text-xl font-bold">
               <span className="text-white">NEWS </span>
@@ -77,7 +77,7 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-8 border-t border-white/10 pt-6 text-center text-sm text-gray-400">
+        <div className="mt-6 border-t border-white/10 pt-4 text-center text-sm text-gray-400">
           <div className="mb-3 flex flex-wrap justify-center gap-4">
             <Link href="/privacy-policy" className="hover:text-white transition-colors">
               {language === "hi" ? "गोपनीयता नीति" : "Privacy Policy"}

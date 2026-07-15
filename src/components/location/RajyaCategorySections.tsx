@@ -13,6 +13,7 @@ import { getAllStates, getStateById } from "@/lib/location/service";
 import { NewsArticle } from "@/types";
 import NewsCard from "@/components/news/NewsCard";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import SectionHeading from "@/components/ui/SectionHeading";
 import Link from "next/link";
 
 export default function RajyaCategorySections() {
@@ -133,9 +134,9 @@ export default function RajyaCategorySections() {
 
       {sections.map((section) => (
         <section key={section.key}>
-          <h2 className="mb-4 text-lg font-bold text-[#1a2b4c]">
+          <SectionHeading size="text-lg" className="mb-4">
             {language === "hi" ? section.titleHi : section.titleEn}
-          </h2>
+          </SectionHeading>
           <div className="rounded-xl bg-white p-4 shadow-sm">
             {section.articles.map((article) => (
               <NewsCard key={article.id} article={article} variant="horizontal" />

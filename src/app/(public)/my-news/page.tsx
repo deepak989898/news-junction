@@ -10,6 +10,7 @@ import { fetchDistrictsByState, fetchCitiesByState } from "@/lib/location/client
 import NewsCard from "@/components/news/NewsCard";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import LocationSelector from "@/components/location/LocationSelector";
+import SectionHeading from "@/components/ui/SectionHeading";
 
 export default function MyNewsPage() {
   const { language } = useLanguage();
@@ -55,11 +56,11 @@ export default function MyNewsPage() {
   }, [location, loaded, language]);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
+    <div className="mx-auto max-w-7xl px-4 py-4">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-3xl font-bold text-[#1a2b4c]">
+        <SectionHeading as="h1" size="text-3xl">
           {language === "hi" ? "मेरी खबरें" : "My News"}
-        </h1>
+        </SectionHeading>
         <LocationSelector />
       </div>
 
@@ -86,9 +87,9 @@ export default function MyNewsPage() {
         <div className="space-y-8">
           {sections.map((section) => (
             <section key={section.id}>
-              <h2 className="mb-3 text-lg font-bold text-[#1a2b4c]">
+              <SectionHeading size="text-lg" bar={false} className="mb-3">
                 {language === "hi" ? section.titleHi : section.titleEn}
-              </h2>
+              </SectionHeading>
               {section.articles.length > 0 ? (
                 <div className="rounded-xl bg-white p-4 shadow-sm">
                   {section.articles.map((a) => (

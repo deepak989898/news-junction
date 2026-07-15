@@ -7,6 +7,7 @@ import { getNewsByCityId, getNewsByDistrictId, getNewsByStateId, getNationalIndi
 import { NewsArticle } from "@/types";
 import NewsCard from "@/components/news/NewsCard";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import SectionHeading from "@/components/ui/SectionHeading";
 import PopularNews from "@/components/news/PopularNews";
 import { getPopularNews } from "@/firebase/firestore";
 
@@ -51,7 +52,7 @@ export default function GeoNewsListPage({
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-12">
+      <div className="mx-auto max-w-7xl px-4 py-6">
         <LoadingSpinner size="lg" />
       </div>
     );
@@ -61,8 +62,8 @@ export default function GeoNewsListPage({
   const thin = articles.length < 3;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
-      <nav className="mb-4 text-sm text-gray-500" aria-label="Breadcrumb">
+    <div className="mx-auto max-w-7xl px-4 py-4">
+      <nav className="mb-3 text-sm text-gray-500" aria-label="Breadcrumb">
         {breadcrumbs.map((b, i) => (
           <span key={i}>
             {i > 0 && <span className="mx-2">/</span>}
@@ -79,9 +80,9 @@ export default function GeoNewsListPage({
         ))}
       </nav>
 
-      <h1 className="mb-6 text-3xl font-bold text-[#1a2b4c]">{title}</h1>
+      <SectionHeading as="h1" size="text-3xl" className="mb-4">{title}</SectionHeading>
 
-      <div className="grid gap-8 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3">
         <section className="lg:col-span-2">
           {articles.length > 0 ? (
             <div className="rounded-xl bg-white p-4 shadow-sm">

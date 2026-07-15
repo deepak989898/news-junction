@@ -4,21 +4,22 @@ import Link from "next/link";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getAllStates } from "@/lib/location/service";
 import LocationSelector from "@/components/location/LocationSelector";
+import SectionHeading from "@/components/ui/SectionHeading";
 
 export default function LocalDiscoveryPage() {
   const { language } = useLanguage();
   const states = getAllStates();
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-3xl font-bold text-[#1a2b4c]">
+    <div className="mx-auto max-w-7xl px-4 py-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+        <SectionHeading as="h1" size="text-3xl">
           {language === "hi" ? "स्थानीय समाचार" : "Local News"}
-        </h1>
+        </SectionHeading>
         <LocationSelector />
       </div>
 
-      <p className="mb-6 text-gray-600">
+      <p className="mb-4 text-gray-600">
         {language === "hi"
           ? "राज्य, जिला या शहर चुनकर स्थानीय खबरें पढ़ें।"
           : "Browse news by state, district or city."}

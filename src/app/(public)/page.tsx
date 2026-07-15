@@ -18,6 +18,7 @@ import {
 } from "@/firebase/firestore";
 import { NewsArticle } from "@/types";
 import LocalNewsFeed from "@/components/location/LocalNewsFeed";
+import SectionHeading from "@/components/ui/SectionHeading";
 
 export default function HomePage() {
   const { t } = useLanguage();
@@ -72,22 +73,31 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-12">
+      <div className="mx-auto max-w-7xl px-4 py-6">
         <LoadingSpinner size="lg" />
       </div>
     );
   }
 
-  const mainFeatured = featured[0] || latest[0] || null;
-  const sideArticles = featured.length > 1 ? featured.slice(1) : latest.slice(1, 4);
+  const heroPool: NewsArticle[] = [];
+  const heroSeen = new Set<string>();
+  for (const a of [...featured, ...latest]) {
+    if (a && !heroSeen.has(a.id)) {
+      heroSeen.add(a.id);
+      heroPool.push(a);
+    }
+  }
+  const heroArticles = heroPool.slice(0, 5);
+  const heroIds = new Set(heroArticles.map((a) => a.id));
+  const sideArticles = latest.filter((a) => !heroIds.has(a.id)).slice(0, 4);
 
   return (
     <>
       <BreakingTicker />
 
-      <div className="mx-auto max-w-7xl px-4 py-6">
-        {mainFeatured ? (
-          <FeaturedNews featured={mainFeatured} sideArticles={sideArticles} />
+      <div className="mx-auto max-w-7xl px-4 py-4">
+        {heroArticles.length > 0 ? (
+          <FeaturedNews articles={heroArticles} sideArticles={sideArticles} />
         ) : (
           <div className="rounded-xl bg-white p-12 text-center shadow-sm">
             <h2 className="text-xl font-bold text-[#1a2b4c]">Welcome to News Junction</h2>
@@ -100,12 +110,8 @@ export default function HomePage() {
         <LocalNewsFeed />
 
         {trending.length > 0 && (
-          <section className="mt-10">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-[#1a2b4c] border-b-2 border-[#c41e20] pb-1 inline-block">
-                {t.trendingNews}
-              </h2>
-            </div>
+          <section className="mt-6">
+            <SectionHeading className="mb-4">{t.trendingNews}</SectionHeading>
             <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
               {trending.map((article) => (
                 <NewsCard key={article.id} article={article} variant="compact" />
@@ -115,12 +121,8 @@ export default function HomePage() {
         )}
 
         {user && recommended.length > 0 && (
-          <section className="mt-10">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-[#1a2b4c] border-b-2 border-[#c41e20] pb-1 inline-block">
-                Recommended for You
-              </h2>
-            </div>
+          <section className="mt-6">
+            <SectionHeading className="mb-4">Recommended for You</SectionHeading>
             <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3">
               {recommended.map((article) => (
                 <NewsCard key={article.id} article={article} />
@@ -129,11 +131,9 @@ export default function HomePage() {
           </section>
         )}
 
-        <div className="mt-10 grid gap-8 lg:grid-cols-3">
+        <div className="mt-6 grid gap-6 lg:grid-cols-3">
           <section className="lg:col-span-2">
-            <h2 className="mb-4 text-xl font-bold text-[#1a2b4c] border-b-2 border-[#c41e20] pb-1 inline-block">
-              {t.latestNews}
-            </h2>
+            <SectionHeading className="mb-4">{t.latestNews}</SectionHeading>
             {latest.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 {latest.map((article) => (

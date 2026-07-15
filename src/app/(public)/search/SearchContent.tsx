@@ -8,6 +8,7 @@ import { searchNews } from "@/firebase/firestore";
 import { NewsArticle } from "@/types";
 import NewsCard from "@/components/news/NewsCard";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import SectionHeading from "@/components/ui/SectionHeading";
 
 export default function SearchPageContent() {
   const { t } = useLanguage();
@@ -47,8 +48,8 @@ export default function SearchPageContent() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
-      <h1 className="mb-6 text-2xl font-bold text-[#1a2b4c]">{t.search}</h1>
+    <div className="mx-auto max-w-7xl px-4 py-4">
+      <SectionHeading as="h1" size="text-2xl" className="mb-6">{t.search}</SectionHeading>
 
       <form onSubmit={handleSubmit} className="mb-8">
         <div className="relative">

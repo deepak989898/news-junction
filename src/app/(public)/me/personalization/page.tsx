@@ -99,7 +99,7 @@ export default function PersonalizationPage() {
   if (loading || busy) return <LoadingSpinner size="lg" />;
   if (!user) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-10">
+      <div className="mx-auto max-w-3xl px-4 py-6">
         <h1 className="text-2xl font-bold text-[#1a2b4c]">AI Personalization</h1>
         <p className="mt-2 text-gray-600">Login to use bookmarks, follows, recommendations, and personalized digests.</p>
       </div>
@@ -107,7 +107,7 @@ export default function PersonalizationPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
+    <div className="mx-auto max-w-6xl px-4 py-5">
       <h1 className="text-2xl font-bold text-[#1a2b4c]">Personalization Settings & Experience</h1>
       <p className="mt-1 text-sm text-gray-600">
         Personalization is optional and based on explicit actions and preferences only.

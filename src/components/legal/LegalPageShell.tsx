@@ -10,8 +10,8 @@ export default function LegalPageShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10">
-      <nav className="mb-6 text-sm text-gray-500">
+    <div className="mx-auto max-w-3xl px-4 py-6">
+      <nav className="mb-4 text-sm text-gray-500">
         <Link href="/" className="hover:text-[#1a2b4c]">
           Home
         </Link>
@@ -19,10 +19,10 @@ export default function LegalPageShell({
         <span className="text-gray-700">{title}</span>
       </nav>
 
-      <article className="rounded-xl bg-white p-6 shadow-sm md:p-10">
+      <article className="rounded-xl bg-white p-5 shadow-sm md:p-8">
         <h1 className="text-3xl font-bold text-[#1a2b4c]">{title}</h1>
         <p className="mt-2 text-sm text-gray-500">Last updated: {updated}</p>
-        <div className="prose prose-sm mt-8 max-w-none text-gray-700 prose-headings:text-[#1a2b4c] prose-a:text-[#c41e20]">
+        <div className="prose prose-sm mt-5 max-w-none text-gray-700 prose-headings:text-[#1a2b4c] prose-a:text-[#c41e20]">
           {children}
         </div>
       </article>

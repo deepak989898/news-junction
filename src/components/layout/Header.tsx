@@ -22,7 +22,7 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 bg-white shadow-sm">
       <AdSlotRenderer location="header" className="mx-auto max-w-7xl px-4 py-1" />
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-2">
         <div className="flex items-center gap-3">
           <button
             className="rounded-lg p-2 text-[#1a2b4c] hover:bg-gray-100 lg:hidden"

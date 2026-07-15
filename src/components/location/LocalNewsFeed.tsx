@@ -6,6 +6,7 @@ import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePreferredLocation } from "@/contexts/LocationContext";
 import { getPersonalizedLocalFeed, LocalFeedSectionResult } from "@/firebase/firestore";
+import SectionHeading from "@/components/ui/SectionHeading";
 import Link from "next/link";
 
 export default function LocalNewsFeed() {
@@ -45,7 +46,7 @@ export default function LocalNewsFeed() {
 
   if (loading) {
     return (
-      <section className="mt-10">
+      <section className="mt-6">
         <LoadingSpinner />
       </section>
     );
@@ -54,11 +55,11 @@ export default function LocalNewsFeed() {
   if (sections.length === 0) return null;
 
   return (
-    <div className="mt-10 space-y-10">
+    <div className="mt-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-[#1a2b4c] border-b-2 border-[#c41e20] pb-1 inline-block">
+        <SectionHeading>
           {language === "hi" ? "आपके क्षेत्र की खबरें" : "News from your area"}
-        </h2>
+        </SectionHeading>
         <Link href="/my-news" className="text-sm text-[#c41e20] hover:underline">
           {language === "hi" ? "सभी देखें" : "View all"}
         </Link>
@@ -66,14 +67,14 @@ export default function LocalNewsFeed() {
 
       {sections.map((section) => (
         <section key={section.id}>
-          <h3 className="mb-3 text-lg font-semibold text-[#1a2b4c]">
+          <SectionHeading as="h3" size="text-lg" bar={false} className="mb-3">
             {language === "hi" ? section.titleHi : section.titleEn}
             {section.isFallback && (
               <span className="ml-2 text-xs font-normal text-gray-500">
                 ({language === "hi" ? "फ़ॉलबैक" : "fallback"})
               </span>
             )}
-          </h3>
+          </SectionHeading>
           {section.emptyMessageHi && section.articles.length === 0 ? (
             <p className="rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
               {language === "hi" ? section.emptyMessageHi : section.emptyMessageEn}
