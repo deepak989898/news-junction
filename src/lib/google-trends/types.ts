@@ -46,6 +46,20 @@ export interface GoogleTrendsSettings {
   highRiskAlwaysApproval: boolean;
   /** When enabled, published trend articles are auto-posted to connected social accounts (Facebook, etc.) immediately. */
   autoPostToSocial: boolean;
+  /**
+   * Admin-controlled daily schedule (for external cron like cron-job.org).
+   * When enabled, the /api/cron/google-trends-cycle endpoint only starts a fresh
+   * Fetch → Research → Generate → Publish cycle at these times.
+   */
+  scheduleEnabled: boolean;
+  /** List of "HH:MM" (24h) times, interpreted in scheduleTimezone, when a cycle should run. */
+  scheduleTimes: string[];
+  /** IANA timezone used to interpret scheduleTimes. Default Asia/Kolkata (IST). */
+  scheduleTimezone: string;
+  /** Dedup key of the last scheduled slot that started (e.g. "2026-07-15T08:00"). */
+  lastScheduledSlot?: string | null;
+  /** ISO timestamp set while a cycle is running (background lock to avoid overlap). */
+  cycleRunningAt?: string | null;
   sourceResearchTimeoutMs: number;
   aiRetryLimit: number;
   trendCooldownHours: number;

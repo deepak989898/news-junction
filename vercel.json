@@ -30,6 +30,9 @@
     "src/app/api/cron/publish-trend-articles/route.ts": {
       "maxDuration": 60
     },
+    "src/app/api/cron/google-trends-cycle/route.ts": {
+      "maxDuration": 120
+    },
     "src/app/api/ai/social/publish-now/route.ts": {
       "maxDuration": 60
     },

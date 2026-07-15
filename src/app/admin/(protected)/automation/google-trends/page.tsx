@@ -5,7 +5,7 @@ import AdminTopbar from "@/components/layout/AdminTopbar";
 import RoleGuard from "@/components/admin/RoleGuard";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import toast from "react-hot-toast";
-import { RefreshCw, Play, Check, X, Search, Loader2, Trash2, Eye, FilePlus2, Settings2, Zap, ChevronDown, ChevronUp } from "lucide-react";
+import { RefreshCw, Play, Check, X, Search, Loader2, Trash2, Eye, FilePlus2, Settings2, Zap, ChevronDown, ChevronUp, Clock, Copy } from "lucide-react";
 import Link from "next/link";
 
 interface TrendRow {
@@ -45,6 +45,10 @@ interface Settings {
   autoPublishMediumRisk: boolean;
   highRiskAlwaysApproval: boolean;
   autoPostToSocial: boolean;
+  scheduleEnabled: boolean;
+  scheduleTimes: string[];
+  scheduleTimezone: string;
+  lastScheduledSlot?: string | null;
   lastFetchRun: string | null;
   lastResearchRun?: string | null;
   lastProcessRun?: string | null;
@@ -70,6 +74,9 @@ type SettingsPatch = Partial<
     | "autoPublishMediumRisk"
     | "highRiskAlwaysApproval"
     | "autoPostToSocial"
+    | "scheduleEnabled"
+    | "scheduleTimes"
+    | "scheduleTimezone"
     | "maximumTopicsPerRun"
     | "maximumArticlesPerDay"
     | "maximumArticlesPerCategoryPerDay"
@@ -182,6 +189,140 @@ function NumberRow({
         }}
         className="w-20 rounded-lg border px-2 py-1 text-sm disabled:opacity-60"
       />
+    </div>
+  );
+}
+
+const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+function ScheduleCard({
+  settings,
+  disabled,
+  onSave,
+}: {
+  settings: Settings;
+  disabled?: boolean;
+  onSave: (patch: SettingsPatch) => void | Promise<void>;
+}) {
+  const [draft, setDraft] = useState<string>((settings.scheduleTimes || []).join(", "));
+  const [cronUrl, setCronUrl] = useState<string>("");
+
+  useEffect(() => {
+    setDraft((settings.scheduleTimes || []).join(", "));
+  }, [settings.scheduleTimes]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setCronUrl(`${window.location.origin}/api/cron/google-trends-cycle?cron_secret=YOUR_CRON_SECRET`);
+    }
+  }, []);
+
+  const saveTimes = () => {
+    const parsed = Array.from(
+      new Set(
+        draft
+          .split(/[,\n]/)
+          .map((t) => t.trim())
+          .filter(Boolean)
+      )
+    );
+    const invalid = parsed.filter((t) => !TIME_RE.test(t));
+    if (invalid.length) {
+      toast.error(`Invalid time(s): ${invalid.join(", ")}. Use 24h HH:MM (e.g. 09:00, 18:30).`);
+      return;
+    }
+    const sorted = parsed.sort();
+    setDraft(sorted.join(", "));
+    onSave({ scheduleTimes: sorted });
+  };
+
+  const copyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(cronUrl);
+      toast.success("Cron URL copied");
+    } catch {
+      toast.error("Copy failed — select and copy manually");
+    }
+  };
+
+  return (
+    <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50/40 p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <Clock size={15} className="text-blue-700" />
+        <p className="text-sm font-semibold text-[#1a2b4c]">Automatic schedule (your times)</p>
+      </div>
+
+      <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-2.5">
+        <span className="text-sm font-medium text-[#1a2b4c]">Run on my schedule</span>
+        <input
+          type="checkbox"
+          checked={settings.scheduleEnabled}
+          disabled={disabled}
+          onChange={(e) => onSave({ scheduleEnabled: e.target.checked })}
+          className="h-4 w-4 accent-green-600"
+        />
+      </label>
+
+      <div className="mt-3">
+        <label className="mb-1 block text-xs font-medium text-gray-600">
+          Fetch &amp; publish times (IST, 24h — comma separated)
+        </label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={draft}
+            disabled={disabled || !settings.scheduleEnabled}
+            placeholder="09:00, 18:00"
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") saveTimes();
+            }}
+            className="flex-1 rounded-lg border px-3 py-1.5 text-sm disabled:opacity-60"
+          />
+          <button
+            type="button"
+            onClick={saveTimes}
+            disabled={disabled || !settings.scheduleEnabled}
+            className="rounded-lg bg-[#1a2b4c] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#24365c] disabled:opacity-60"
+          >
+            Save times
+          </button>
+        </div>
+        <p className="mt-1 text-xs text-gray-500">
+          At each time, the site auto-fetches trends, researches sources, generates articles + images and publishes
+          (per your auto-publish toggles above).
+        </p>
+      </div>
+
+      <div className="mt-3 rounded-lg bg-white p-2.5">
+        <p className="text-xs font-semibold text-gray-700">One-time setup in cron-job.org</p>
+        <p className="mt-1 text-xs text-gray-600">
+          Create a cron job that requests this URL <strong>every 5 minutes</strong>. It returns instantly (no timeout)
+          and does the work in the background. Replace <code>YOUR_CRON_SECRET</code> with your existing secret.
+        </p>
+        <div className="mt-2 flex items-center gap-2">
+          <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-gray-100 px-2 py-1 text-[11px] text-gray-700">
+            {cronUrl || "…"}
+          </code>
+          <button
+            type="button"
+            onClick={copyUrl}
+            className="flex items-center gap-1 rounded-lg border px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+          >
+            <Copy size={12} /> Copy
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-1 text-xs text-gray-600">
+        <span>Last fetch: {settings.lastFetchRun ? new Date(settings.lastFetchRun).toLocaleString() : "Never"}</span>
+        <span>Last generate: {settings.lastProcessRun ? new Date(settings.lastProcessRun).toLocaleString() : "Never"}</span>
+        <span>Last publish: {settings.lastPublishRun ? new Date(settings.lastPublishRun).toLocaleString() : "Never"}</span>
+        <span>Last scheduled slot: {settings.lastScheduledSlot || "—"}</span>
+      </div>
+      <p className="mt-2 text-xs text-gray-500">
+        Prefer instant? Use <strong>Run Automation Now</strong> at the top to trigger a full cycle immediately.
+      </p>
     </div>
   );
 }
@@ -830,17 +971,11 @@ export default function GoogleTrendsAdminPage() {
                     />
                   </div>
 
-                  <div className="mt-4 rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
-                    <p className="font-semibold text-gray-700">Automatic schedule (daily)</p>
-                    <p className="mt-1">Fetch → Research → Generate → Publish run on server crons every day.</p>
-                    <div className="mt-2 grid grid-cols-2 gap-1">
-                      <span>Last fetch: {settings.lastFetchRun ? new Date(settings.lastFetchRun).toLocaleString() : "Never"}</span>
-                      <span>Last research: {settings.lastResearchRun ? new Date(settings.lastResearchRun).toLocaleString() : "Never"}</span>
-                      <span>Last generate: {settings.lastProcessRun ? new Date(settings.lastProcessRun).toLocaleString() : "Never"}</span>
-                      <span>Last publish: {settings.lastPublishRun ? new Date(settings.lastPublishRun).toLocaleString() : "Never"}</span>
-                    </div>
-                    <p className="mt-2">Use <strong>Run Automation Now</strong> to trigger the whole cycle immediately.</p>
-                  </div>
+                  <ScheduleCard
+                    settings={settings}
+                    disabled={!!busy || !settings.enabled}
+                    onSave={(patch) => saveSettings(patch, { silent: true })}
+                  />
                 </div>
               </div>
             </div>
