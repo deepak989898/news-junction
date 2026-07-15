@@ -27,6 +27,15 @@ function stripTags(html: string): string {
   return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
+/**
+ * Remove the auto-appended "Related articles" (nj-internal-links) block from the
+ * story HTML. It is shown in its own always-visible section instead, so it must
+ * not get trapped inside the collapsible Full Story (where "Show less" hides it).
+ */
+function stripInternalLinks(html: string): string {
+  return html.replace(/<section class="nj-internal-links"[\s\S]*?<\/section>/gi, "").trim();
+}
+
 function GradientHeading({
   label,
   accentClass,
@@ -51,7 +60,7 @@ export default function ArticleBodySections({ summary, content }: Props) {
   const [showFull, setShowFull] = useState(false);
 
   const shortHtml = useMemo(() => toParagraphHtml(summary), [summary]);
-  const fullHtml = useMemo(() => toParagraphHtml(content), [content]);
+  const fullHtml = useMemo(() => stripInternalLinks(toParagraphHtml(content)), [content]);
 
   const fullPlain = stripTags(fullHtml);
   const shortPlain = stripTags(shortHtml);

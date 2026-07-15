@@ -116,15 +116,16 @@ export default function FeaturedNews({ articles, sideArticles }: FeaturedNewsPro
             >
               <ChevronRight size={20} />
             </button>
-            <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
+            <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/35 px-2.5 py-1.5 backdrop-blur-sm">
               {slides.map((_, i) => (
                 <button
                   key={i}
                   type="button"
                   onClick={() => go(i)}
                   aria-label={`Go to slide ${i + 1}`}
+                  aria-current={i === index}
                   className={`h-2 rounded-full transition-all ${
-                    i === index ? "w-6 bg-white" : "w-2 bg-white/50 hover:bg-white/80"
+                    i === index ? "w-6 bg-white" : "w-2 bg-white/60 hover:bg-white/90"
                   }`}
                 />
               ))}

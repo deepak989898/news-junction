@@ -109,23 +109,12 @@ export default function RajyaCategorySections() {
 
   return (
     <div className="space-y-8">
-      <div className="rounded-lg bg-blue-50 p-4 text-sm text-[#1a2b4c]">
-        {language === "hi"
-          ? "राज्य पेज स्थानीय और राज्य-स्तरीय खबरों के लिए है — विषय श्रेणी (खेल, व्यापार आदि) अलग रहती है।"
-          : "The State page shows geo-based news — subject categories (Sports, Business, etc.) stay separate."}
-        {!location && (
-          <span className="ml-1 font-medium">
-            {language === "hi" ? "अपना राज्य चुनने के लिए हेडर में क्षेत्र चुनें।" : "Select your area from the header."}
-          </span>
-        )}
-      </div>
-
       <div className="flex flex-wrap gap-2">
         {majorStates.map((s) => (
           <Link
             key={s.id}
             href={`/state/${s.slug}`}
-            className="rounded-full border border-[#1a2b4c]/20 px-3 py-1 text-xs hover:bg-[#1a2b4c]/5"
+            className="rounded-full border border-[#1a2b4c]/25 px-3 py-1 text-xs font-semibold text-[#1a2b4c] transition-colors hover:border-[#c41e20] hover:bg-[#c41e20] hover:text-white"
           >
             {language === "hi" ? s.nameHi : s.nameEn}
           </Link>

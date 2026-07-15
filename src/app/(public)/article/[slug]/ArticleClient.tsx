@@ -413,10 +413,10 @@ export default function ArticleClient() {
 
             {(article.seoInternalLinks || []).length > 0 && (
               <section className="mt-6 rounded-lg border border-gray-100 bg-gray-50 p-4">
-                <h2 className="text-lg font-semibold text-[#1a2b4c]">
-                  {language === "hi" ? "संबंधित आंतरिक लिंक" : "Related Internal Links"}
-                </h2>
-                <ul className="mt-3 list-inside list-disc space-y-1 text-sm">
+                <SectionHeading as="h2" size="text-lg" bar={false} className="mb-3">
+                  {language === "hi" ? "संबंधित लेख" : "Related articles"}
+                </SectionHeading>
+                <ul className="list-inside list-disc space-y-1 text-sm">
                   {(article.seoInternalLinks || []).slice(0, 6).map((link) => (
                     <li key={`${link.suggestedArticleId}-${link.slug}`}>
                       <Link href={`/article/${link.slug}`} className="text-[#c41e20] hover:underline">
