@@ -23,7 +23,14 @@ service cloud.firestore {
 
     match /news/{newsId} {
       allow read: if resource.data.status == 'published' || isAdmin();
-      allow create, update: if isAdmin();
+      allow create: if isAdmin();
+      // Admins can fully edit. Anyone may bump the public view counter on a
+      // published article, but ONLY the `views` field — nothing else.
+      allow update: if isAdmin()
+        || (
+          resource.data.status == 'published' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views'])
+        );
       allow delete: if isSuperAdmin();
     }
 
@@ -344,7 +351,13 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow create: if isAuthenticated() && request.auth.uid == userId;
+      // A signed-in user may create only their own doc, and may NOT grant
+      // themselves an admin role. Admin roles are set via the Admin SDK
+      // (server) or by an existing super_admin — never by self-signup.
+      allow create: if isAuthenticated() &&
+        request.auth.uid == userId &&
+        (!('role' in request.resource.data) ||
+          !(request.resource.data.role in ['super_admin', 'editor']));
       allow update, delete: if isSuperAdmin();
     }
 
@@ -361,8 +374,16 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && resource.data.uid == request.auth.uid;
     }
 
-     match /{document=**} {
-      allow read, write: if request.time < timestamp.date(2029, 5, 15);
+    // Mobile push registration — a user only manages their own token doc.
+    match /userPushTokens/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow create, update, delete: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Deny everything not explicitly matched above (no more open catch-all).
+    // Server code uses the Admin SDK, which bypasses these rules entirely.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

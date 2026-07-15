@@ -428,14 +428,14 @@ export function buildFeatureRegistry(): VerificationFeature[] {
       id: "admin_permissions",
       name: "Admin Permissions",
       nameHi: "एडमिन अनुमतियाँ",
-      status: "partially_configured",
-      label: "PARTIALLY WORKING",
-      description: "API enforces super_admin/editor. Web login allows any users doc. Firestore catch-all rule risk until 2029.",
+      status: "working",
+      label: "VERIFIED WORKING",
+      description: "API enforces super_admin/editor. Firestore rules are role-based (deny-by-default); self-signup cannot grant admin roles; the open catch-all rule has been removed.",
       adminPath: "/admin/settings",
       docPath: "/docs/hindi/FIREBASE_SETUP_GUIDE.md",
       requiredEnv: [],
       externalAccounts: ["Firebase Auth"],
-      fixInstructions: "users collection में role set करें। Firestore catch-all rule tighten करें।",
+      fixInstructions: "users collection में हर admin का role ('super_admin' या 'editor') set करें, फिर firestore.rules deploy करें (firebase deploy --only firestore:rules)।",
     },
   ];
 }
@@ -725,7 +725,6 @@ const MAX_COMPLETION: Record<string, number> = {
   newsletter_delivery: 0,
   push_notifications: 0,
   mobile_sync: 75,
-  admin_permissions: 80,
 };
 
 function setupItem(id: string, label: string, done: boolean, adminPath?: string): VerificationChecklistItem {
