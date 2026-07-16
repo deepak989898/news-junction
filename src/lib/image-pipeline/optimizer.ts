@@ -63,7 +63,8 @@ export async function measureImageQuality(buffer: Buffer): Promise<{
     let clarityScore = Math.min(100, Math.round(avgStdDev * 4.5));
     let qualityScore = 50;
 
-    if (width >= 1536 && height >= 864) qualityScore += 35;
+    if (width >= 1536 && height >= 1024) qualityScore += 35;
+    else if (width >= 1536 && height >= 864) qualityScore += 32;
     else if (width >= 1200 && height >= 675) qualityScore += 30;
     else if (width >= 960 && height >= 540) qualityScore += 22;
     else if (width >= MIN_SOURCE_WIDTH && height >= MIN_SOURCE_HEIGHT) qualityScore += 12;
@@ -80,15 +81,20 @@ export async function measureImageQuality(buffer: Buffer): Promise<{
   }
 }
 
-function pickLargeDimensions(sourceWidth: number, sourceHeight: number): { width: number; height: number } {
+function pickLargeDimensions(sourceWidth: number): { width: number; height: number } {
+  // Keep 3:2 (OpenAI landscape) so hero subjects are not cropped to 16:9.
+  const ratio = 2 / 3; // height / width for 3:2
   if (sourceWidth >= VARIANT_SIZES.large.width) {
     return VARIANT_SIZES.large;
   }
   if (sourceWidth >= 1200) {
-    return { width: 1200, height: 675 };
+    return { width: 1200, height: Math.round(1200 * ratio) };
   }
   if (sourceWidth >= MIN_SOURCE_WIDTH) {
-    return { width: sourceWidth, height: Math.max(MIN_SOURCE_HEIGHT, Math.round((sourceWidth * 9) / 16)) };
+    return {
+      width: sourceWidth,
+      height: Math.max(MIN_SOURCE_HEIGHT, Math.round(sourceWidth * ratio)),
+    };
   }
   return VARIANT_SIZES.large;
 }
@@ -98,7 +104,9 @@ async function resizeVariant(
   width: number,
   height: number,
   quality: number,
-  focalPoint?: { x: number; y: number }
+  focalPoint?: { x: number; y: number },
+  /** Hero/large: prefer "inside" so we never crop the generated frame. Cards keep "cover". */
+  fit: "cover" | "inside" = "cover"
 ): Promise<Buffer> {
   const sharp = await getSharp();
   const position = focalPoint
@@ -111,20 +119,13 @@ async function resizeVariant(
 
   let pipeline = sharp(buffer).rotate();
 
-  if (sourceW < width || sourceH < height) {
-    pipeline = pipeline.resize(width, height, {
-      fit: "cover",
-      position,
-      kernel: sharp.kernel.lanczos3,
-      withoutEnlargement: true,
-    });
-  } else {
-    pipeline = pipeline.resize(width, height, {
-      fit: "cover",
-      position,
-      kernel: sharp.kernel.lanczos3,
-    });
-  }
+  const needsUpscale = sourceW < width || sourceH < height;
+  pipeline = pipeline.resize(width, height, {
+    fit,
+    position: fit === "cover" ? position : "centre",
+    kernel: sharp.kernel.lanczos3,
+    withoutEnlargement: needsUpscale && fit === "cover",
+  });
 
   return pipeline
     .webp({ quality, effort: 6, smartSubsample: false, nearLossless: quality >= 92 })
@@ -166,12 +167,13 @@ export async function optimizeAndUploadVariants(
   const ts = Date.now();
   const basePath = `news/images/${articleStorageId}/${ts}`;
 
-  const largeDims = pickLargeDimensions(measured.width, measured.height);
+  const largeDims = pickLargeDimensions(measured.width);
 
   const [large, medium, thumbnail] = await Promise.all([
-    resizeVariant(enhanced, largeDims.width, largeDims.height, WEBP_QUALITY.large, focalPoint),
-    resizeVariant(enhanced, VARIANT_SIZES.medium.width, VARIANT_SIZES.medium.height, WEBP_QUALITY.medium, focalPoint),
-    resizeVariant(enhanced, VARIANT_SIZES.thumbnail.width, VARIANT_SIZES.thumbnail.height, WEBP_QUALITY.thumbnail, focalPoint),
+    // Large/hero: fit "inside" — keep full generated frame (no subject crop).
+    resizeVariant(enhanced, largeDims.width, largeDims.height, WEBP_QUALITY.large, focalPoint, "inside"),
+    resizeVariant(enhanced, VARIANT_SIZES.medium.width, VARIANT_SIZES.medium.height, WEBP_QUALITY.medium, focalPoint, "cover"),
+    resizeVariant(enhanced, VARIANT_SIZES.thumbnail.width, VARIANT_SIZES.thumbnail.height, WEBP_QUALITY.thumbnail, focalPoint, "cover"),
   ]);
 
   const [largeUrl, mediumUrl, thumbUrl] = await Promise.all([

@@ -308,7 +308,7 @@ export default function ArticleClient() {
               {categoryName}
             </span>
 
-            <h1 className="mt-4 text-2xl font-bold leading-tight text-[#1a2b4c] md:text-4xl">
+            <h1 className="mt-4 scroll-mt-28 text-2xl font-bold leading-tight text-[#1a2b4c] md:text-4xl">
               {title}
             </h1>
 
@@ -368,7 +368,7 @@ export default function ArticleClient() {
             )}
 
             {article.imageUrl && (
-              <div className="relative mt-6 aspect-[16/9] overflow-hidden rounded-lg bg-gray-100">
+              <div className="relative mt-6 aspect-[3/2] w-full overflow-hidden rounded-lg bg-[#0f172a]/5">
                 <NewsArticleImage
                   src={article.imageUrl}
                   alt={imageAlt || title}
@@ -379,7 +379,7 @@ export default function ArticleClient() {
                   focalPointX={article.focalPointX}
                   focalPointY={article.focalPointY}
                   fill
-                  className=""
+                  className="object-contain"
                   sizes="(max-width: 1024px) 100vw, 66vw"
                   priority
                 />

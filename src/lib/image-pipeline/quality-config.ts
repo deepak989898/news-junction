@@ -1,7 +1,11 @@
 import { QUALITY_DIRECTIVES } from "./prompt-builder";
 
+/**
+ * Large/hero matches OpenAI default `1536x1024` (3:2) so we do not crop
+ * subjects when optimizing. Medium/thumb stay 16:9 for card grids.
+ */
 export const VARIANT_SIZES = {
-  large: { width: 1536, height: 864 },
+  large: { width: 1536, height: 1024 },
   medium: { width: 960, height: 540 },
   thumbnail: { width: 480, height: 270 },
   small: { width: 320, height: 180 },

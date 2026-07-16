@@ -55,8 +55,10 @@ export async function applyNewsTextOverlay(
   }
 ): Promise<Buffer> {
   const sharp = (await import("sharp")).default;
-  const width = VARIANT_SIZES.large.width;
-  const height = VARIANT_SIZES.large.height;
+  const meta = await sharp(imageBuffer).metadata();
+  // Prefer the source frame size so we do not crop before overlaying.
+  const width = meta.width && meta.width > 0 ? meta.width : VARIANT_SIZES.large.width;
+  const height = meta.height && meta.height > 0 ? meta.height : VARIANT_SIZES.large.height;
 
   const headlineCandidates = [args.headlineEn, args.headline].filter(Boolean) as string[];
   const safeHeadline = headlineCandidates.find((h) => isLatinSafe(h)) || "";
@@ -75,8 +77,8 @@ export async function applyNewsTextOverlay(
   <defs>
     <linearGradient id="bar" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
-      <stop offset="50%" stop-color="#0A1628" stop-opacity="0.35"/>
-      <stop offset="100%" stop-color="#07101C" stop-opacity="0.82"/>
+      <stop offset="55%" stop-color="#0A1628" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#07101C" stop-opacity="0.72"/>
     </linearGradient>
   </defs>
   <rect width="${width}" height="${height}" fill="url(#bar)"/>
@@ -100,11 +102,8 @@ export async function applyNewsTextOverlay(
   }
 </svg>`;
 
-  const base = await sharp(imageBuffer)
-    .resize(width, height, { fit: "cover", position: "centre" })
-    .toBuffer();
-
-  return sharp(base)
+  // Do not re-crop: keep the generated frame intact, only composite the SVG.
+  return sharp(imageBuffer)
     .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
     .jpeg({ quality: 92 })
     .toBuffer();

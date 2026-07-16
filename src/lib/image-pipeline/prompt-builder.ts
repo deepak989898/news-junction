@@ -265,7 +265,8 @@ Style requirements:
 - Strong subject-background separation
 - Realistic lighting and natural proportions
 - Clean, modern, uncluttered composition
-- Leave clean lower-third space for optional later overlay
+- Fill the full 3:2 / 1536×1024 frame with the photographic subject — no letterboxing, no fake UI chrome
+- Do NOT leave empty lower-third bars or draw news graphics on top of the photo
 ${entertainmentBlock}
 ${QUALITY_DIRECTIVES}
 
