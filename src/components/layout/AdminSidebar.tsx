@@ -26,6 +26,8 @@ import {
   Waypoints,
   ClipboardCheck,
   MapPin,
+  Bell,
+  Mail,
 } from "lucide-react";
 import { logoutAdmin } from "@/firebase/auth";
 import { useAuth } from "@/contexts/AuthContext";
@@ -55,6 +57,8 @@ const navItems = [
   { href: "/admin/ai/orchestrator", label: "AI Master Orchestrator", icon: Waypoints, roles: ["super_admin", "editor"] },
   { href: "/admin/ai/social-manager", label: "AI Social Manager", icon: Share2, roles: ["super_admin", "editor"] },
   { href: "/admin/social/accounts", label: "Social Accounts", icon: Share2, roles: ["super_admin", "editor"] },
+  { href: "/admin/notifications", label: "Push Notifications", icon: Bell, roles: ["super_admin", "editor"] },
+  { href: "/admin/newsletter", label: "Newsletter", icon: Mail, roles: ["super_admin", "editor"] },
   { href: "/admin/media", label: "Media", icon: Image, roles: ["super_admin", "editor"] },
   { href: "/admin/ads", label: "Ads", icon: Megaphone, roles: ["super_admin"] },
   { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["super_admin"] },

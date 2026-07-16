@@ -224,37 +224,43 @@ export function buildFeatureRegistry(): VerificationFeature[] {
       nameHi: "पुश नोटिफिकेशन",
       status: "working",
       label: "WORKING",
-      description: "Expo push delivery on publish + manual send. Web VAPID optional.",
-      adminPath: "/admin/ai/content-studio",
+      description:
+        "Expo push on article publish + manual send from Admin → Push Notifications. Web VAPID optional (not required).",
+      adminPath: "/admin/notifications",
       docPath: "/docs/hindi/PUSH_NOTIFICATION_GUIDE.md",
       requiredEnv: ["FIREBASE_SERVICE_ACCOUNT_KEY", "EXPO_ACCESS_TOKEN (optional)"],
-      externalAccounts: ["Firebase Cloud Messaging", "Expo Push"],
-      fixInstructions: "Server-side push sender implement करना बाकी है।",
+      externalAccounts: ["Expo Push"],
+      fixInstructions:
+        "Mobile app में लॉगिन करके push token register करें। Admin → Push Notifications से test send करें।",
     },
     {
       id: "newsletter_gen",
       name: "Newsletter Generation",
       nameHi: "न्यूज़लेटर टेक्स्ट",
       status: openAi || gemini ? "partially_configured" : "configuration_required",
-      label: "PLACEHOLDER ONLY",
-      description: "AI newsletter_snippet action only — text field on article.",
+      label: "WORKING",
+      description:
+        "AI newsletter_snippet on articles + digest HTML built from latest published stories.",
       adminPath: "/admin/ai/content-studio",
       docPath: "/docs/hindi/NEWSLETTER_SETUP_GUIDE.md",
       requiredEnv: ["OPENAI_API_KEY or GEMINI_API_KEY"],
       externalAccounts: [],
-      fixInstructions: "Full newsletter system नहीं है — केवल AI snippet।",
+      fixInstructions: "Content Studio से newsletter_snippet generate करें या publish पर summary fallback use होगा।",
     },
     {
       id: "newsletter_delivery",
       name: "Newsletter Delivery",
       nameHi: "न्यूज़लेटर डिलीवरी",
-      status: "not_implemented",
-      label: "NOT IMPLEMENTED",
-      description: "No email provider, subscriber list, or send cron.",
+      status: "configuration_required",
+      label: "CONFIGURATION REQUIRED",
+      description:
+        "Footer subscribe + Resend email delivery + admin/cron digest send. Set RESEND_API_KEY and NEWSLETTER_FROM_EMAIL.",
+      adminPath: "/admin/newsletter",
       docPath: "/docs/hindi/NEWSLETTER_SETUP_GUIDE.md",
-      requiredEnv: ["Email provider (SendGrid/Resend/etc.) — not integrated"],
-      externalAccounts: ["Email service provider"],
-      fixInstructions: "Email provider integrate करना बाकी है।",
+      requiredEnv: ["RESEND_API_KEY", "NEWSLETTER_FROM_EMAIL"],
+      externalAccounts: ["Resend"],
+      fixInstructions:
+        "Resend account बनाएँ, domain verify करें, Vercel पर RESEND_API_KEY + NEWSLETTER_FROM_EMAIL set करें, footer से subscribe test करें।",
     },
     {
       id: "audio_news",
@@ -606,7 +612,6 @@ const HAS_KNOWN_LIMITS = new Set([
   "ai_images",
   "social_captions",
   "social_posting",
-  "newsletter_gen",
   "ai_analytics",
   "reports",
   "trending",
@@ -645,6 +650,12 @@ interface RuntimeVerificationContext {
   hasGeoTaggedArticles: boolean;
   hasOperationsHealthCheck: boolean;
   hasAdminRoles: boolean;
+  hasPushTokens: boolean;
+  hasPushLogs: boolean;
+  hasNewsletterSubscribers: boolean;
+  hasNewsletterSends: boolean;
+  hasNewsletterSnippets: boolean;
+  resendConfigured: boolean;
 }
 
 async function loadRuntimeContext(): Promise<RuntimeVerificationContext> {
@@ -675,13 +686,22 @@ async function loadRuntimeContext(): Promise<RuntimeVerificationContext> {
     hasGeoTaggedArticles: false,
     hasOperationsHealthCheck: false,
     hasAdminRoles: false,
+    hasPushTokens: false,
+    hasPushLogs: false,
+    hasNewsletterSubscribers: false,
+    hasNewsletterSends: false,
+    hasNewsletterSnippets: false,
+    resendConfigured: Boolean(
+      String(process.env.RESEND_API_KEY || "").trim() &&
+        String(process.env.NEWSLETTER_FROM_EMAIL || "").trim()
+    ),
   };
 
   if (!adminCreds) return ctx;
 
   try {
     const db = getAdminDb();
-    const [settings, sourcesSnap, districtsSnap, socialSnap, publishedSnap, voiceSnap, mediaSnap, seoSnap, trendingSnap, socialQueueSnap, contentSnap, healthSnap, adminUsersSnap] =
+    const [settings, sourcesSnap, districtsSnap, socialSnap, publishedSnap, voiceSnap, mediaSnap, seoSnap, trendingSnap, socialQueueSnap, contentSnap, healthSnap, adminUsersSnap, pushTokenSnap, pushLogSnap, nlSubSnap, nlLogSnap] =
       await Promise.all([
       getAutomationSettings(),
       db.collection("sources").where("isActive", "==", true).limit(1).get(),
@@ -696,6 +716,10 @@ async function loadRuntimeContext(): Promise<RuntimeVerificationContext> {
       db.collection("aiContentLogs").limit(1).get(),
       db.collection("healthChecks").doc("latest").get(),
       db.collection("users").where("role", "in", ["super_admin", "editor", "admin"]).limit(1).get(),
+      db.collection("userPushTokens").limit(1).get(),
+      db.collection("pushLogs").limit(1).get(),
+      db.collection("newsletterSubscribers").limit(1).get(),
+      db.collection("newsletterLogs").limit(1).get(),
     ]);
     ctx.automationEnabled = Boolean(settings.automationEnabled);
     ctx.generateAiImages = Boolean(settings.generateAiImages);
@@ -714,6 +738,13 @@ async function loadRuntimeContext(): Promise<RuntimeVerificationContext> {
     ctx.hasGeoTaggedArticles = publishedSnap.docs.some((d) => Boolean(d.data().stateId || d.data().geoScope));
     ctx.hasOperationsHealthCheck = healthSnap.exists;
     ctx.hasAdminRoles = !adminUsersSnap.empty;
+    ctx.hasPushTokens = !pushTokenSnap.empty;
+    ctx.hasPushLogs = !pushLogSnap.empty;
+    ctx.hasNewsletterSubscribers = !nlSubSnap.empty;
+    ctx.hasNewsletterSends = !nlLogSnap.empty;
+    ctx.hasNewsletterSnippets = publishedSnap.docs.some(
+      (d) => Boolean(String(d.data().newsletterSnippet || "").trim())
+    );
   } catch {
     // keep defaults
   }
@@ -723,10 +754,7 @@ async function loadRuntimeContext(): Promise<RuntimeVerificationContext> {
 
 /** Cap completion % — placeholder / not-built products never show false 100% */
 const MAX_COMPLETION: Record<string, number> = {
-  newsletter_gen: 50,
-  newsletter_delivery: 0,
-  push_notifications: 0,
-  // mobile_sync: no hard cap — incomplete work must appear as unchecked checklist items
+  // push + newsletter delivery are implemented; scored via checklist only
 };
 
 function setupItem(id: string, label: string, done: boolean, adminPath?: string): VerificationChecklistItem {
@@ -800,11 +828,6 @@ function buildChecklist(featureId: string, ctx: RuntimeVerificationContext): Ver
         setupItem("ai_key", "OpenAI or Gemini API key", hasAiKey),
         manualItem("generated", "Generated social caption for an article", ctx.hasSocialQueueActivity || ctx.hasAiContentActivity, "/admin/ai/social-manager"),
       ];
-    case "newsletter_gen":
-      return [
-        setupItem("ai_key", "OpenAI or Gemini API key", hasAiKey),
-        manualItem("snippet", "Newsletter snippet only — full email system not built", false, "/admin/ai/content-studio"),
-      ];
     case "ai_images":
       return [
         setupItem("ai_key", "OpenAI or Gemini API key", hasAiKey),
@@ -843,8 +866,45 @@ function buildChecklist(featureId: string, ctx: RuntimeVerificationContext): Ver
         manualItem("posted", "At least 1 social post queued or published", ctx.hasSocialQueueActivity, "/admin/ai/social-manager"),
       ];
     case "push_notifications":
+      return [
+        setupItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+        setupItem("tokens", "At least 1 mobile push token registered", ctx.hasPushTokens, "/admin/notifications"),
+        manualItem(
+          "sent",
+          "At least 1 push send logged (publish or manual)",
+          ctx.hasPushLogs,
+          "/admin/notifications"
+        ),
+        optionalItem("expo_token", "EXPO_ACCESS_TOKEN set (optional)", envPresent("EXPO_ACCESS_TOKEN")),
+      ];
+    case "newsletter_gen":
+      return [
+        setupItem("ai_key", "OpenAI or Gemini API key", hasAiKey),
+        setupItem("articles", "Published articles exist", ctx.hasPublishedArticles, "/admin/news"),
+        manualItem(
+          "snippet",
+          "Newsletter snippet generated or digest content available",
+          ctx.hasNewsletterSnippets || ctx.hasPublishedArticles,
+          "/admin/ai/content-studio"
+        ),
+      ];
     case "newsletter_delivery":
-      return [setupItem("impl", "Server implementation not built yet", false)];
+      return [
+        setupItem("resend", "RESEND_API_KEY + NEWSLETTER_FROM_EMAIL", ctx.resendConfigured, "/admin/newsletter"),
+        setupItem("admin", "Firebase Admin credentials", ctx.adminCreds),
+        manualItem(
+          "subscriber",
+          "At least 1 newsletter subscriber",
+          ctx.hasNewsletterSubscribers,
+          "/admin/newsletter"
+        ),
+        manualItem(
+          "sent",
+          "At least 1 newsletter send logged (test or digest)",
+          ctx.hasNewsletterSends,
+          "/admin/newsletter"
+        ),
+      ];
     case "ai_analytics":
       return [
         setupItem("admin", "Firebase Admin (internal views)", ctx.adminCreds),
@@ -918,7 +978,7 @@ function buildChecklist(featureId: string, ctx: RuntimeVerificationContext): Ver
 function labelFromStatus(status: VerificationStatus, featureId: string, completionPercent: number): string {
   if (status === "not_implemented") return "NOT IMPLEMENTED";
   if (MAX_COMPLETION[featureId] != null && completionPercent < 100) {
-    if (featureId === "newsletter_gen") return "PLACEHOLDER ONLY — full newsletter not built";
+    // reserved for true placeholders only
   }
   if (status === "configuration_required") return "CONFIGURATION REQUIRED";
   if (status === "partially_configured") return "SETUP OR MANUAL STEPS REMAINING";
@@ -987,5 +1047,16 @@ export const CRON_JOBS = [
     manualTest: "curl -H 'Authorization: Bearer $CRON_SECRET' https://YOUR_DOMAIN/api/cron/cleanup",
     expectedChanges: "Up to 100 old rawNews deleted",
     onFailure: "May need Firestore composite index",
+  },
+  {
+    name: "newsletter-digest",
+    route: "/api/cron/newsletter-digest",
+    purpose: "Weekly newsletter digest email via Resend",
+    schedule: "0 6 * * 1 (Monday 06:00 UTC)",
+    secret: "CRON_SECRET",
+    manualTest:
+      "curl -H 'Authorization: Bearer $CRON_SECRET' https://YOUR_DOMAIN/api/cron/newsletter-digest",
+    expectedChanges: "newsletterLogs entry; emails to active subscribers",
+    onFailure: "Skipped if RESEND_API_KEY / NEWSLETTER_FROM_EMAIL missing",
   },
 ] as const;

@@ -8,6 +8,7 @@ import { getCategories } from "@/firebase/firestore";
 import { Category } from "@/types";
 import { BRAND } from "@/lib/constants";
 import AdSlotRenderer from "@/components/ads/AdSlotRenderer";
+import NewsletterSignup from "@/components/newsletter/NewsletterSignup";
 
 const FOOTER_GROUPS: {
   titleEn: string;
@@ -99,17 +100,9 @@ export default function Footer() {
           </div>
 
           <div>
-            <h4 className="mb-3 text-sm font-bold uppercase tracking-wider text-[#c41e20]">
-              {language === "hi" ? "हमारे बारे में" : "About"}
-            </h4>
-            <p className="text-sm text-gray-300 leading-relaxed">
-              {settings.footerText ||
-                (language === "hi"
-                  ? "News Junction आपकी विश्वसनीय द्विभाषी समाचार वेबसाइट है।"
-                  : "News Junction is your trusted bilingual news website.")}
-            </p>
+            <NewsletterSignup variant="footer" source="footer" />
             {settings.contactEmail && (
-              <p className="mt-2 text-sm text-gray-400">{settings.contactEmail}</p>
+              <p className="mt-3 text-sm text-gray-400">{settings.contactEmail}</p>
             )}
           </div>
         </div>
