@@ -379,11 +379,13 @@ export function buildFeatureRegistry(): VerificationFeature[] {
       nameHi: "मोबाइल सिंक",
       status: publicFb ? "partially_configured" : "configuration_required",
       label: "PARTIALLY WORKING",
-      description: "Same Firestore for reader. Admin APIs partial. Push/background sync not complete.",
+      description:
+        "Reader app shares Firestore with the website. Mobile admin/AI APIs exist. Offline background sync is still a scaffold (see mobile-app sync placeholder).",
       docPath: "/docs/hindi/MOBILE_SYNC_GUIDE.md",
       requiredEnv: ["EXPO_PUBLIC_FIREBASE_*", "EXPO_PUBLIC_API_BASE_URL"],
       externalAccounts: ["Expo", "EAS"],
-      fixInstructions: "mobile-app/README.md follow करें। TypeScript errors fix करें।",
+      fixInstructions:
+        "mobile-app/README.md follow करें। Background sync तब तक incomplete रहेगा जब तक offline sync placeholder replace न हो।",
     },
     {
       id: "monitoring",
@@ -719,12 +721,12 @@ async function loadRuntimeContext(): Promise<RuntimeVerificationContext> {
   return ctx;
 }
 
-/** Cap completion % — placeholder / partial products never show false 100% */
+/** Cap completion % — placeholder / not-built products never show false 100% */
 const MAX_COMPLETION: Record<string, number> = {
   newsletter_gen: 50,
   newsletter_delivery: 0,
   push_notifications: 0,
-  mobile_sync: 75,
+  // mobile_sync: no hard cap — incomplete work must appear as unchecked checklist items
 };
 
 function setupItem(id: string, label: string, done: boolean, adminPath?: string): VerificationChecklistItem {
@@ -877,7 +879,18 @@ function buildChecklist(featureId: string, ctx: RuntimeVerificationContext): Ver
       return [
         setupItem("public_fb", "Public Firebase config", ctx.publicFb),
         setupItem("site_url", "NEXT_PUBLIC_SITE_URL set", ctx.siteUrl),
-        manualItem("expo", "Mobile app built with Expo (see mobile-app/README)", envPresent("EXPO_PUBLIC_API_BASE_URL")),
+        setupItem("mobile_apis", "Mobile admin/AI API routes present", true),
+        manualItem(
+          "expo",
+          "Mobile app env (EXPO_PUBLIC_API_BASE_URL)",
+          envPresent("EXPO_PUBLIC_API_BASE_URL")
+        ),
+        // Intentionally incomplete until futureSyncPlaceholder is replaced with real sync.
+        manualItem(
+          "bg_sync",
+          "Offline / background sync implemented (not placeholder)",
+          false
+        ),
       ];
     case "monitoring":
       return [
@@ -906,7 +919,6 @@ function labelFromStatus(status: VerificationStatus, featureId: string, completi
   if (status === "not_implemented") return "NOT IMPLEMENTED";
   if (MAX_COMPLETION[featureId] != null && completionPercent < 100) {
     if (featureId === "newsletter_gen") return "PLACEHOLDER ONLY — full newsletter not built";
-    if (featureId === "mobile_sync") return "PARTIAL — mobile app setup incomplete";
   }
   if (status === "configuration_required") return "CONFIGURATION REQUIRED";
   if (status === "partially_configured") return "SETUP OR MANUAL STEPS REMAINING";
